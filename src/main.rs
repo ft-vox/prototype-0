@@ -12,55 +12,13 @@ use winit::{
     window::Window,
 };
 
-trait Example: 'static + Sized {
-    const SRGB: bool = true;
-
-    fn optional_features() -> wgpu::Features {
-        wgpu::Features::empty()
-    }
-
-    fn required_features() -> wgpu::Features {
-        wgpu::Features::empty()
-    }
-
-    fn required_downlevel_capabilities() -> wgpu::DownlevelCapabilities {
-        wgpu::DownlevelCapabilities {
-            flags: wgpu::DownlevelFlags::empty(),
-            shader_model: wgpu::ShaderModel::Sm5,
-            ..wgpu::DownlevelCapabilities::default()
-        }
-    }
-
-    fn required_limits() -> wgpu::Limits {
-        wgpu::Limits::downlevel_webgl2_defaults() // These downlevel limits will allow the code to run on all possible hardware
-    }
-
-    fn init(
-        config: &wgpu::SurfaceConfiguration,
-        adapter: &wgpu::Adapter,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-    ) -> Self;
-
-    fn resize(
-        &mut self,
-        config: &wgpu::SurfaceConfiguration,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-    );
-
-    fn update(&mut self, event: WindowEvent);
-
-    fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue);
-}
-
 struct EventLoopWrapper {
     event_loop: EventLoop<()>,
     window: Arc<Window>,
 }
 
 impl EventLoopWrapper {
-    pub fn new(title: &str) -> Self {
+    pub fn new() -> Self {
         let event_loop = EventLoop::new().unwrap();
         let mut builder = winit::window::WindowBuilder::new();
         #[cfg(target_arch = "wasm32")]
@@ -77,7 +35,7 @@ impl EventLoopWrapper {
                 .unwrap();
             builder = builder.with_canvas(Some(canvas));
         }
-        builder = builder.with_title(title);
+        builder = builder.with_title("ft_vox");
         let window = Arc::new(builder.build(&event_loop).unwrap());
 
         Self { event_loop, window }
@@ -130,7 +88,7 @@ impl SurfaceWrapper {
     /// On all native platforms, this is where we create the surface.
     ///
     /// Additionally, we configure the surface based on the (now valid) window size.
-    fn resume(&mut self, context: &ExampleContext, window: Arc<Window>, srgb: bool) {
+    fn resume(&mut self, context: &Context, window: Arc<Window>, srgb: bool) {
         // Window size is only actually valid after we enter the event loop.
         let window_size = window.inner_size();
         let width = window_size.width.max(1);
@@ -167,7 +125,7 @@ impl SurfaceWrapper {
     }
 
     /// Resize the surface, making sure to not resize to zero.
-    fn resize(&mut self, context: &ExampleContext, size: PhysicalSize<u32>) {
+    fn resize(&mut self, context: &Context, size: PhysicalSize<u32>) {
         // log::info!("Surface resize {size:?}");
 
         let config = self.config.as_mut().unwrap();
@@ -178,7 +136,7 @@ impl SurfaceWrapper {
     }
 
     /// Acquire the next surface texture.
-    fn acquire(&mut self, context: &ExampleContext) -> wgpu::SurfaceTexture {
+    fn acquire(&mut self, context: &Context) -> wgpu::SurfaceTexture {
         let surface = self.surface.as_ref().unwrap();
 
         match surface.get_current_texture() {
@@ -221,17 +179,15 @@ impl SurfaceWrapper {
 }
 
 /// Context containing global wgpu resources.
-struct ExampleContext {
+struct Context {
     instance: wgpu::Instance,
     adapter: wgpu::Adapter,
     device: wgpu::Device,
     queue: wgpu::Queue,
 }
-impl ExampleContext {
+impl Context {
     /// Initializes the example context.
-    async fn init_async<E: Example>(surface: &mut SurfaceWrapper, window: Arc<Window>) -> Self {
-        // log::info!("Initializing wgpu...");
-
+    async fn init_async(surface: &mut SurfaceWrapper, window: Arc<Window>) -> Self {
         let backends = wgpu::util::backend_bits_from_env().unwrap_or_default();
         let dx12_shader_compiler = wgpu::util::dx12_shader_compiler_from_env().unwrap_or_default();
         let gles_minor_version = wgpu::util::gles_minor_version_from_env().unwrap_or_default();
@@ -250,8 +206,8 @@ impl ExampleContext {
         // let adapter_info = adapter.get_info();
         // log::info!("Using {} ({:?})", adapter_info.name, adapter_info.backend);
 
-        let optional_features = E::optional_features();
-        let required_features = E::required_features();
+        let optional_features = wgpu::Features::empty();
+        let required_features = wgpu::Features::empty();
         let adapter_features = adapter.features();
         assert!(
             adapter_features.contains(required_features),
@@ -259,7 +215,11 @@ impl ExampleContext {
             required_features - adapter_features
         );
 
-        let required_downlevel_capabilities = E::required_downlevel_capabilities();
+        let required_downlevel_capabilities = wgpu::DownlevelCapabilities {
+            flags: wgpu::DownlevelFlags::empty(),
+            shader_model: wgpu::ShaderModel::Sm5,
+            ..wgpu::DownlevelCapabilities::default()
+        };
         let downlevel_capabilities = adapter.get_downlevel_capabilities();
         assert!(
             downlevel_capabilities.shader_model >= required_downlevel_capabilities.shader_model,
@@ -275,7 +235,8 @@ impl ExampleContext {
         );
 
         // Make sure we use the texture resolution limits from the adapter, so we can support images the size of the surface.
-        let needed_limits = E::required_limits().using_resolution(adapter.limits());
+        let needed_limits =
+            wgpu::Limits::downlevel_webgl2_defaults().using_resolution(adapter.limits());
 
         let trace_dir = std::env::var("WGPU_TRACE");
         let (device, queue) = adapter
@@ -299,10 +260,10 @@ impl ExampleContext {
     }
 }
 
-async fn run<E: Example>(title: &'static str) {
-    let window_loop = EventLoopWrapper::new(title);
+async fn run() {
+    let window_loop = EventLoopWrapper::new();
     let mut surface = SurfaceWrapper::new();
-    let context = ExampleContext::init_async::<E>(&mut surface, window_loop.window.clone()).await;
+    let context = Context::init_async(&mut surface, window_loop.window.clone()).await;
     // We wait to create the example until we have a valid surface.
     let mut example = None;
 
@@ -315,11 +276,11 @@ async fn run<E: Example>(title: &'static str) {
         move |event: Event<()>, target: &EventLoopWindowTarget<()>| {
             match event {
                 ref e if SurfaceWrapper::start_condition(e) => {
-                    surface.resume(&context, window_loop.window.clone(), E::SRGB);
+                    surface.resume(&context, window_loop.window.clone(), false);
 
                     // If we haven't created the example yet, do so now.
                     if example.is_none() {
-                        example = Some(E::init(
+                        example = Some(Vox::init(
                             surface.config(),
                             &context.adapter,
                             &context.device,
@@ -396,7 +357,7 @@ async fn run<E: Example>(title: &'static str) {
 }
 
 fn main() {
-    futures::executor::block_on(run::<Main>("ft_vox"));
+    futures::executor::block_on(run());
 }
 
 #[repr(C)]
@@ -477,17 +438,16 @@ fn create_texels(size: usize) -> Vec<u8> {
         .collect()
 }
 
-struct Main {
+struct Vox {
     vertex_buf: wgpu::Buffer,
     index_buf: wgpu::Buffer,
     index_count: usize,
     bind_group: wgpu::BindGroup,
     uniform_buf: wgpu::Buffer,
     pipeline: wgpu::RenderPipeline,
-    pipeline_wire: Option<wgpu::RenderPipeline>,
 }
 
-impl Main {
+impl Vox {
     fn generate_matrix(aspect_ratio: f32) -> glam::Mat4 {
         let projection = glam::Mat4::perspective_rh(consts::FRAC_PI_4, aspect_ratio, 1.0, 10.0);
         let view = glam::Mat4::look_at_rh(
@@ -496,12 +456,6 @@ impl Main {
             glam::Vec3::Z,
         );
         projection * view
-    }
-}
-
-impl Example for Main {
-    fn optional_features() -> wgpu::Features {
-        wgpu::Features::POLYGON_MODE_LINE
     }
 
     fn init(
@@ -657,58 +611,14 @@ impl Example for Main {
             multiview: None,
         });
 
-        let pipeline_wire = if device
-            .features()
-            .contains(wgpu::Features::POLYGON_MODE_LINE)
-        {
-            let pipeline_wire = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: None,
-                layout: Some(&pipeline_layout),
-                vertex: wgpu::VertexState {
-                    module: &shader,
-                    entry_point: "vs_main",
-                    buffers: &vertex_buffers,
-                },
-                fragment: Some(wgpu::FragmentState {
-                    module: &shader,
-                    entry_point: "fs_wire",
-                    targets: &[Some(wgpu::ColorTargetState {
-                        format: config.view_formats[0],
-                        blend: Some(wgpu::BlendState {
-                            color: wgpu::BlendComponent {
-                                operation: wgpu::BlendOperation::Add,
-                                src_factor: wgpu::BlendFactor::SrcAlpha,
-                                dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
-                            },
-                            alpha: wgpu::BlendComponent::REPLACE,
-                        }),
-                        write_mask: wgpu::ColorWrites::ALL,
-                    })],
-                }),
-                primitive: wgpu::PrimitiveState {
-                    front_face: wgpu::FrontFace::Ccw,
-                    cull_mode: Some(wgpu::Face::Back),
-                    polygon_mode: wgpu::PolygonMode::Line,
-                    ..Default::default()
-                },
-                depth_stencil: None,
-                multisample: wgpu::MultisampleState::default(),
-                multiview: None,
-            });
-            Some(pipeline_wire)
-        } else {
-            None
-        };
-
         // Done
-        Main {
+        Vox {
             vertex_buf,
             index_buf,
             index_count: index_data.len(),
             bind_group,
             uniform_buf,
             pipeline,
-            pipeline_wire,
         }
     }
 
@@ -758,10 +668,6 @@ impl Example for Main {
             rpass.pop_debug_group();
             rpass.insert_debug_marker("Draw!");
             rpass.draw_indexed(0..self.index_count as u32, 0, 0..1);
-            if let Some(ref pipe) = self.pipeline_wire {
-                rpass.set_pipeline(pipe);
-                rpass.draw_indexed(0..self.index_count as u32, 0, 0..1);
-            }
         }
 
         queue.submit(Some(encoder.finish()));
