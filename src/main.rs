@@ -438,12 +438,30 @@ fn create_texels(size: usize) -> Vec<u8> {
         .collect()
 }
 
+const DIRECTIONS: [glam::Vec3; 8] = [
+    glam::Vec3::new(1.0, 1.0, 1.0),
+    glam::Vec3::new(-1.0, 1.0, 1.0),
+    glam::Vec3::new(1.0, -1.0, 1.0),
+    glam::Vec3::new(-1.0, -1.0, 1.0),
+    glam::Vec3::new(1.0, 1.0, -1.0),
+    glam::Vec3::new(-1.0, 1.0, -1.0),
+    glam::Vec3::new(1.0, -1.0, -1.0),
+    glam::Vec3::new(-1.0, -1.0, -1.0),
+];
+
+#[repr(C)]
+#[derive(Copy, Clone, Pod, Zeroable)]
+struct Uniforms {
+    transform: [[f32; 4]; 4], // This represents a single transformation matrix.
+}
+
 struct Vox {
     vertex_buf: wgpu::Buffer,
     index_buf: wgpu::Buffer,
-    index_count: usize,
-    bind_group: wgpu::BindGroup,
-    uniform_buf: wgpu::Buffer,
+    index_count: u32,
+    uniform_m_buffers: Vec<wgpu::Buffer>,
+    bind_groups: Vec<wgpu::BindGroup>,
+    uniform_vp_buffer: wgpu::Buffer,
     pipeline: wgpu::RenderPipeline,
 }
 
@@ -496,6 +514,16 @@ impl Vox {
                 },
                 wgpu::BindGroupLayoutEntry {
                     binding: 1,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: wgpu::BufferSize::new(64),
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
                     visibility: wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Texture {
                         multisampled: false,
@@ -543,29 +571,81 @@ impl Vox {
         );
 
         // Create other resources
-        let mx_total = Self::generate_matrix(config.width as f32 / config.height as f32);
-        let mx_ref: &[f32; 16] = mx_total.as_ref();
-        let uniform_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Uniform Buffer"),
-            contents: bytemuck::cast_slice(mx_ref),
+        let mx_vp_total = Self::generate_matrix(config.width as f32 / config.height as f32);
+        let mx_vp_ref: &[f32; 16] = mx_vp_total.as_ref();
+        let uniform_vp_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Uniform VP Buffer"),
+            contents: bytemuck::cast_slice(mx_vp_ref),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+        let mx_m_total = glam::Mat4::from_translation(glam::Vec3::new(1.0, 1.0, 1.0));
+        let mx_m_ref: &[f32; 16] = mx_m_total.as_ref();
+        let uniform_m_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Uniform M Buffer"),
+            contents: bytemuck::cast_slice(mx_m_ref),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
-        // Create bind group
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: uniform_buf.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&texture_view),
-                },
-            ],
-            label: None,
-        });
+        // Create bind groups
+        let mut uniform_m_buffers = Vec::new();
+        let mut bind_groups = Vec::new();
+        for i in 0..DIRECTIONS.len() {
+            let direction = DIRECTIONS[i];
+            let matrix = glam::Mat4::from_translation(direction);
+            let uniforms = Uniforms {
+                transform: [
+                    [
+                        matrix.x_axis.x,
+                        matrix.x_axis.y,
+                        matrix.x_axis.z,
+                        matrix.x_axis.w,
+                    ],
+                    [
+                        matrix.y_axis.x,
+                        matrix.y_axis.y,
+                        matrix.y_axis.z,
+                        matrix.y_axis.w,
+                    ],
+                    [
+                        matrix.z_axis.x,
+                        matrix.z_axis.y,
+                        matrix.z_axis.z,
+                        matrix.z_axis.w,
+                    ],
+                    [
+                        matrix.w_axis.x,
+                        matrix.w_axis.y,
+                        matrix.w_axis.z,
+                        matrix.w_axis.w,
+                    ],
+                ],
+            };
+            let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some(&format!("Uniform Buffer {}", i)),
+                contents: bytemuck::cast_slice(&[uniforms]),
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            });
+            let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+                layout: &bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: uniform_vp_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: wgpu::BindingResource::TextureView(&texture_view),
+                    },
+                ],
+                label: None,
+            });
+            uniform_m_buffers.push(buffer);
+            bind_groups.push(bind_group);
+        }
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
@@ -615,9 +695,10 @@ impl Vox {
         Vox {
             vertex_buf,
             index_buf,
-            index_count: index_data.len(),
-            bind_group,
-            uniform_buf,
+            index_count: index_data.len() as u32,
+            bind_groups,
+            uniform_vp_buffer,
+            uniform_m_buffers,
             pipeline,
         }
     }
@@ -634,7 +715,7 @@ impl Vox {
     ) {
         let mx_total = Self::generate_matrix(config.width as f32 / config.height as f32);
         let mx_ref: &[f32; 16] = mx_total.as_ref();
-        queue.write_buffer(&self.uniform_buf, 0, bytemuck::cast_slice(mx_ref));
+        queue.write_buffer(&self.uniform_vp_buffer, 0, bytemuck::cast_slice(mx_ref));
     }
 
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
@@ -662,12 +743,14 @@ impl Vox {
             });
             rpass.push_debug_group("Prepare data for draw.");
             rpass.set_pipeline(&self.pipeline);
-            rpass.set_bind_group(0, &self.bind_group, &[]);
             rpass.set_index_buffer(self.index_buf.slice(..), wgpu::IndexFormat::Uint16);
             rpass.set_vertex_buffer(0, self.vertex_buf.slice(..));
             rpass.pop_debug_group();
             rpass.insert_debug_marker("Draw!");
-            rpass.draw_indexed(0..self.index_count as u32, 0, 0..1);
+            for (i, bind_group) in self.bind_groups.iter().enumerate() {
+                rpass.set_bind_group(0, bind_group, &[]);
+                rpass.draw_indexed(0..self.index_count, 0, 0..1);
+            }
         }
 
         queue.submit(Some(encoder.finish()));
