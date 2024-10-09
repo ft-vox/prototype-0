@@ -289,12 +289,10 @@ pub async fn run() {
     let window_loop = EventLoopWrapper::new();
     let mut surface = SurfaceWrapper::new();
     let context = Context::init_async(&mut surface, window_loop.window.clone()).await;
-    // We wait to create the example until we have a valid surface.
-    let mut example = None;
+    let mut vox = None;
 
     let event_loop_function = EventLoop::run;
 
-    // On native this is a result, but on wasm it's a unit type.
     #[allow(clippy::let_unit_value)]
     let _ = (event_loop_function)(
         window_loop.event_loop,
@@ -304,8 +302,8 @@ pub async fn run() {
                     surface.resume(&context, window_loop.window.clone(), false);
 
                     // If we haven't created the example yet, do so now.
-                    if example.is_none() {
-                        example = Some(Vox::init(
+                    if vox.is_none() {
+                        vox = Some(Vox::init(
                             surface.config(),
                             &context.adapter,
                             &context.device,
@@ -319,7 +317,7 @@ pub async fn run() {
                 Event::WindowEvent { event, .. } => match event {
                     WindowEvent::Resized(size) => {
                         surface.resize(&context, size);
-                        example.as_mut().unwrap().resize(
+                        vox.as_mut().unwrap().resize(
                             surface.config(),
                             &context.device,
                             &context.queue,
@@ -349,12 +347,72 @@ pub async fn run() {
                     } if s == "r" => {
                         println!("{:#?}", context.instance.generate_report());
                     }
+                    WindowEvent::KeyboardInput {
+                        event:
+                            KeyEvent {
+                                logical_key: Key::Character(s),
+                                ..
+                            },
+                        ..
+                    } if s == "w" => {
+                        vox.as_mut().map(|vox| vox.eye.y += 0.1);
+                    }
+                    WindowEvent::KeyboardInput {
+                        event:
+                            KeyEvent {
+                                logical_key: Key::Character(s),
+                                ..
+                            },
+                        ..
+                    } if s == "a" => {
+                        vox.as_mut().map(|vox| vox.eye.x -= 0.1);
+                    }
+                    WindowEvent::KeyboardInput {
+                        event:
+                            KeyEvent {
+                                logical_key: Key::Character(s),
+                                ..
+                            },
+                        ..
+                    } if s == "s" => {
+                        vox.as_mut().map(|vox| vox.eye.y -= 0.1);
+                    }
+                    WindowEvent::KeyboardInput {
+                        event:
+                            KeyEvent {
+                                logical_key: Key::Character(s),
+                                ..
+                            },
+                        ..
+                    } if s == "d" => {
+                        vox.as_mut().map(|vox| vox.eye.x += 0.1);
+                    }
+                    WindowEvent::KeyboardInput {
+                        event:
+                            KeyEvent {
+                                logical_key: Key::Named(s),
+                                ..
+                            },
+                        ..
+                    } if s == NamedKey::Space => {
+                        vox.as_mut().map(|vox| vox.eye.z += 0.1);
+                    }
+                    WindowEvent::KeyboardInput {
+                        event:
+                            KeyEvent {
+                                logical_key: Key::Named(s),
+                                ..
+                            },
+                        ..
+                    } if s == NamedKey::Shift => {
+                        vox.as_mut().map(|vox| vox.eye.z -= 0.1);
+                    }
                     WindowEvent::RedrawRequested => {
                         // On MacOS, currently redraw requested comes in _before_ Init does.
                         // If this happens, just drop the requested redraw on the floor.
                         //
                         // See https://github.com/rust-windowing/winit/issues/3235 for some discussion
-                        if example.is_none() {
+                        if vox.is_none() {
                             return;
                         }
 
@@ -364,8 +422,7 @@ pub async fn run() {
                             ..wgpu::TextureViewDescriptor::default()
                         });
 
-                        example
-                            .as_mut()
+                        vox.as_mut()
                             .unwrap()
                             .render(&view, &context.device, &context.queue);
 
@@ -373,7 +430,7 @@ pub async fn run() {
 
                         window_loop.window.request_redraw();
                     }
-                    _ => example.as_mut().unwrap().update(event),
+                    _ => vox.as_mut().unwrap().update(event),
                 },
                 _ => {}
             }
@@ -459,11 +516,8 @@ fn create_texels(size: usize) -> Vec<u8> {
         .collect()
 }
 
-const DIRECTIONS: [glam::Vec3; 8] = [
+const DIRECTIONS: [glam::Vec3; 5] = [
     glam::Vec3::new(1.0, 1.0, 1.0),
-    glam::Vec3::new(-1.0, 1.0, 1.0),
-    glam::Vec3::new(1.0, -1.0, 1.0),
-    glam::Vec3::new(-1.0, -1.0, 1.0),
     glam::Vec3::new(1.0, 1.0, -1.0),
     glam::Vec3::new(-1.0, 1.0, -1.0),
     glam::Vec3::new(1.0, -1.0, -1.0),
@@ -477,6 +531,10 @@ struct Uniforms {
 }
 
 struct Vox {
+    eye: glam::Vec3,
+    horizontal_rotation: f32,
+    vertical_rotation: f32,
+    projection_matrix: glam::Mat4,
     angle: f32,
     depth_buffer: wgpu::TextureView,
     vertex_buf: wgpu::Buffer,
@@ -489,14 +547,8 @@ struct Vox {
 }
 
 impl Vox {
-    fn generate_matrix(aspect_ratio: f32) -> glam::Mat4 {
-        let projection = glam::Mat4::perspective_rh(consts::FRAC_PI_4, aspect_ratio, 1.0, 10.0);
-        let view = glam::Mat4::look_at_rh(
-            glam::Vec3::new(1.5f32, -5.0, 3.0),
-            glam::Vec3::ZERO,
-            glam::Vec3::Z,
-        );
-        projection * view
+    fn generate_projection_matrix(aspect_ratio: f32) -> glam::Mat4 {
+        glam::Mat4::perspective_rh(consts::FRAC_PI_4, aspect_ratio, 1.0, 1000.0)
     }
 
     fn init(
@@ -612,20 +664,20 @@ impl Vox {
             texture_extent,
         );
 
-        // Create other resources
-        let mx_vp_total = Self::generate_matrix(config.width as f32 / config.height as f32);
-        let mx_vp_ref: &[f32; 16] = mx_vp_total.as_ref();
-        let uniform_vp_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Uniform VP Buffer"),
-            contents: bytemuck::cast_slice(mx_vp_ref),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
-
-        // Create bind groups
         let min_alignment = device.limits().min_uniform_buffer_offset_alignment as usize;
         let uniform_size = std::mem::size_of::<Uniforms>();
         let aligned_uniform_size =
             ((uniform_size + min_alignment - 1) / min_alignment) * min_alignment;
+
+        // Create other resources
+        let uniform_vp_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Uniform VP Buffer"),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            size: aligned_uniform_size as wgpu::BufferAddress,
+            mapped_at_creation: false,
+        });
+
+        // Create bind groups
         let total_size = aligned_uniform_size * DIRECTIONS.len();
         println!("min_alignment: {min_alignment}, uniform_size: {uniform_size}, aligned_uniform_size: {aligned_uniform_size}");
         let uniform_m_buffer = device.create_buffer(&wgpu::BufferDescriptor {
@@ -712,6 +764,12 @@ impl Vox {
 
         // Done
         Vox {
+            eye: glam::Vec3::new(0.0, -5.0, 0.0),
+            horizontal_rotation: 0.0,
+            vertical_rotation: 0.0,
+            projection_matrix: Self::generate_projection_matrix(
+                config.width as f32 / config.height as f32,
+            ),
             angle: 0f32,
             depth_buffer,
             vertex_buf,
@@ -732,7 +790,7 @@ impl Vox {
         &mut self,
         config: &wgpu::SurfaceConfiguration,
         device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        _queue: &wgpu::Queue,
     ) {
         let texture_extent = wgpu::Extent3d {
             width: config.width,
@@ -754,9 +812,8 @@ impl Vox {
         let depth_buffer = draw_depth_buffer.create_view(&wgpu::TextureViewDescriptor::default());
         self.depth_buffer = depth_buffer;
 
-        let mx_total = Self::generate_matrix(config.width as f32 / config.height as f32);
-        let mx_ref: &[f32; 16] = mx_total.as_ref();
-        queue.write_buffer(&self.uniform_vp_buffer, 0, bytemuck::cast_slice(mx_ref));
+        self.projection_matrix =
+            Self::generate_projection_matrix(config.width as f32 / config.height as f32);
     }
 
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
@@ -767,6 +824,17 @@ impl Vox {
         let uniform_size = std::mem::size_of::<Uniforms>() as u32;
         let aligned_uniform_size =
             ((uniform_size + min_alignment - 1) / min_alignment) * min_alignment;
+
+        {
+            let dir = glam::Mat3::from_rotation_x(self.vertical_rotation)
+                * glam::Mat3::from_rotation_z(self.horizontal_rotation);
+            let dir = dir * glam::Vec3::Y;
+            log::debug!("{}", self.eye);
+            let view_matrix = glam::Mat4::look_to_rh(self.eye, dir.into(), glam::Vec3::Z);
+            let mx_total = self.projection_matrix * view_matrix;
+            let mx_ref: &[f32; 16] = mx_total.as_ref();
+            queue.write_buffer(&self.uniform_vp_buffer, 0, bytemuck::cast_slice(mx_ref));
+        }
 
         {
             self.angle += 0.001;
