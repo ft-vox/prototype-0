@@ -461,8 +461,8 @@ struct Vox {
     vertex_buf: wgpu::Buffer,
     index_buf: wgpu::Buffer,
     index_count: u32,
-    uniform_m_buffers: Vec<wgpu::Buffer>,
-    bind_groups: Vec<wgpu::BindGroup>,
+    uniform_m_buffer: wgpu::Buffer,
+    bind_group: wgpu::BindGroup,
     uniform_vp_buffer: wgpu::Buffer,
     pipeline: wgpu::RenderPipeline,
 }
@@ -538,7 +538,7 @@ impl Vox {
                     visibility: wgpu::ShaderStages::VERTEX,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
+                        has_dynamic_offset: true,
                         min_binding_size: wgpu::BufferSize::new(64),
                     },
                     count: None,
@@ -599,74 +599,42 @@ impl Vox {
             contents: bytemuck::cast_slice(mx_vp_ref),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
-        let mx_m_total = glam::Mat4::from_translation(glam::Vec3::new(1.0, 1.0, 1.0));
-        let mx_m_ref: &[f32; 16] = mx_m_total.as_ref();
-        let uniform_m_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Uniform M Buffer"),
-            contents: bytemuck::cast_slice(mx_m_ref),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
 
         // Create bind groups
-        let mut uniform_m_buffers = Vec::new();
-        let mut bind_groups = Vec::new();
-        for i in 0..DIRECTIONS.len() {
-            let direction = DIRECTIONS[i];
-            let matrix = glam::Mat4::from_translation(direction);
-            let uniforms = Uniforms {
-                transform: [
-                    [
-                        matrix.x_axis.x,
-                        matrix.x_axis.y,
-                        matrix.x_axis.z,
-                        matrix.x_axis.w,
-                    ],
-                    [
-                        matrix.y_axis.x,
-                        matrix.y_axis.y,
-                        matrix.y_axis.z,
-                        matrix.y_axis.w,
-                    ],
-                    [
-                        matrix.z_axis.x,
-                        matrix.z_axis.y,
-                        matrix.z_axis.z,
-                        matrix.z_axis.w,
-                    ],
-                    [
-                        matrix.w_axis.x,
-                        matrix.w_axis.y,
-                        matrix.w_axis.z,
-                        matrix.w_axis.w,
-                    ],
-                ],
-            };
-            let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some(&format!("Uniform Buffer {}", i)),
-                contents: bytemuck::cast_slice(&[uniforms]),
-                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            });
-            let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-                layout: &bind_group_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: uniform_vp_buffer.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: buffer.as_entire_binding(),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 2,
-                        resource: wgpu::BindingResource::TextureView(&texture_view),
-                    },
-                ],
-                label: None,
-            });
-            uniform_m_buffers.push(buffer);
-            bind_groups.push(bind_group);
-        }
+        let min_alignment = device.limits().min_uniform_buffer_offset_alignment as usize;
+        let uniform_size = std::mem::size_of::<Uniforms>();
+        let aligned_uniform_size =
+            ((uniform_size + min_alignment - 1) / min_alignment) * min_alignment;
+        let total_size = aligned_uniform_size * DIRECTIONS.len();
+        println!("min_alignment: {min_alignment}, uniform_size: {uniform_size}, aligned_uniform_size: {aligned_uniform_size}");
+        let uniform_m_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Uniform M Buffer"),
+            size: total_size as wgpu::BufferAddress,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: uniform_vp_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                        buffer: &uniform_m_buffer,
+                        offset: 0,
+                        size: wgpu::BufferSize::new(mem::size_of::<Uniforms>() as _),
+                    }),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::TextureView(&texture_view),
+                },
+            ],
+            label: None,
+        });
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
@@ -725,9 +693,9 @@ impl Vox {
             vertex_buf,
             index_buf,
             index_count: index_data.len() as u32,
-            bind_groups,
+            bind_group,
             uniform_vp_buffer,
-            uniform_m_buffers,
+            uniform_m_buffer,
             pipeline,
         }
     }
@@ -771,46 +739,28 @@ impl Vox {
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
-        self.angle += 0.001;
-        for i in 0..DIRECTIONS.len() {
-            let direction = DIRECTIONS[i];
-            let matrix = glam::Mat4::from_rotation_x(self.angle)
+        let min_alignment = device.limits().min_uniform_buffer_offset_alignment;
+        let uniform_size = std::mem::size_of::<Uniforms>() as u32;
+        let aligned_uniform_size =
+            ((uniform_size + min_alignment - 1) / min_alignment) * min_alignment;
+
+        {
+            self.angle += 0.001;
+            let rotation_matrix = glam::Mat4::from_rotation_x(self.angle)
                 * glam::Mat4::from_rotation_y(self.angle * 2.0)
-                * glam::Mat4::from_rotation_z(self.angle * 3.0)
-                * glam::Mat4::from_translation(direction);
-            let uniforms = Uniforms {
-                transform: [
-                    [
-                        matrix.x_axis.x,
-                        matrix.x_axis.y,
-                        matrix.x_axis.z,
-                        matrix.x_axis.w,
-                    ],
-                    [
-                        matrix.y_axis.x,
-                        matrix.y_axis.y,
-                        matrix.y_axis.z,
-                        matrix.y_axis.w,
-                    ],
-                    [
-                        matrix.z_axis.x,
-                        matrix.z_axis.y,
-                        matrix.z_axis.z,
-                        matrix.z_axis.w,
-                    ],
-                    [
-                        matrix.w_axis.x,
-                        matrix.w_axis.y,
-                        matrix.w_axis.z,
-                        matrix.w_axis.w,
-                    ],
-                ],
-            };
-            queue.write_buffer(
-                &self.uniform_m_buffers[i],
-                0,
-                bytemuck::cast_slice(&[uniforms]),
-            );
+                * glam::Mat4::from_rotation_z(self.angle * 3.0);
+
+            for (i, &direction) in DIRECTIONS.iter().enumerate() {
+                let matrix = rotation_matrix * glam::Mat4::from_translation(direction);
+                let uniforms = Uniforms {
+                    transform: matrix.to_cols_array_2d(),
+                };
+                queue.write_buffer(
+                    &self.uniform_m_buffer,
+                    (i as u32 * aligned_uniform_size) as wgpu::BufferAddress,
+                    bytemuck::cast_slice(&[uniforms]),
+                );
+            }
         }
 
         {
@@ -846,8 +796,9 @@ impl Vox {
             rpass.set_vertex_buffer(0, self.vertex_buf.slice(..));
             rpass.pop_debug_group();
             rpass.insert_debug_marker("Draw!");
-            for (i, bind_group) in self.bind_groups.iter().enumerate() {
-                rpass.set_bind_group(0, bind_group, &[]);
+            for (i, _) in DIRECTIONS.iter().enumerate() {
+                let offset = (i as u32 * aligned_uniform_size) as wgpu::DynamicOffset;
+                rpass.set_bind_group(0, &self.bind_group, &[offset]);
                 rpass.draw_indexed(0..self.index_count, 0, 0..1);
             }
         }
