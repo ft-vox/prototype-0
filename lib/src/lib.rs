@@ -260,7 +260,7 @@ impl Context {
     }
 }
 
-async fn run() {
+pub async fn run() {
     let window_loop = EventLoopWrapper::new();
     let mut surface = SurfaceWrapper::new();
     let context = Context::init_async(&mut surface, window_loop.window.clone()).await;
@@ -354,10 +354,6 @@ async fn run() {
             }
         },
     );
-}
-
-fn main() {
-    futures::executor::block_on(run());
 }
 
 #[repr(C)]
