@@ -456,6 +456,7 @@ struct Uniforms {
 }
 
 struct Vox {
+    angle: f32,
     depth_buffer: wgpu::TextureView,
     vertex_buf: wgpu::Buffer,
     index_buf: wgpu::Buffer,
@@ -719,6 +720,7 @@ impl Vox {
 
         // Done
         Vox {
+            angle: 0f32,
             depth_buffer,
             vertex_buf,
             index_buf,
@@ -768,6 +770,49 @@ impl Vox {
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+
+        self.angle += 0.001;
+        for i in 0..DIRECTIONS.len() {
+            let direction = DIRECTIONS[i];
+            let matrix = glam::Mat4::from_rotation_x(self.angle)
+                * glam::Mat4::from_rotation_y(self.angle * 2.0)
+                * glam::Mat4::from_rotation_z(self.angle * 3.0)
+                * glam::Mat4::from_translation(direction);
+            let uniforms = Uniforms {
+                transform: [
+                    [
+                        matrix.x_axis.x,
+                        matrix.x_axis.y,
+                        matrix.x_axis.z,
+                        matrix.x_axis.w,
+                    ],
+                    [
+                        matrix.y_axis.x,
+                        matrix.y_axis.y,
+                        matrix.y_axis.z,
+                        matrix.y_axis.w,
+                    ],
+                    [
+                        matrix.z_axis.x,
+                        matrix.z_axis.y,
+                        matrix.z_axis.z,
+                        matrix.z_axis.w,
+                    ],
+                    [
+                        matrix.w_axis.x,
+                        matrix.w_axis.y,
+                        matrix.w_axis.z,
+                        matrix.w_axis.w,
+                    ],
+                ],
+            };
+            queue.write_buffer(
+                &self.uniform_m_buffers[i],
+                0,
+                bytemuck::cast_slice(&[uniforms]),
+            );
+        }
+
         {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
