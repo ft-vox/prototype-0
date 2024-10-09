@@ -1,0 +1,25 @@
+html, body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  overflow: hidden;
+}
+
+#wasm-container, #root {
+  inset: 0;
+  position: fixed;
+}
+
+#root {
+  padding: 2rem;
+  pointer-events: none;
+  color: white;
+  mix-blend-mode: difference;
+}
+
+#wasm-container canvas {
+  width: 100%;
+  height: 100%;
+}

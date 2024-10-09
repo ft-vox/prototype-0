@@ -5,4 +5,4 @@ edition = "2021"
 
 [dependencies]
 futures = "0.3.30"
-"ft-vox-prototype-0-lib" = { path = "../lib" }
+ft-vox-prototype-0-lib = { path = "../lib" }

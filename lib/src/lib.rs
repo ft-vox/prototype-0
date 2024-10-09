@@ -12,6 +12,9 @@ use winit::{
     window::Window,
 };
 
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::prelude::*;
+
 struct EventLoopWrapper {
     event_loop: EventLoop<()>,
     window: Arc<Window>,
@@ -21,22 +24,25 @@ impl EventLoopWrapper {
     pub fn new() -> Self {
         let event_loop = EventLoop::new().unwrap();
         let mut builder = winit::window::WindowBuilder::new();
-        #[cfg(target_arch = "wasm32")]
-        {
-            use wasm_bindgen::JsCast;
-            use winit::platform::web::WindowBuilderExtWebSys;
-            let canvas = web_sys::window()
-                .unwrap()
-                .document()
-                .unwrap()
-                .get_element_by_id("canvas")
-                .unwrap()
-                .dyn_into::<web_sys::HtmlCanvasElement>()
-                .unwrap();
-            builder = builder.with_canvas(Some(canvas));
-        }
         builder = builder.with_title("ft_vox");
         let window = Arc::new(builder.build(&event_loop).unwrap());
+
+        #[cfg(target_arch = "wasm32")]
+        {
+            use winit::dpi::PhysicalSize;
+            let _ = window.request_inner_size(PhysicalSize::new(450, 400));
+
+            use winit::platform::web::WindowExtWebSys;
+            web_sys::window()
+                .and_then(|win| win.document())
+                .and_then(|doc| {
+                    let dst = doc.get_element_by_id("wasm-container")?;
+                    let canvas = web_sys::Element::from(window.canvas()?);
+                    dst.append_child(&canvas).ok()?;
+                    Some(())
+                })
+                .expect("Couldn't append canvas to document body.");
+        }
 
         Self { event_loop, window }
     }
@@ -94,7 +100,7 @@ impl SurfaceWrapper {
         let width = window_size.width.max(1);
         let height = window_size.height.max(1);
 
-        // log::info!("Surface resume {window_size:?}");
+        log::info!("Surface resume {window_size:?}");
 
         // We didn't create the surface in pre_adapter, so we need to do so now.
         if !cfg!(target_arch = "wasm32") {
@@ -126,11 +132,19 @@ impl SurfaceWrapper {
 
     /// Resize the surface, making sure to not resize to zero.
     fn resize(&mut self, context: &Context, size: PhysicalSize<u32>) {
-        // log::info!("Surface resize {size:?}");
+        log::info!("Surface resize {size:?}");
 
         let config = self.config.as_mut().unwrap();
-        config.width = size.width.max(1);
-        config.height = size.height.max(1);
+        config.width = size.width;
+        config.height = size.height;
+        #[cfg(target_arch = "wasm32")]
+        {
+            let device_pixel_ratio = web_sys::window().unwrap().device_pixel_ratio();
+            config.width = (config.width as f64 / device_pixel_ratio) as u32;
+            config.height = (config.height as f64 / device_pixel_ratio) as u32;
+        }
+        config.width = config.width.max(1);
+        config.height = config.height.max(1);
         let surface = self.surface.as_ref().unwrap();
         surface.configure(&context.device, config);
     }
@@ -245,6 +259,7 @@ impl Context {
                     label: None,
                     required_features: (optional_features & adapter_features) | required_features,
                     required_limits: needed_limits,
+                    ..Default::default()
                 },
                 trace_dir.ok().as_ref().map(std::path::Path::new),
             )
@@ -260,7 +275,17 @@ impl Context {
     }
 }
 
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen(start))]
 pub async fn run() {
+    cfg_if::cfg_if! {
+        if #[cfg(target_arch = "wasm32")] {
+            std::panic::set_hook(Box::new(console_error_panic_hook::hook));
+            console_log::init_with_level(log::Level::Debug).expect("Couldn't initialize logger");
+        } else {
+            env_logger::init();
+        }
+    }
+
     let window_loop = EventLoopWrapper::new();
     let mut surface = SurfaceWrapper::new();
     let context = Context::init_async(&mut surface, window_loop.window.clone()).await;
@@ -661,11 +686,13 @@ impl Vox {
                 module: &shader,
                 entry_point: "vs_main",
                 buffers: &vertex_buffers,
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
                 entry_point: "fs_main",
                 targets: &[Some(config.view_formats[0].into())],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
             }),
             primitive: wgpu::PrimitiveState {
                 cull_mode: Some(wgpu::Face::Back),
@@ -680,6 +707,7 @@ impl Vox {
             }),
             multisample: wgpu::MultisampleState::default(),
             multiview: None,
+            cache: None,
         });
 
         // Done
