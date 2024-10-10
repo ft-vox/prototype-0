@@ -355,7 +355,9 @@ pub async fn run() {
                             },
                         ..
                     } if s == "w" => {
-                        vox.as_mut().map(|vox| vox.eye.y += 0.1);
+                        if let Some(vox) = vox.as_mut() {
+                            vox.eye.y += 0.1;
+                        }
                     }
                     WindowEvent::KeyboardInput {
                         event:
@@ -365,7 +367,9 @@ pub async fn run() {
                             },
                         ..
                     } if s == "a" => {
-                        vox.as_mut().map(|vox| vox.eye.x -= 0.1);
+                        if let Some(vox) = vox.as_mut() {
+                            vox.eye.x -= 0.1;
+                        }
                     }
                     WindowEvent::KeyboardInput {
                         event:
@@ -375,7 +379,9 @@ pub async fn run() {
                             },
                         ..
                     } if s == "s" => {
-                        vox.as_mut().map(|vox| vox.eye.y -= 0.1);
+                        if let Some(vox) = vox.as_mut() {
+                            vox.eye.y -= 0.1;
+                        }
                     }
                     WindowEvent::KeyboardInput {
                         event:
@@ -385,7 +391,9 @@ pub async fn run() {
                             },
                         ..
                     } if s == "d" => {
-                        vox.as_mut().map(|vox| vox.eye.x += 0.1);
+                        if let Some(vox) = vox.as_mut() {
+                            vox.eye.x += 0.1;
+                        }
                     }
                     WindowEvent::KeyboardInput {
                         event:
@@ -395,7 +403,9 @@ pub async fn run() {
                             },
                         ..
                     } if s == NamedKey::Space => {
-                        vox.as_mut().map(|vox| vox.eye.z += 0.1);
+                        if let Some(vox) = vox.as_mut() {
+                            vox.eye.z += 0.1;
+                        }
                     }
                     WindowEvent::KeyboardInput {
                         event:
@@ -405,7 +415,9 @@ pub async fn run() {
                             },
                         ..
                     } if s == NamedKey::Shift => {
-                        vox.as_mut().map(|vox| vox.eye.z -= 0.1);
+                        if let Some(vox) = vox.as_mut() {
+                            vox.eye.z -= 0.1;
+                        }
                     }
                     WindowEvent::RedrawRequested => {
                         // On MacOS, currently redraw requested comes in _before_ Init does.
@@ -830,7 +842,7 @@ impl Vox {
                 * glam::Mat3::from_rotation_z(self.horizontal_rotation);
             let dir = dir * glam::Vec3::Y;
             log::debug!("{}", self.eye);
-            let view_matrix = glam::Mat4::look_to_rh(self.eye, dir.into(), glam::Vec3::Z);
+            let view_matrix = glam::Mat4::look_to_rh(self.eye, dir, glam::Vec3::Z);
             let mx_total = self.projection_matrix * view_matrix;
             let mx_ref: &[f32; 16] = mx_total.as_ref();
             queue.write_buffer(&self.uniform_vp_buffer, 0, bytemuck::cast_slice(mx_ref));
