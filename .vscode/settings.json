@@ -14,4 +14,6 @@
     "editor.codeActionsOnSave": {
         "source.organizeImports": "explicit",
     },
+    "rust-analyzer.checkOnSave": true,
+    "rust-analyzer.check.command": "clippy",
 }
