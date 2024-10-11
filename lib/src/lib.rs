@@ -434,6 +434,11 @@ pub async fn run() {
                             let delta_y = local_cursor_position.y - (window_size.height / 2) as f64;
                             if let Some(vox) = vox.as_mut() {
                                 vox.horizontal_rotation -= delta_x as f32 * 0.002;
+                                vox.horizontal_rotation %= 2.0 * std::f32::consts::PI;
+                                if vox.horizontal_rotation < 0.0 {
+                                    vox.horizontal_rotation += 2.0 * std::f32::consts::PI;
+                                }
+                                println!("h-r: {}", vox.horizontal_rotation);
                             }
                             if let Some(vox) = vox.as_mut() {
                                 vox.vertical_rotation -= delta_y as f32 * 0.002;
