@@ -4,6 +4,7 @@ use bytemuck::{Pod, Zeroable};
 use std::{borrow::Cow, f32::consts, mem};
 use wgpu::util::DeviceExt;
 use wgpu::{Instance, Surface};
+use winit::event::ElementState;
 use winit::{
     dpi::PhysicalSize,
     event::{Event, KeyEvent, StartCause, WindowEvent},
@@ -17,6 +18,9 @@ use winapi::um::winuser::SetCursorPos;
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
+
+mod input;
+use input::Input;
 
 struct EventLoopWrapper {
     event_loop: EventLoop<()>,
@@ -293,7 +297,7 @@ pub async fn run() {
     let mut surface = SurfaceWrapper::new();
     let context = Context::init_async(&mut surface, window_loop.window.clone()).await;
     let mut vox = None;
-
+    let mut input = Input::new();
     let event_loop_function = EventLoop::run;
 
     #[allow(clippy::let_unit_value)]
@@ -350,78 +354,74 @@ pub async fn run() {
                     } if s == "r" => {
                         println!("{:#?}", context.instance.generate_report());
                     }
+
+                    // key pressed
                     WindowEvent::KeyboardInput {
                         event:
                             KeyEvent {
-                                logical_key: Key::Character(s),
+                                logical_key,
+                                state: ElementState::Pressed,
                                 ..
                             },
                         ..
-                    } if s == "w" => {
-                        if let Some(vox) = vox.as_mut() {
-                            vox.eye.y += 0.1;
+                    } => match logical_key {
+                        Key::Character(s) => match s.as_str() {
+                            "w" => {
+                                input.key_w = true;
+                            }
+                            "a" => {
+                                input.key_a = true;
+                            }
+                            "s" => {
+                                input.key_s = true;
+                            }
+                            "d" => {
+                                input.key_d = true;
+                            }
+                            _ => {}
+                        },
+                        Key::Named(NamedKey::Shift) => {
+                            input.key_shift = true;
                         }
-                    }
+                        Key::Named(NamedKey::Space) => {
+                            input.key_space = true;
+                        }
+                        _ => {}
+                    },
+
+                    // WASD key released
                     WindowEvent::KeyboardInput {
                         event:
                             KeyEvent {
-                                logical_key: Key::Character(s),
+                                logical_key,
+                                state: ElementState::Released,
                                 ..
                             },
                         ..
-                    } if s == "a" => {
-                        if let Some(vox) = vox.as_mut() {
-                            vox.eye.x -= 0.1;
+                    } => match logical_key {
+                        Key::Character(s) => match s.as_str() {
+                            "w" => {
+                                input.key_w = false;
+                            }
+                            "a" => {
+                                input.key_a = false;
+                            }
+                            "s" => {
+                                input.key_s = false;
+                            }
+                            "d" => {
+                                input.key_d = false;
+                            }
+                            _ => {}
+                        },
+                        Key::Named(NamedKey::Shift) => {
+                            input.key_shift = false;
                         }
-                    }
-                    WindowEvent::KeyboardInput {
-                        event:
-                            KeyEvent {
-                                logical_key: Key::Character(s),
-                                ..
-                            },
-                        ..
-                    } if s == "s" => {
-                        if let Some(vox) = vox.as_mut() {
-                            vox.eye.y -= 0.1;
+                        Key::Named(NamedKey::Space) => {
+                            input.key_space = false;
                         }
-                    }
-                    WindowEvent::KeyboardInput {
-                        event:
-                            KeyEvent {
-                                logical_key: Key::Character(s),
-                                ..
-                            },
-                        ..
-                    } if s == "d" => {
-                        if let Some(vox) = vox.as_mut() {
-                            vox.eye.x += 0.1;
-                        }
-                    }
-                    WindowEvent::KeyboardInput {
-                        event:
-                            KeyEvent {
-                                logical_key: Key::Named(s),
-                                ..
-                            },
-                        ..
-                    } if s == NamedKey::Space => {
-                        if let Some(vox) = vox.as_mut() {
-                            vox.eye.z += 0.1;
-                        }
-                    }
-                    WindowEvent::KeyboardInput {
-                        event:
-                            KeyEvent {
-                                logical_key: Key::Named(s),
-                                ..
-                            },
-                        ..
-                    } if s == NamedKey::Shift => {
-                        if let Some(vox) = vox.as_mut() {
-                            vox.eye.z -= 0.1;
-                        }
-                    }
+                        _ => {}
+                    },
 
                     #[cfg(target_os = "windows")]
                     WindowEvent::CursorMoved {
@@ -438,7 +438,6 @@ pub async fn run() {
                                 if vox.horizontal_rotation < 0.0 {
                                     vox.horizontal_rotation += 2.0 * std::f32::consts::PI;
                                 }
-                                println!("h-r: {}", vox.horizontal_rotation);
                             }
                             if let Some(vox) = vox.as_mut() {
                                 vox.vertical_rotation -= delta_y as f32 * 0.002;
@@ -454,7 +453,6 @@ pub async fn run() {
                             }
                         }
                     }
-
                     WindowEvent::RedrawRequested => {
                         // On MacOS, currently redraw requested comes in _before_ Init does.
                         // If this happens, just drop the requested redraw on the floor.
@@ -462,6 +460,58 @@ pub async fn run() {
                         // See https://github.com/rust-windowing/winit/issues/3235 for some discussion
                         if vox.is_none() {
                             return;
+                        }
+
+                        if input.key_w && !input.key_s {
+                            if let Some(vox) = vox.as_mut() {
+                                let forward_x = -vox.horizontal_rotation.sin();
+                                let forward_y = vox.horizontal_rotation.cos();
+                                vox.eye.x += forward_x * 0.1;
+                                vox.eye.y += forward_y * 0.1;
+                            }
+                        }
+
+                        if input.key_a && !input.key_d {
+                            if let Some(vox) = vox.as_mut() {
+                                let forward_x = -vox.horizontal_rotation.sin();
+                                let forward_y = vox.horizontal_rotation.cos();
+                                let leftward_x = -forward_y;
+                                let leftward_y = forward_x;
+                                vox.eye.x += leftward_x * 0.1;
+                                vox.eye.y += leftward_y * 0.1;
+                            }
+                        }
+
+                        if input.key_s && !input.key_w {
+                            if let Some(vox) = vox.as_mut() {
+                                let forward_x = -vox.horizontal_rotation.sin();
+                                let forward_y = vox.horizontal_rotation.cos();
+                                vox.eye.x -= forward_x * 0.1;
+                                vox.eye.y -= forward_y * 0.1;
+                            }
+                        }
+
+                        if input.key_d && !input.key_a {
+                            if let Some(vox) = vox.as_mut() {
+                                let forward_x = -vox.horizontal_rotation.sin();
+                                let forward_y = vox.horizontal_rotation.cos();
+                                let rightward_x = forward_y;
+                                let rightward_y = -forward_x;
+                                vox.eye.x += rightward_x * 0.1;
+                                vox.eye.y += rightward_y * 0.1;
+                            }
+                        }
+
+                        if input.key_space && !input.key_shift {
+                            if let Some(vox) = vox.as_mut() {
+                                vox.eye.z += 0.1;
+                            }
+                        }
+
+                        if input.key_shift && !input.key_space {
+                            if let Some(vox) = vox.as_mut() {
+                                vox.eye.z -= 0.1;
+                            }
                         }
 
                         let frame = surface.acquire(&context);
@@ -478,7 +528,9 @@ pub async fn run() {
 
                         window_loop.window.request_redraw();
                     }
-                    _ => vox.as_mut().unwrap().update(event),
+                    _ => {
+                        vox.as_mut().unwrap().update(event);
+                    }
                 },
                 _ => {}
             }
