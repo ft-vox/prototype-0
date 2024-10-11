@@ -12,6 +12,9 @@ use winit::{
     window::Window,
 };
 
+#[cfg(target_os = "windows")]
+use winapi::um::winuser::SetCursorPos;
+
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
@@ -419,6 +422,31 @@ pub async fn run() {
                             vox.eye.z -= 0.1;
                         }
                     }
+
+                    #[cfg(target_os = "windows")]
+                    WindowEvent::CursorMoved {
+                        position: local_cursor_position,
+                        ..
+                    } => {
+                        if let Ok(window_position) = window_loop.window.inner_position() {
+                            let window_size = window_loop.window.inner_size();
+                            let delta_x = local_cursor_position.x - (window_size.width / 2) as f64;
+                            let delta_y = local_cursor_position.y - (window_size.height / 2) as f64;
+                            if let Some(vox) = vox.as_mut() {
+                                vox.horizontal_rotation -= delta_x as f32 * 0.002;
+                            }
+                            if let Some(vox) = vox.as_mut() {
+                                vox.vertical_rotation -= delta_y as f32 * 0.002;
+                            }
+
+                            let center_x: i32 = window_position.x + (window_size.width / 2) as i32;
+                            let center_y: i32 = window_position.y + (window_size.height / 2) as i32;
+                            unsafe {
+                                SetCursorPos(center_x, center_y);
+                            }
+                        }
+                    }
+
                     WindowEvent::RedrawRequested => {
                         // On MacOS, currently redraw requested comes in _before_ Init does.
                         // If this happens, just drop the requested redraw on the floor.
