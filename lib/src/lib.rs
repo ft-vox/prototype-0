@@ -4,7 +4,6 @@ use bytemuck::{Pod, Zeroable};
 use std::{borrow::Cow, f32::consts, mem};
 use wgpu::util::DeviceExt;
 use wgpu::{Instance, Surface};
-use winapi::um::winuser::SetCursorPos;
 use winit::{
     dpi::PhysicalSize,
     event::{Event, KeyEvent, StartCause, WindowEvent},
@@ -12,6 +11,9 @@ use winit::{
     keyboard::{Key, NamedKey},
     window::Window,
 };
+
+#[cfg(target_os = "windows")]
+use winapi::um::winuser::SetCursorPos;
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
@@ -421,6 +423,7 @@ pub async fn run() {
                         }
                     }
 
+                    #[cfg(target_os = "windows")]
                     WindowEvent::CursorMoved {
                         position: local_cursor_position,
                         ..
