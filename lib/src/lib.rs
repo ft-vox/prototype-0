@@ -437,6 +437,9 @@ pub async fn run() {
                             }
                             if let Some(vox) = vox.as_mut() {
                                 vox.vertical_rotation -= delta_y as f32 * 0.002;
+                                vox.vertical_rotation = vox
+                                    .vertical_rotation
+                                    .clamp(-0.5 * std::f32::consts::PI, 0.5 * std::f32::consts::PI);
                             }
 
                             let center_x: i32 = window_position.x + (window_size.width / 2) as i32;
