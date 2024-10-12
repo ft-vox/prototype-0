@@ -1003,10 +1003,9 @@ impl Vox {
             ((uniform_size + min_alignment - 1) / min_alignment) * min_alignment;
 
         {
-            let dir = glam::Mat3::from_rotation_x(self.vertical_rotation)
-                * glam::Mat3::from_rotation_z(self.horizontal_rotation);
-            let dir = dir * glam::Vec3::Y;
-            log::debug!("{}", self.eye);
+            let dir = (glam::Mat3::from_rotation_z(self.horizontal_rotation)
+                * glam::Mat3::from_rotation_x(self.vertical_rotation))
+                * glam::Vec3::Y;
             let view_matrix = glam::Mat4::look_to_rh(self.eye, dir, glam::Vec3::Z);
             let mx_total = self.projection_matrix * view_matrix;
             let mx_ref: &[f32; 16] = mx_total.as_ref();
