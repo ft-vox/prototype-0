@@ -1,3 +1,5 @@
+use winit::dpi::PhysicalPosition;
+
 pub struct Input {
     pub key_w: bool,
     pub key_a: bool,
@@ -5,6 +7,7 @@ pub struct Input {
     pub key_d: bool,
     pub key_shift: bool,
     pub key_space: bool,
+    pub local_cursor_position: PhysicalPosition<f64>,
 }
 
 impl Input {
@@ -16,6 +19,7 @@ impl Input {
             key_d: false,
             key_shift: false,
             key_space: false,
+            local_cursor_position: PhysicalPosition::new(0.0, 0.0),
         }
     }
 }
