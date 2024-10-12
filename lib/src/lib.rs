@@ -14,8 +14,10 @@ use winapi::um::winuser::SetCursorPos;
 
 #[cfg(target_os = "macos")]
 use core_graphics::{
-    display::{CGDisplay, CGDisplayMoveCursorToPoint},
+    display::CGDisplay,
     geometry::CGPoint,
+    event::{CGEvent, CGEventType, CGMouseButton},
+    event_source::{CGEventSource, CGEventSourceStateID},
 };
 
 #[cfg(target_arch = "wasm32")]
@@ -496,7 +498,7 @@ pub async fn run() {
 
                         // Movement by mouse
                         {
-                            let sensitive: f32 = 0.001;
+                            let sensitive: f32 = 0.0015;
                             if let Ok(window_position) = window_loop.window.inner_position() {
                                 let window_size = window_loop.window.inner_size();
                                 let delta_x =
@@ -529,14 +531,21 @@ pub async fn run() {
                                 }
 
                                 #[cfg(target_os = "macos")]
-                                unsafe {
+                                {
                                     let display_size_os = target.primary_monitor().unwrap().size();
                                     let display_size_cg = CGDisplay::main().bounds().size;
                                     let scaling_factor =
                                         display_size_cg.width / display_size_os.width as f64;
                                     let scaled_x = center_x as f64 * scaling_factor;
                                     let scaled_y = center_y as f64 * scaling_factor;
-                                    CGDisplayMoveCursorToPoint(0, CGPoint::new(scaled_x, scaled_y));
+                                    let source = CGEventSource::new(CGEventSourceStateID::HIDSystemState).unwrap();
+                                    let event = CGEvent::new_mouse_event(
+                                        source,
+                                        CGEventType::MouseMoved,
+                                        CGPoint::new(scaled_x, scaled_y),
+                                        CGMouseButton::Left
+                                    ).unwrap();
+                                    event.post(core_graphics::event::CGEventTapLocation::HID);
                                 }
                             }
                         }
