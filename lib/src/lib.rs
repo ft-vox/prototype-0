@@ -1,13 +1,9 @@
-use std::sync::Arc;
-
 use bytemuck::{Pod, Zeroable};
-use std::{borrow::Cow, f32::consts, mem};
-use wgpu::util::DeviceExt;
-use wgpu::{Instance, Surface};
-use winit::event::ElementState;
+use std::{borrow::Cow, f32::consts, mem, sync::Arc};
+use wgpu::{util::DeviceExt, Instance, Surface};
 use winit::{
     dpi::PhysicalSize,
-    event::{Event, KeyEvent, StartCause, WindowEvent},
+    event::{ElementState, Event, KeyEvent, StartCause, WindowEvent},
     event_loop::{EventLoop, EventLoopWindowTarget},
     keyboard::{Key, NamedKey},
     window::Window,
