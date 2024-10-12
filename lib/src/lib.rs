@@ -1,5 +1,8 @@
 use bytemuck::{Pod, Zeroable};
-use std::{borrow::Cow, f32::consts, mem, sync::Arc};
+use std::{
+    borrow::Cow, cell::RefCell, f32::consts, marker::PhantomData, mem, num::NonZeroU8, rc::Rc,
+    sync::Arc,
+};
 use wgpu::{util::DeviceExt, Instance, Surface};
 use winit::{
     dpi::PhysicalSize,
@@ -15,9 +18,9 @@ use winapi::um::winuser::SetCursorPos;
 #[cfg(target_os = "macos")]
 use core_graphics::{
     display::CGDisplay,
-    geometry::CGPoint,
     event::{CGEvent, CGEventType, CGMouseButton},
     event_source::{CGEventSource, CGEventSourceStateID},
+    geometry::CGPoint,
 };
 
 #[cfg(target_arch = "wasm32")]
@@ -29,6 +32,10 @@ use input::Input;
 struct EventLoopWrapper {
     event_loop: EventLoop<()>,
     window: Arc<Window>,
+    #[cfg(target_arch = "wasm32")]
+    canvas: Option<web_sys::Element>,
+    #[cfg(not(target_arch = "wasm32"))]
+    canvas: Option<PhantomData<NonZeroU8>>,
 }
 
 impl EventLoopWrapper {
@@ -38,6 +45,7 @@ impl EventLoopWrapper {
         builder = builder.with_title("ft_vox");
         let window = Arc::new(builder.build(&event_loop).unwrap());
 
+        let mut outer_canvas = None;
         #[cfg(target_arch = "wasm32")]
         {
             use winit::dpi::PhysicalSize;
@@ -50,12 +58,30 @@ impl EventLoopWrapper {
                     let dst = doc.get_element_by_id("wasm-container")?;
                     let canvas = web_sys::Element::from(window.canvas()?);
                     dst.append_child(&canvas).ok()?;
+                    {
+                        let canvas_clone = canvas.clone();
+                        let closure = Closure::wrap(Box::new(move || {
+                            canvas_clone.request_pointer_lock();
+                        }) as Box<dyn FnMut()>);
+                        canvas
+                            .add_event_listener_with_callback(
+                                "click",
+                                closure.as_ref().unchecked_ref(),
+                            )
+                            .expect("Failed to add click event listener");
+                        closure.forget();
+                    }
+                    outer_canvas = Some(canvas);
                     Some(())
                 })
                 .expect("Couldn't append canvas to document body.");
         }
 
-        Self { event_loop, window }
+        Self {
+            event_loop,
+            window,
+            canvas: outer_canvas,
+        }
     }
 }
 
@@ -300,7 +326,36 @@ pub async fn run() {
     let window_loop = EventLoopWrapper::new();
     let mut surface = SurfaceWrapper::new();
     let context = Context::init_async(&mut surface, window_loop.window.clone()).await;
-    let mut vox = None;
+    let vox: Rc<RefCell<Option<Vox>>> = Rc::new(RefCell::new(None));
+    #[cfg(target_arch = "wasm32")]
+    {
+        let vox = Rc::clone(&vox);
+
+        let sensitive: f32 = 0.0015;
+        let closure = Closure::wrap(Box::new(move |event: web_sys::MouseEvent| {
+            if let Some(vox) = vox.borrow_mut().as_mut() {
+                let delta_x = event.movement_x() as f64;
+                let delta_y = event.movement_y() as f64;
+
+                vox.horizontal_rotation -= delta_x as f32 * sensitive;
+                vox.horizontal_rotation %= 2.0 * std::f32::consts::PI;
+                if vox.horizontal_rotation < 0.0 {
+                    vox.horizontal_rotation += 2.0 * std::f32::consts::PI;
+                }
+
+                vox.vertical_rotation -= delta_y as f32 * sensitive;
+                vox.vertical_rotation = vox
+                    .vertical_rotation
+                    .clamp(-0.5 * std::f32::consts::PI, 0.5 * std::f32::consts::PI);
+            }
+        }) as Box<dyn FnMut(_)>);
+        window_loop
+            .canvas
+            .unwrap()
+            .add_event_listener_with_callback("mousemove", closure.as_ref().unchecked_ref())
+            .expect("Failed to add mousemove event listener");
+        closure.forget();
+    }
     let mut input = Input::new();
     let event_loop_function = EventLoop::run;
 
@@ -313,8 +368,8 @@ pub async fn run() {
                     surface.resume(&context, window_loop.window.clone(), false);
 
                     // If we haven't created the example yet, do so now.
-                    if vox.is_none() {
-                        vox = Some(Vox::init(
+                    if vox.borrow().is_none() {
+                        *vox.borrow_mut() = Some(Vox::init(
                             surface.config(),
                             &context.adapter,
                             &context.device,
@@ -328,12 +383,9 @@ pub async fn run() {
                 Event::WindowEvent { event, .. } => match event {
                     WindowEvent::Resized(size) => {
                         surface.resize(&context, size);
-                        vox.as_mut().unwrap().resize(
-                            surface.config(),
-                            &context.device,
-                            &context.queue,
-                        );
-
+                        if let Some(vox) = vox.borrow_mut().as_mut() {
+                            vox.resize(surface.config(), &context.device, &context.queue);
+                        }
                         window_loop.window.request_redraw();
                     }
                     WindowEvent::KeyboardInput {
@@ -437,23 +489,18 @@ pub async fn run() {
                         // If this happens, just drop the requested redraw on the floor.
                         //
                         // See https://github.com/rust-windowing/winit/issues/3235 for some discussion
-                        if vox.is_none() {
-                            return;
-                        }
 
-                        // Movement by keyboard
-                        {
-                            if input.key_w && !input.key_s {
-                                if let Some(vox) = vox.as_mut() {
+                        if let Some(vox) = vox.borrow_mut().as_mut() {
+                            // Movement by keyboard
+                            {
+                                if input.key_w && !input.key_s {
                                     let forward_x = -vox.horizontal_rotation.sin();
                                     let forward_y = vox.horizontal_rotation.cos();
                                     vox.eye.x += forward_x * 0.1;
                                     vox.eye.y += forward_y * 0.1;
                                 }
-                            }
 
-                            if input.key_a && !input.key_d {
-                                if let Some(vox) = vox.as_mut() {
+                                if input.key_a && !input.key_d {
                                     let forward_x = -vox.horizontal_rotation.sin();
                                     let forward_y = vox.horizontal_rotation.cos();
                                     let leftward_x = -forward_y;
@@ -461,19 +508,15 @@ pub async fn run() {
                                     vox.eye.x += leftward_x * 0.1;
                                     vox.eye.y += leftward_y * 0.1;
                                 }
-                            }
 
-                            if input.key_s && !input.key_w {
-                                if let Some(vox) = vox.as_mut() {
+                                if input.key_s && !input.key_w {
                                     let forward_x = -vox.horizontal_rotation.sin();
                                     let forward_y = vox.horizontal_rotation.cos();
                                     vox.eye.x -= forward_x * 0.1;
                                     vox.eye.y -= forward_y * 0.1;
                                 }
-                            }
 
-                            if input.key_d && !input.key_a {
-                                if let Some(vox) = vox.as_mut() {
+                                if input.key_d && !input.key_a {
                                     let forward_x = -vox.horizontal_rotation.sin();
                                     let forward_y = vox.horizontal_rotation.cos();
                                     let rightward_x = forward_y;
@@ -481,90 +524,89 @@ pub async fn run() {
                                     vox.eye.x += rightward_x * 0.1;
                                     vox.eye.y += rightward_y * 0.1;
                                 }
-                            }
 
-                            if input.key_space && !input.key_shift {
-                                if let Some(vox) = vox.as_mut() {
+                                if input.key_space && !input.key_shift {
                                     vox.eye.z += 0.1;
                                 }
-                            }
 
-                            if input.key_shift && !input.key_space {
-                                if let Some(vox) = vox.as_mut() {
+                                if input.key_shift && !input.key_space {
                                     vox.eye.z -= 0.1;
                                 }
                             }
-                        }
 
-                        // Movement by mouse
-                        {
-                            let sensitive: f32 = 0.0015;
-                            if let Ok(window_position) = window_loop.window.inner_position() {
-                                let window_size = window_loop.window.inner_size();
-                                let delta_x =
-                                    input.local_cursor_position.x - (window_size.width / 2) as f64;
-                                let delta_y =
-                                    input.local_cursor_position.y - (window_size.height / 2) as f64;
-                                if let Some(vox) = vox.as_mut() {
+                            // Rotation by mouse
+                            #[cfg(not(target_arch = "wasm32"))]
+                            {
+                                let sensitive: f32 = 0.0015;
+                                if let Ok(window_position) = window_loop.window.inner_position() {
+                                    let window_size = window_loop.window.inner_size();
+                                    let delta_x = input.local_cursor_position.x
+                                        - (window_size.width / 2) as f64;
+                                    let delta_y = input.local_cursor_position.y
+                                        - (window_size.height / 2) as f64;
                                     vox.horizontal_rotation -= delta_x as f32 * sensitive;
                                     vox.horizontal_rotation %= 2.0 * std::f32::consts::PI;
                                     if vox.horizontal_rotation < 0.0 {
                                         vox.horizontal_rotation += 2.0 * std::f32::consts::PI;
                                     }
-                                }
-                                if let Some(vox) = vox.as_mut() {
+
                                     vox.vertical_rotation -= delta_y as f32 * sensitive;
                                     vox.vertical_rotation = vox.vertical_rotation.clamp(
                                         -0.5 * std::f32::consts::PI,
                                         0.5 * std::f32::consts::PI,
                                     );
-                                }
 
-                                let center_x: i32 =
-                                    window_position.x + (window_size.width / 2) as i32;
-                                let center_y: i32 =
-                                    window_position.y + (window_size.height / 2) as i32;
+                                    let center_x: i32 =
+                                        window_position.x + (window_size.width / 2) as i32;
+                                    let center_y: i32 =
+                                        window_position.y + (window_size.height / 2) as i32;
 
-                                #[cfg(target_os = "windows")]
-                                unsafe {
-                                    SetCursorPos(center_x, center_y);
-                                }
+                                    #[cfg(target_os = "windows")]
+                                    unsafe {
+                                        SetCursorPos(center_x, center_y);
+                                    }
 
-                                #[cfg(target_os = "macos")]
-                                {
-                                    let display_size_os = target.primary_monitor().unwrap().size();
-                                    let display_size_cg = CGDisplay::main().bounds().size;
-                                    let scaling_factor =
-                                        display_size_cg.width / display_size_os.width as f64;
-                                    let scaled_x = center_x as f64 * scaling_factor;
-                                    let scaled_y = center_y as f64 * scaling_factor;
-                                    let source = CGEventSource::new(CGEventSourceStateID::HIDSystemState).unwrap();
-                                    let event = CGEvent::new_mouse_event(
-                                        source,
-                                        CGEventType::MouseMoved,
-                                        CGPoint::new(scaled_x, scaled_y),
-                                        CGMouseButton::Left
-                                    ).unwrap();
-                                    event.post(core_graphics::event::CGEventTapLocation::HID);
+                                    #[cfg(target_os = "macos")]
+                                    {
+                                        let display_size_os =
+                                            target.primary_monitor().unwrap().size();
+                                        let display_size_cg = CGDisplay::main().bounds().size;
+                                        let scaling_factor =
+                                            display_size_cg.width / display_size_os.width as f64;
+                                        let scaled_x = center_x as f64 * scaling_factor;
+                                        let scaled_y = center_y as f64 * scaling_factor;
+                                        let source = CGEventSource::new(
+                                            CGEventSourceStateID::HIDSystemState,
+                                        )
+                                        .unwrap();
+                                        let event = CGEvent::new_mouse_event(
+                                            source,
+                                            CGEventType::MouseMoved,
+                                            CGPoint::new(scaled_x, scaled_y),
+                                            CGMouseButton::Left,
+                                        )
+                                        .unwrap();
+                                        event.post(core_graphics::event::CGEventTapLocation::HID);
+                                    }
                                 }
                             }
+                            let frame = surface.acquire(&context);
+                            let view = frame.texture.create_view(&wgpu::TextureViewDescriptor {
+                                format: Some(surface.config().view_formats[0]),
+                                ..wgpu::TextureViewDescriptor::default()
+                            });
+
+                            vox.render(&view, &context.device, &context.queue);
+
+                            frame.present();
+
+                            window_loop.window.request_redraw();
                         }
-                        let frame = surface.acquire(&context);
-                        let view = frame.texture.create_view(&wgpu::TextureViewDescriptor {
-                            format: Some(surface.config().view_formats[0]),
-                            ..wgpu::TextureViewDescriptor::default()
-                        });
-
-                        vox.as_mut()
-                            .unwrap()
-                            .render(&view, &context.device, &context.queue);
-
-                        frame.present();
-
-                        window_loop.window.request_redraw();
                     }
                     _ => {
-                        vox.as_mut().unwrap().update(event);
+                        if let Some(vox) = vox.borrow_mut().as_mut() {
+                            vox.update(event);
+                        }
                     }
                 },
                 _ => {}
