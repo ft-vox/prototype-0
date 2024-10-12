@@ -12,6 +12,7 @@ typedef void (*TMap_delete)(TMap self);
 
 typedef struct T {
   TMap map;
+  unsigned char opaque[];
 } *T;
 
 struct THandle {
