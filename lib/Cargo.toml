@@ -18,7 +18,7 @@ winit = { version = "0.29.10", features = ["rwh_05"] }
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["winuser"] }
 
-[target.'cfg(macos)'.dependencies]
+[target.'cfg(target_os = "macos")'.dependencies]
 core-graphics = "0.24.0"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]

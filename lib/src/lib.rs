@@ -13,7 +13,10 @@ use winit::{
 use winapi::um::winuser::SetCursorPos;
 
 #[cfg(target_os = "macos")]
-use core_graphics::event::{CGEvent, CGEventTapLocation, CGEventType};
+use core_graphics::{
+    display::{CGDisplayMoveCursorToPoint, CGDisplay},
+    geometry::CGPoint,
+};
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
@@ -442,29 +445,33 @@ pub async fn run() {
                                 vox.vertical_rotation = vox
                                     .vertical_rotation
                                     .clamp(-0.5 * std::f32::consts::PI, 0.5 * std::f32::consts::PI);
-                                println!(
-                                    "hr: {}, vr: {}",
-                                    vox.horizontal_rotation, vox.vertical_rotation
-                                );
                             }
 
                             let center_x: i32 = window_position.x + (window_size.width / 2) as i32;
                             let center_y: i32 = window_position.y + (window_size.height / 2) as i32;
+                            
+                            // 설명: logical_display_size_by_os
+                            // OS의 배율 설정에 의한 논리적 디스플레이 크기. 1080px, 150%배율이라면 1620가됨.(1080 * 1.5)
+                            let logical_display_size_by_os = target.primary_monitor().unwrap().size();
 
                             #[cfg(target_os = "windows")]
                             unsafe {
                                 SetCursorPos(center_x, center_y);
+                                // TODO: 배율에 맞추어 스케일링이 필요함. (필요한지도 검증이 필요함)
                             }
 
                             #[cfg(target_os = "macos")]
-                            {
-                                let event = CGEvent::new_mouse_event(
-                                    CGEventType::MouseMoved,
-                                    (center_x, center_y),
-                                    CGEventTapLocation::HID,
-                                )
-                                .unwrap();
-                                event.post(CGEventTapLocation::HID);
+                            unsafe {
+                                // 설명: logical_display_size_by_cg
+                                // 어떤 근거로 만들어진 논리적 크기인지는 모르겠으나 Apple의 core-graphics 에서 쓰이는 논리적 디스플레이 크기
+                                // 마우스 커서 좌표를 해당 좌표계를 이용해 이동시켜야함.
+                                // 맥 OS 디스플레이 배율 설정과 다른 논리적 크기임.
+                                let logical_display_size_by_cg = CGDisplay::main().bounds().size;
+                                let scaling_factor = logical_display_size_by_cg.width / logical_display_size_by_os.width as f64;
+                                let scaled_x = center_x as f64 * scaling_factor;
+                                let scaled_y = center_y as f64 * scaling_factor;
+                                CGDisplayMoveCursorToPoint(0, CGPoint::new(scaled_x, scaled_y));
+                                // 버그: 정상 작동되지 않음... 커서가 1픽셀조차 움직이지 못하는 상황
                             }
                         }
                     }
