@@ -12,6 +12,9 @@ use winit::{
 #[cfg(target_os = "windows")]
 use winapi::um::winuser::SetCursorPos;
 
+#[cfg(target_os = "macos")]
+use core_graphics::event::{CGEvent, CGEventTapLocation, CGEventType};
+
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
@@ -419,7 +422,6 @@ pub async fn run() {
                         _ => {}
                     },
 
-                    #[cfg(target_os = "windows")]
                     WindowEvent::CursorMoved {
                         position: local_cursor_position,
                         ..
@@ -440,12 +442,29 @@ pub async fn run() {
                                 vox.vertical_rotation = vox
                                     .vertical_rotation
                                     .clamp(-0.5 * std::f32::consts::PI, 0.5 * std::f32::consts::PI);
+                                println!(
+                                    "hr: {}, vr: {}",
+                                    vox.horizontal_rotation, vox.vertical_rotation
+                                );
                             }
 
                             let center_x: i32 = window_position.x + (window_size.width / 2) as i32;
                             let center_y: i32 = window_position.y + (window_size.height / 2) as i32;
+
+                            #[cfg(target_os = "windows")]
                             unsafe {
                                 SetCursorPos(center_x, center_y);
+                            }
+
+                            #[cfg(target_os = "macos")]
+                            {
+                                let event = CGEvent::new_mouse_event(
+                                    CGEventType::MouseMoved,
+                                    (center_x, center_y),
+                                    CGEventTapLocation::HID,
+                                )
+                                .unwrap();
+                                event.post(CGEventTapLocation::HID);
                             }
                         }
                     }
