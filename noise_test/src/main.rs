@@ -16,7 +16,7 @@ fn main() {
     let top_left_y: f32 = args[4].parse().expect("Invalid top_left.y");
     let bottom_right_x: f32 = args[5].parse().expect("Invalid bottom_right.x");
     let bottom_right_y: f32 = args[6].parse().expect("Invalid bottom_right.y");
-    let seed: u128 = args[7].parse().expect("Invalid seed");
+    let seed: u64 = args[7].parse().expect("Invalid seed");
 
     let mut layers = Vec::new();
     for i in (8..args.len()).step_by(2) {

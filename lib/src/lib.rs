@@ -27,7 +27,10 @@ use core_graphics::{
 use wasm_bindgen::prelude::*;
 
 mod input;
+mod map;
+
 use input::Input;
+use map::{Cube, Map, CHUNK_SIZE};
 
 struct EventLoopWrapper {
     event_loop: EventLoop<()>,
@@ -576,54 +579,85 @@ struct Vertex {
     _tex_coord: [f32; 2],
 }
 
-fn vertex(pos: [i8; 3], tc: [i8; 2]) -> Vertex {
+fn vertex(pos: [f32; 3], tc: [f32; 2]) -> Vertex {
     Vertex {
-        _pos: [pos[0] as f32, pos[1] as f32, pos[2] as f32, 1.0],
-        _tex_coord: [tc[0] as f32, tc[1] as f32],
+        _pos: [pos[0], pos[1], pos[2], 1.0],
+        _tex_coord: [tc[0], tc[1]],
     }
 }
 
-fn create_vertices() -> (Vec<Vertex>, Vec<u16>) {
+fn create_vertices(x: f32, y: f32, z: f32, index: usize) -> (Vec<Vertex>, Vec<u16>) {
     let vertex_data = [
         // top (0, 0, 1)
-        vertex([-1, -1, 1], [0, 0]),
-        vertex([1, -1, 1], [1, 0]),
-        vertex([1, 1, 1], [1, 1]),
-        vertex([-1, 1, 1], [0, 1]),
+        vertex([x + 0.0, y + 0.0, z + 1.0], [0.0, 0.0]),
+        vertex([x + 1.0, y + 0.0, z + 1.0], [1.0, 0.0]),
+        vertex([x + 1.0, y + 1.0, z + 1.0], [1.0, 1.0]),
+        vertex([x + 0.0, y + 1.0, z + 1.0], [0.0, 1.0]),
         // bottom (0, 0, -1)
-        vertex([-1, 1, -1], [1, 0]),
-        vertex([1, 1, -1], [0, 0]),
-        vertex([1, -1, -1], [0, 1]),
-        vertex([-1, -1, -1], [1, 1]),
+        vertex([x + 0.0, y + 1.0, z + 0.0], [1.0, 0.0]),
+        vertex([x + 1.0, y + 1.0, z + 0.0], [0.0, 0.0]),
+        vertex([x + 1.0, y + 0.0, z + 0.0], [0.0, 1.0]),
+        vertex([x + 0.0, y + 0.0, z + 0.0], [1.0, 1.0]),
         // right (1, 0, 0)
-        vertex([1, -1, -1], [0, 0]),
-        vertex([1, 1, -1], [1, 0]),
-        vertex([1, 1, 1], [1, 1]),
-        vertex([1, -1, 1], [0, 1]),
+        vertex([x + 1.0, y + 0.0, z + 0.0], [0.0, 0.0]),
+        vertex([x + 1.0, y + 1.0, z + 0.0], [1.0, 0.0]),
+        vertex([x + 1.0, y + 1.0, z + 1.0], [1.0, 1.0]),
+        vertex([x + 1.0, y + 0.0, z + 1.0], [0.0, 1.0]),
         // left (-1, 0, 0)
-        vertex([-1, -1, 1], [1, 0]),
-        vertex([-1, 1, 1], [0, 0]),
-        vertex([-1, 1, -1], [0, 1]),
-        vertex([-1, -1, -1], [1, 1]),
+        vertex([x + 0.0, y + 0.0, z + 1.0], [1.0, 0.0]),
+        vertex([x + 0.0, y + 1.0, z + 1.0], [0.0, 0.0]),
+        vertex([x + 0.0, y + 1.0, z + 0.0], [0.0, 1.0]),
+        vertex([x + 0.0, y + 0.0, z + 0.0], [1.0, 1.0]),
         // front (0, 1, 0)
-        vertex([1, 1, -1], [1, 0]),
-        vertex([-1, 1, -1], [0, 0]),
-        vertex([-1, 1, 1], [0, 1]),
-        vertex([1, 1, 1], [1, 1]),
+        vertex([x + 1.0, y + 1.0, z + 0.0], [1.0, 0.0]),
+        vertex([x + 0.0, y + 1.0, z + 0.0], [0.0, 0.0]),
+        vertex([x + 0.0, y + 1.0, z + 1.0], [0.0, 1.0]),
+        vertex([x + 1.0, y + 1.0, z + 1.0], [1.0, 1.0]),
         // back (0, -1, 0)
-        vertex([1, -1, 1], [0, 0]),
-        vertex([-1, -1, 1], [1, 0]),
-        vertex([-1, -1, -1], [1, 1]),
-        vertex([1, -1, -1], [0, 1]),
+        vertex([x + 1.0, y + 0.0, z + 1.0], [0.0, 0.0]),
+        vertex([x + 0.0, y + 0.0, z + 1.0], [1.0, 0.0]),
+        vertex([x + 0.0, y + 0.0, z + 0.0], [1.0, 1.0]),
+        vertex([x + 1.0, y + 0.0, z + 0.0], [0.0, 1.0]),
     ];
 
+    let offset = index as u16 * 24;
     let index_data: &[u16] = &[
-        0, 1, 2, 2, 3, 0, // top
-        4, 5, 6, 6, 7, 4, // bottom
-        8, 9, 10, 10, 11, 8, // right
-        12, 13, 14, 14, 15, 12, // left
-        16, 17, 18, 18, 19, 16, // front
-        20, 21, 22, 22, 23, 20, // back
+        offset,
+        1 + offset,
+        2 + offset,
+        2 + offset,
+        3 + offset,
+        offset, // top
+        4 + offset,
+        5 + offset,
+        6 + offset,
+        6 + offset,
+        7 + offset,
+        4 + offset, // bottom
+        8 + offset,
+        9 + offset,
+        10 + offset,
+        10 + offset,
+        11 + offset,
+        8 + offset, // right
+        12 + offset,
+        13 + offset,
+        14 + offset,
+        14 + offset,
+        15 + offset,
+        12 + offset, // left
+        16 + offset,
+        17 + offset,
+        18 + offset,
+        18 + offset,
+        19 + offset,
+        16 + offset, // front
+        20 + offset,
+        21 + offset,
+        22 + offset,
+        22 + offset,
+        23 + offset,
+        20 + offset, // back
     ];
 
     (vertex_data.to_vec(), index_data.to_vec())
@@ -647,14 +681,6 @@ fn create_texels(size: usize) -> Vec<u8> {
         .collect()
 }
 
-const DIRECTIONS: [glam::Vec3; 5] = [
-    glam::Vec3::new(1.0, 1.0, 1.0),
-    glam::Vec3::new(1.0, 1.0, -1.0),
-    glam::Vec3::new(-1.0, 1.0, -1.0),
-    glam::Vec3::new(1.0, -1.0, -1.0),
-    glam::Vec3::new(-1.0, -1.0, -1.0),
-];
-
 #[repr(C)]
 #[derive(Copy, Clone, Pod, Zeroable)]
 struct Uniforms {
@@ -666,12 +692,10 @@ struct Vox {
     horizontal_rotation: f32,
     vertical_rotation: f32,
     projection_matrix: glam::Mat4,
-    angle: f32,
     depth_buffer: wgpu::TextureView,
     vertex_buf: wgpu::Buffer,
     index_buf: wgpu::Buffer,
     index_count: u32,
-    uniform_m_buffer: wgpu::Buffer,
     bind_group: wgpu::BindGroup,
     uniform_vp_buffer: wgpu::Buffer,
     pipeline: wgpu::RenderPipeline,
@@ -707,9 +731,30 @@ impl Vox {
         });
         let depth_buffer = draw_depth_buffer.create_view(&wgpu::TextureViewDescriptor::default());
 
+        let chunk: map::Chunk = Map::new(42).get_chunk(0, 0, 0);
+        let mut cubes = Vec::new();
+        for z in 0..CHUNK_SIZE {
+            for y in 0..CHUNK_SIZE {
+                for x in 0..CHUNK_SIZE {
+                    if chunk.cubes[z * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE + x]
+                        == Cube::OnlyOneAtThisTime
+                    {
+                        cubes.push([x as f32, y as f32, z as f32]);
+                    }
+                }
+            }
+        }
+
+        let mut vertex_data = Vec::<Vertex>::new();
+        let mut index_data = Vec::<u16>::new();
+        for (i, &[x, y, z]) in cubes.iter().enumerate() {
+            let (mut vertex, mut index) = create_vertices(x, y, z, i);
+            vertex_data.append(&mut vertex);
+            index_data.append(&mut index);
+        }
+
         // Create the vertex and index buffers
         let vertex_size = mem::size_of::<Vertex>();
-        let (vertex_data, index_data) = create_vertices();
 
         let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertex Buffer"),
@@ -739,16 +784,6 @@ impl Vox {
                 },
                 wgpu::BindGroupLayoutEntry {
                     binding: 1,
-                    visibility: wgpu::ShaderStages::VERTEX,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: true,
-                        min_binding_size: wgpu::BufferSize::new(64),
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 2,
                     visibility: wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Texture {
                         multisampled: false,
@@ -808,15 +843,6 @@ impl Vox {
             mapped_at_creation: false,
         });
 
-        // Create bind groups
-        let total_size = aligned_uniform_size * DIRECTIONS.len();
-        println!("min_alignment: {min_alignment}, uniform_size: {uniform_size}, aligned_uniform_size: {aligned_uniform_size}");
-        let uniform_m_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Uniform M Buffer"),
-            size: total_size as wgpu::BufferAddress,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &bind_group_layout,
             entries: &[
@@ -826,14 +852,6 @@ impl Vox {
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
-                        buffer: &uniform_m_buffer,
-                        offset: 0,
-                        size: wgpu::BufferSize::new(mem::size_of::<Uniforms>() as _),
-                    }),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
                     resource: wgpu::BindingResource::TextureView(&texture_view),
                 },
             ],
@@ -895,20 +913,18 @@ impl Vox {
 
         // Done
         Vox {
-            eye: glam::Vec3::new(0.0, -5.0, 0.0),
+            eye: glam::Vec3::new(0.0, -5.0, 3.0),
             horizontal_rotation: 0.0,
             vertical_rotation: 0.0,
             projection_matrix: Self::generate_projection_matrix(
                 config.width as f32 / config.height as f32,
             ),
-            angle: 0f32,
             depth_buffer,
             vertex_buf,
             index_buf,
             index_count: index_data.len() as u32,
             bind_group,
             uniform_vp_buffer,
-            uniform_m_buffer,
             pipeline,
         }
     }
@@ -951,11 +967,6 @@ impl Vox {
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
-        let min_alignment = device.limits().min_uniform_buffer_offset_alignment;
-        let uniform_size = std::mem::size_of::<Uniforms>() as u32;
-        let aligned_uniform_size =
-            ((uniform_size + min_alignment - 1) / min_alignment) * min_alignment;
-
         {
             let dir = (glam::Mat3::from_rotation_z(self.horizontal_rotation)
                 * glam::Mat3::from_rotation_x(self.vertical_rotation))
@@ -964,25 +975,6 @@ impl Vox {
             let mx_total = self.projection_matrix * view_matrix;
             let mx_ref: &[f32; 16] = mx_total.as_ref();
             queue.write_buffer(&self.uniform_vp_buffer, 0, bytemuck::cast_slice(mx_ref));
-        }
-
-        {
-            self.angle += 0.001;
-            let rotation_matrix = glam::Mat4::from_rotation_x(self.angle)
-                * glam::Mat4::from_rotation_y(self.angle * 2.0)
-                * glam::Mat4::from_rotation_z(self.angle * 3.0);
-
-            for (i, &direction) in DIRECTIONS.iter().enumerate() {
-                let matrix = rotation_matrix * glam::Mat4::from_translation(direction);
-                let uniforms = Uniforms {
-                    transform: matrix.to_cols_array_2d(),
-                };
-                queue.write_buffer(
-                    &self.uniform_m_buffer,
-                    (i as u32 * aligned_uniform_size) as wgpu::BufferAddress,
-                    bytemuck::cast_slice(&[uniforms]),
-                );
-            }
         }
 
         {
@@ -1018,11 +1010,8 @@ impl Vox {
             rpass.set_vertex_buffer(0, self.vertex_buf.slice(..));
             rpass.pop_debug_group();
             rpass.insert_debug_marker("Draw!");
-            for (i, _) in DIRECTIONS.iter().enumerate() {
-                let offset = (i as u32 * aligned_uniform_size) as wgpu::DynamicOffset;
-                rpass.set_bind_group(0, &self.bind_group, &[offset]);
-                rpass.draw_indexed(0..self.index_count, 0, 0..1);
-            }
+            rpass.set_bind_group(0, &self.bind_group, &[]);
+            rpass.draw_indexed(0..self.index_count, 0, 0..1);
         }
 
         queue.submit(Some(encoder.finish()));
