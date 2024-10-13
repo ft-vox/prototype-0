@@ -24,6 +24,7 @@ mod context;
 mod input;
 mod map;
 mod surface_wrapper;
+mod texture;
 mod vertex;
 mod vox;
 

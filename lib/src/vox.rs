@@ -1,4 +1,5 @@
 use crate::map::*;
+use crate::texture::create_texels;
 use crate::vertex::*;
 use bytemuck::{Pod, Zeroable};
 use std::{borrow::Cow, collections::BTreeMap, f32::consts, mem, rc::Rc};
