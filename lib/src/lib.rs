@@ -1,7 +1,7 @@
 use bytemuck::{Pod, Zeroable};
 use std::{
-    borrow::Cow, cell::RefCell, f32::consts, marker::PhantomData, mem, num::NonZeroU8, rc::Rc,
-    sync::Arc,
+    borrow::Cow, cell::RefCell, collections::BTreeMap, f32::consts, marker::PhantomData, mem,
+    num::NonZeroU8, rc::Rc, sync::Arc,
 };
 use wgpu::{util::DeviceExt, Instance, Surface};
 use winit::{
@@ -30,7 +30,18 @@ mod input;
 mod map;
 
 use input::Input;
-use map::{Cube, Map, CHUNK_SIZE};
+use map::{Chunk, Map, CHUNK_SIZE};
+
+const REGIONS: [[i32; 3]; 8] = [
+    [-1, -1, -1],
+    [-1, -1, 0],
+    [-1, 0, -1],
+    [-1, 0, 0],
+    [0, -1, -1],
+    [0, -1, 0],
+    [0, 0, -1],
+    [0, 0, 0],
+];
 
 struct EventLoopWrapper {
     event_loop: EventLoop<()>,
@@ -573,81 +584,184 @@ fn vertex(pos: [f32; 3], tc: [f32; 2]) -> Vertex {
     }
 }
 
-fn create_vertices(x: f32, y: f32, z: f32, index: usize) -> (Vec<Vertex>, Vec<u16>) {
-    let vertex_data = [
-        // top (0, 0, 1)
-        vertex([x + 0.0, y + 0.0, z + 1.0], [0.0, 0.0]),
-        vertex([x + 1.0, y + 0.0, z + 1.0], [1.0, 0.0]),
-        vertex([x + 1.0, y + 1.0, z + 1.0], [1.0, 1.0]),
-        vertex([x + 0.0, y + 1.0, z + 1.0], [0.0, 1.0]),
-        // bottom (0, 0, -1)
-        vertex([x + 0.0, y + 1.0, z + 0.0], [1.0, 0.0]),
-        vertex([x + 1.0, y + 1.0, z + 0.0], [0.0, 0.0]),
-        vertex([x + 1.0, y + 0.0, z + 0.0], [0.0, 1.0]),
-        vertex([x + 0.0, y + 0.0, z + 0.0], [1.0, 1.0]),
-        // right (1, 0, 0)
-        vertex([x + 1.0, y + 0.0, z + 0.0], [0.0, 0.0]),
-        vertex([x + 1.0, y + 1.0, z + 0.0], [1.0, 0.0]),
-        vertex([x + 1.0, y + 1.0, z + 1.0], [1.0, 1.0]),
-        vertex([x + 1.0, y + 0.0, z + 1.0], [0.0, 1.0]),
-        // left (-1, 0, 0)
-        vertex([x + 0.0, y + 0.0, z + 1.0], [1.0, 0.0]),
-        vertex([x + 0.0, y + 1.0, z + 1.0], [0.0, 0.0]),
-        vertex([x + 0.0, y + 1.0, z + 0.0], [0.0, 1.0]),
-        vertex([x + 0.0, y + 0.0, z + 0.0], [1.0, 1.0]),
-        // front (0, 1, 0)
-        vertex([x + 1.0, y + 1.0, z + 0.0], [1.0, 0.0]),
-        vertex([x + 0.0, y + 1.0, z + 0.0], [0.0, 0.0]),
-        vertex([x + 0.0, y + 1.0, z + 1.0], [0.0, 1.0]),
-        vertex([x + 1.0, y + 1.0, z + 1.0], [1.0, 1.0]),
-        // back (0, -1, 0)
-        vertex([x + 1.0, y + 0.0, z + 1.0], [0.0, 0.0]),
-        vertex([x + 0.0, y + 0.0, z + 1.0], [1.0, 0.0]),
-        vertex([x + 0.0, y + 0.0, z + 0.0], [1.0, 1.0]),
-        vertex([x + 1.0, y + 0.0, z + 0.0], [0.0, 1.0]),
-    ];
+fn create_vertices_for_chunk(
+    chunk: &Chunk,
+    chunk_x: i32,
+    chunk_y: i32,
+    chunk_z: i32,
+    chunk_px: &Chunk,
+    chunk_nx: &Chunk,
+    chunk_py: &Chunk,
+    chunk_ny: &Chunk,
+    chunk_pz: &Chunk,
+    chunk_nz: &Chunk,
+) -> (Vec<Vertex>, Vec<u16>) {
+    let x_offset = chunk_x * CHUNK_SIZE as i32;
+    let y_offset = chunk_y * CHUNK_SIZE as i32;
+    let z_offset = chunk_z * CHUNK_SIZE as i32;
 
-    let offset = index as u16 * 24;
-    let index_data: &[u16] = &[
-        offset,
-        1 + offset,
-        2 + offset,
-        2 + offset,
-        3 + offset,
-        offset, // top
-        4 + offset,
-        5 + offset,
-        6 + offset,
-        6 + offset,
-        7 + offset,
-        4 + offset, // bottom
-        8 + offset,
-        9 + offset,
-        10 + offset,
-        10 + offset,
-        11 + offset,
-        8 + offset, // right
-        12 + offset,
-        13 + offset,
-        14 + offset,
-        14 + offset,
-        15 + offset,
-        12 + offset, // left
-        16 + offset,
-        17 + offset,
-        18 + offset,
-        18 + offset,
-        19 + offset,
-        16 + offset, // front
-        20 + offset,
-        21 + offset,
-        22 + offset,
-        22 + offset,
-        23 + offset,
-        20 + offset, // back
-    ];
+    let mut vertex_data = Vec::<Vertex>::new();
+    let mut index_data = Vec::<u16>::new();
+    for z in 0..CHUNK_SIZE {
+        for y in 0..CHUNK_SIZE {
+            for x in 0..CHUNK_SIZE {
+                if chunk.cubes[z * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE + x].is_solid() {
+                    let actual_x = x_offset + x as i32;
+                    let actual_y = y_offset + y as i32;
+                    let actual_z = z_offset + z as i32;
+                    let (mut tmp_vertex_data, mut tmp_index_data) = create_vertices(
+                        actual_x as f32,
+                        actual_y as f32,
+                        actual_z as f32,
+                        if x == CHUNK_SIZE - 1 {
+                            chunk_px.cubes[z * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE].is_solid()
+                        } else {
+                            chunk.cubes[z * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE + x + 1]
+                                .is_solid()
+                        },
+                        if x == 0 {
+                            chunk_nx.cubes
+                                [z * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE + CHUNK_SIZE - 1]
+                                .is_solid()
+                        } else {
+                            chunk.cubes[z * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE + x - 1]
+                                .is_solid()
+                        },
+                        if y == CHUNK_SIZE - 1 {
+                            chunk_py.cubes[z * CHUNK_SIZE * CHUNK_SIZE + x].is_solid()
+                        } else {
+                            chunk.cubes[z * CHUNK_SIZE * CHUNK_SIZE + (y + 1) * CHUNK_SIZE + x]
+                                .is_solid()
+                        },
+                        if y == 0 {
+                            chunk_ny.cubes
+                                [z * CHUNK_SIZE * CHUNK_SIZE + (CHUNK_SIZE - 1) * CHUNK_SIZE + x]
+                                .is_solid()
+                        } else {
+                            chunk.cubes[z * CHUNK_SIZE * CHUNK_SIZE + (y - 1) * CHUNK_SIZE + x]
+                                .is_solid()
+                        },
+                        if z == CHUNK_SIZE - 1 {
+                            chunk_pz.cubes[y * CHUNK_SIZE + x].is_solid()
+                        } else {
+                            chunk.cubes[(z + 1) * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE + x]
+                                .is_solid()
+                        },
+                        if z == 0 {
+                            chunk_nz.cubes
+                                [(CHUNK_SIZE - 1) * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE + x]
+                                .is_solid()
+                        } else {
+                            chunk.cubes[(z - 1) * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE + x]
+                                .is_solid()
+                        },
+                        vertex_data.len(),
+                    );
+                    vertex_data.append(&mut tmp_vertex_data);
+                    index_data.append(&mut tmp_index_data);
+                }
+            }
+        }
+    }
+    (vertex_data, index_data)
+}
 
-    (vertex_data.to_vec(), index_data.to_vec())
+fn create_vertices(
+    x: f32,
+    y: f32,
+    z: f32,
+    px: bool,
+    nx: bool,
+    py: bool,
+    ny: bool,
+    pz: bool,
+    nz: bool,
+    index: usize,
+) -> (Vec<Vertex>, Vec<u16>) {
+    let offset = index as u16;
+
+    let mut vertex_data = Vec::<Vertex>::new();
+    let mut index_data = Vec::<u16>::new();
+
+    if !px {
+        vertex_data.push(vertex([x + 1.0, y + 0.0, z + 0.0], [0.0, 0.0]));
+        vertex_data.push(vertex([x + 1.0, y + 1.0, z + 0.0], [1.0, 0.0]));
+        vertex_data.push(vertex([x + 1.0, y + 1.0, z + 1.0], [1.0, 1.0]));
+        vertex_data.push(vertex([x + 1.0, y + 0.0, z + 1.0], [0.0, 1.0]));
+        index_data.push(offset + vertex_data.len() as u16 - 4);
+        index_data.push(offset + vertex_data.len() as u16 - 3);
+        index_data.push(offset + vertex_data.len() as u16 - 2);
+        index_data.push(offset + vertex_data.len() as u16 - 2);
+        index_data.push(offset + vertex_data.len() as u16 - 1);
+        index_data.push(offset + vertex_data.len() as u16 - 4);
+    }
+
+    if !nx {
+        vertex_data.push(vertex([x + 0.0, y + 0.0, z + 1.0], [1.0, 0.0]));
+        vertex_data.push(vertex([x + 0.0, y + 1.0, z + 1.0], [0.0, 0.0]));
+        vertex_data.push(vertex([x + 0.0, y + 1.0, z + 0.0], [0.0, 1.0]));
+        vertex_data.push(vertex([x + 0.0, y + 0.0, z + 0.0], [1.0, 1.0]));
+        index_data.push(offset + vertex_data.len() as u16 - 4);
+        index_data.push(offset + vertex_data.len() as u16 - 3);
+        index_data.push(offset + vertex_data.len() as u16 - 2);
+        index_data.push(offset + vertex_data.len() as u16 - 2);
+        index_data.push(offset + vertex_data.len() as u16 - 1);
+        index_data.push(offset + vertex_data.len() as u16 - 4);
+    }
+
+    if !py {
+        vertex_data.push(vertex([x + 1.0, y + 1.0, z + 0.0], [1.0, 0.0]));
+        vertex_data.push(vertex([x + 0.0, y + 1.0, z + 0.0], [0.0, 0.0]));
+        vertex_data.push(vertex([x + 0.0, y + 1.0, z + 1.0], [0.0, 1.0]));
+        vertex_data.push(vertex([x + 1.0, y + 1.0, z + 1.0], [1.0, 1.0]));
+        index_data.push(offset + vertex_data.len() as u16 - 4);
+        index_data.push(offset + vertex_data.len() as u16 - 3);
+        index_data.push(offset + vertex_data.len() as u16 - 2);
+        index_data.push(offset + vertex_data.len() as u16 - 2);
+        index_data.push(offset + vertex_data.len() as u16 - 1);
+        index_data.push(offset + vertex_data.len() as u16 - 4);
+    }
+
+    if !ny {
+        vertex_data.push(vertex([x + 1.0, y + 0.0, z + 1.0], [0.0, 0.0]));
+        vertex_data.push(vertex([x + 0.0, y + 0.0, z + 1.0], [1.0, 0.0]));
+        vertex_data.push(vertex([x + 0.0, y + 0.0, z + 0.0], [1.0, 1.0]));
+        vertex_data.push(vertex([x + 1.0, y + 0.0, z + 0.0], [0.0, 1.0]));
+        index_data.push(offset + vertex_data.len() as u16 - 4);
+        index_data.push(offset + vertex_data.len() as u16 - 3);
+        index_data.push(offset + vertex_data.len() as u16 - 2);
+        index_data.push(offset + vertex_data.len() as u16 - 2);
+        index_data.push(offset + vertex_data.len() as u16 - 1);
+        index_data.push(offset + vertex_data.len() as u16 - 4);
+    }
+
+    if !pz {
+        vertex_data.push(vertex([x + 0.0, y + 0.0, z + 1.0], [0.0, 0.0]));
+        vertex_data.push(vertex([x + 1.0, y + 0.0, z + 1.0], [1.0, 0.0]));
+        vertex_data.push(vertex([x + 1.0, y + 1.0, z + 1.0], [1.0, 1.0]));
+        vertex_data.push(vertex([x + 0.0, y + 1.0, z + 1.0], [0.0, 1.0]));
+        index_data.push(offset + vertex_data.len() as u16 - 4);
+        index_data.push(offset + vertex_data.len() as u16 - 3);
+        index_data.push(offset + vertex_data.len() as u16 - 2);
+        index_data.push(offset + vertex_data.len() as u16 - 2);
+        index_data.push(offset + vertex_data.len() as u16 - 1);
+        index_data.push(offset + vertex_data.len() as u16 - 4);
+    }
+
+    if !nz {
+        vertex_data.push(vertex([x + 0.0, y + 1.0, z + 0.0], [1.0, 0.0]));
+        vertex_data.push(vertex([x + 1.0, y + 1.0, z + 0.0], [0.0, 0.0]));
+        vertex_data.push(vertex([x + 1.0, y + 0.0, z + 0.0], [0.0, 1.0]));
+        vertex_data.push(vertex([x + 0.0, y + 0.0, z + 0.0], [1.0, 1.0]));
+        index_data.push(offset + vertex_data.len() as u16 - 4);
+        index_data.push(offset + vertex_data.len() as u16 - 3);
+        index_data.push(offset + vertex_data.len() as u16 - 2);
+        index_data.push(offset + vertex_data.len() as u16 - 2);
+        index_data.push(offset + vertex_data.len() as u16 - 1);
+        index_data.push(offset + vertex_data.len() as u16 - 4);
+    }
+
+    (vertex_data, index_data)
 }
 
 fn create_texels(size: usize) -> Vec<u8> {
@@ -680,15 +794,71 @@ struct Vox {
     vertical_rotation: f32,
     projection_matrix: glam::Mat4,
     depth_buffer: wgpu::TextureView,
-    vertex_buf: wgpu::Buffer,
-    index_buf: wgpu::Buffer,
-    index_count: u32,
+    map: Map,
+    chunks: BTreeMap<[i32; 3], Rc<Chunk>>,
+    buffers: BTreeMap<[i32; 3], Rc<(wgpu::Buffer, wgpu::Buffer, u32)>>,
     bind_group: wgpu::BindGroup,
     uniform_vp_buffer: wgpu::Buffer,
     pipeline: wgpu::RenderPipeline,
 }
 
 impl Vox {
+    fn get_chunk(&mut self, x: i32, y: i32, z: i32) -> Rc<Chunk> {
+        if !self.chunks.contains_key(&[x, y, z]) {
+            let result = Rc::new(self.map.get_chunk(x, y, z));
+            self.chunks.insert([x, y, z], result);
+        }
+        Rc::clone(self.chunks.get(&[x, y, z]).unwrap())
+    }
+
+    fn get_buffers(
+        &mut self,
+        device: &wgpu::Device,
+        x: i32,
+        y: i32,
+        z: i32,
+    ) -> Rc<(wgpu::Buffer, wgpu::Buffer, u32)> {
+        if !self.buffers.contains_key(&[x, y, z]) {
+            let result = Rc::new(self.create_buffers(device, x, y, z));
+            self.buffers.insert([x, y, z], result);
+        }
+        Rc::clone(self.buffers.get(&[x, y, z]).unwrap())
+    }
+
+    fn create_buffers(
+        &mut self,
+        device: &wgpu::Device,
+        x: i32,
+        y: i32,
+        z: i32,
+    ) -> (wgpu::Buffer, wgpu::Buffer, u32) {
+        let chunk = self.get_chunk(x, y, z);
+        let chunk_px = self.get_chunk(x + 1, y, z);
+        let chunk_nx = self.get_chunk(x - 1, y, z);
+        let chunk_py = self.get_chunk(x, y + 1, z);
+        let chunk_ny = self.get_chunk(x, y - 1, z);
+        let chunk_pz = self.get_chunk(x, y, z + 1);
+        let chunk_nz = self.get_chunk(x, y, z - 1);
+
+        let (vertex_data, index_data) = create_vertices_for_chunk(
+            &chunk, x, y, z, &chunk_px, &chunk_nx, &chunk_py, &chunk_ny, &chunk_pz, &chunk_nz,
+        );
+
+        let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Vertex Buffer"),
+            contents: bytemuck::cast_slice(&vertex_data),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+
+        let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Index Buffer"),
+            contents: bytemuck::cast_slice(&index_data),
+            usage: wgpu::BufferUsages::INDEX,
+        });
+
+        return (vertex_buf, index_buf, index_data.len() as u32);
+    }
+
     fn generate_projection_matrix(aspect_ratio: f32) -> glam::Mat4 {
         glam::Mat4::perspective_rh(consts::FRAC_PI_4, aspect_ratio, 1.0, 1000.0)
     }
@@ -718,42 +888,21 @@ impl Vox {
         });
         let depth_buffer = draw_depth_buffer.create_view(&wgpu::TextureViewDescriptor::default());
 
-        let chunk: map::Chunk = Map::new(42).get_chunk(0, 0, 0);
-        let mut cubes = Vec::new();
-        for z in 0..CHUNK_SIZE {
-            for y in 0..CHUNK_SIZE {
-                for x in 0..CHUNK_SIZE {
-                    if chunk.cubes[z * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE + x]
-                        == Cube::OnlyOneAtThisTime
-                    {
-                        cubes.push([x as f32, y as f32, z as f32]);
-                    }
-                }
-            }
-        }
-
-        let mut vertex_data = Vec::<Vertex>::new();
-        let mut index_data = Vec::<u16>::new();
-        for (i, &[x, y, z]) in cubes.iter().enumerate() {
-            let (mut vertex, mut index) = create_vertices(x, y, z, i);
-            vertex_data.append(&mut vertex);
-            index_data.append(&mut index);
-        }
-
-        // Create the vertex and index buffers
-        let vertex_size = mem::size_of::<Vertex>();
-
-        let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Vertex Buffer"),
-            contents: bytemuck::cast_slice(&vertex_data),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-
-        let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Index Buffer"),
-            contents: bytemuck::cast_slice(&index_data),
-            usage: wgpu::BufferUsages::INDEX,
-        });
+        let map = Map::new(42);
+        let chunk_x = 0;
+        let chunk_y = 0;
+        let chunk_z = 0;
+        let chunk = map.get_chunk(chunk_x, chunk_y, chunk_z);
+        let chunk_px = map.get_chunk(chunk_x + 1, chunk_y, chunk_z);
+        let chunk_nx = map.get_chunk(chunk_x - 1, chunk_y, chunk_z);
+        let chunk_py = map.get_chunk(chunk_x, chunk_y + 1, chunk_z);
+        let chunk_ny = map.get_chunk(chunk_x, chunk_y - 1, chunk_z);
+        let chunk_pz = map.get_chunk(chunk_x, chunk_y, chunk_z + 1);
+        let chunk_nz = map.get_chunk(chunk_x, chunk_y, chunk_z - 1);
+        let (vertex_data, index_data) = create_vertices_for_chunk(
+            &chunk, chunk_x, chunk_y, chunk_z, &chunk_px, &chunk_nx, &chunk_py, &chunk_ny,
+            &chunk_pz, &chunk_nz,
+        );
 
         // Create pipeline layout
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -850,6 +999,8 @@ impl Vox {
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
         });
 
+        let vertex_size = mem::size_of::<Vertex>();
+
         let vertex_buffers = [wgpu::VertexBufferLayout {
             array_stride: vertex_size as wgpu::BufferAddress,
             step_mode: wgpu::VertexStepMode::Vertex,
@@ -907,9 +1058,9 @@ impl Vox {
                 config.width as f32 / config.height as f32,
             ),
             depth_buffer,
-            vertex_buf,
-            index_buf,
-            index_count: index_data.len() as u32,
+            map,
+            chunks: BTreeMap::new(),
+            buffers: BTreeMap::new(),
             bind_group,
             uniform_vp_buffer,
             pipeline,
@@ -991,14 +1142,17 @@ impl Vox {
                 timestamp_writes: None,
                 occlusion_query_set: None,
             });
-            rpass.push_debug_group("Prepare data for draw.");
-            rpass.set_pipeline(&self.pipeline);
-            rpass.set_index_buffer(self.index_buf.slice(..), wgpu::IndexFormat::Uint16);
-            rpass.set_vertex_buffer(0, self.vertex_buf.slice(..));
-            rpass.pop_debug_group();
-            rpass.insert_debug_marker("Draw!");
-            rpass.set_bind_group(0, &self.bind_group, &[]);
-            rpass.draw_indexed(0..self.index_count, 0, 0..1);
+            for [x, y, z] in REGIONS {
+                let buffers = self.get_buffers(device, x, y, z);
+                rpass.push_debug_group("Prepare data for draw.");
+                rpass.set_pipeline(&self.pipeline);
+                rpass.set_index_buffer(buffers.1.slice(..), wgpu::IndexFormat::Uint16);
+                rpass.set_vertex_buffer(0, buffers.0.slice(..));
+                rpass.pop_debug_group();
+                rpass.insert_debug_marker("Draw!");
+                rpass.set_bind_group(0, &self.bind_group, &[]);
+                rpass.draw_indexed(0..buffers.2, 0, 0..1);
+            }
         }
 
         queue.submit(Some(encoder.finish()));
