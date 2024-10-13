@@ -1,8 +1,19 @@
-use crate::map::{self, Cube, Map, CHUNK_SIZE};
+use crate::map::*;
 use crate::vertex::*;
 use bytemuck::{Pod, Zeroable};
-use std::{borrow::Cow, f32::consts, mem};
+use std::{borrow::Cow, collections::BTreeMap, f32::consts, mem, rc::Rc};
 use wgpu::util::DeviceExt;
+
+const REGIONS: [[i32; 3]; 8] = [
+    [-1, -1, -1],
+    [-1, -1, 0],
+    [-1, 0, -1],
+    [-1, 0, 0],
+    [0, -1, -1],
+    [0, -1, 0],
+    [0, 0, -1],
+    [0, 0, 0],
+];
 
 #[repr(C)]
 #[derive(Copy, Clone, Pod, Zeroable)]
@@ -16,15 +27,71 @@ pub struct Vox {
     pub vertical_rotation: f32,
     projection_matrix: glam::Mat4,
     depth_buffer: wgpu::TextureView,
-    vertex_buf: wgpu::Buffer,
-    index_buf: wgpu::Buffer,
-    index_count: u32,
+    map: Map,
+    chunks: BTreeMap<[i32; 3], Rc<Chunk>>,
+    buffers: BTreeMap<[i32; 3], Rc<(wgpu::Buffer, wgpu::Buffer, u32)>>,
     bind_group: wgpu::BindGroup,
     uniform_vp_buffer: wgpu::Buffer,
     pipeline: wgpu::RenderPipeline,
 }
 
 impl Vox {
+    fn get_chunk(&mut self, x: i32, y: i32, z: i32) -> Rc<Chunk> {
+        if !self.chunks.contains_key(&[x, y, z]) {
+            let result = Rc::new(self.map.get_chunk(x, y, z));
+            self.chunks.insert([x, y, z], result);
+        }
+        Rc::clone(self.chunks.get(&[x, y, z]).unwrap())
+    }
+
+    fn get_buffers(
+        &mut self,
+        device: &wgpu::Device,
+        x: i32,
+        y: i32,
+        z: i32,
+    ) -> Rc<(wgpu::Buffer, wgpu::Buffer, u32)> {
+        if !self.buffers.contains_key(&[x, y, z]) {
+            let result = Rc::new(self.create_buffers(device, x, y, z));
+            self.buffers.insert([x, y, z], result);
+        }
+        Rc::clone(self.buffers.get(&[x, y, z]).unwrap())
+    }
+
+    fn create_buffers(
+        &mut self,
+        device: &wgpu::Device,
+        x: i32,
+        y: i32,
+        z: i32,
+    ) -> (wgpu::Buffer, wgpu::Buffer, u32) {
+        let chunk = self.get_chunk(x, y, z);
+        let chunk_px = self.get_chunk(x + 1, y, z);
+        let chunk_nx = self.get_chunk(x - 1, y, z);
+        let chunk_py = self.get_chunk(x, y + 1, z);
+        let chunk_ny = self.get_chunk(x, y - 1, z);
+        let chunk_pz = self.get_chunk(x, y, z + 1);
+        let chunk_nz = self.get_chunk(x, y, z - 1);
+
+        let (vertex_data, index_data) = create_vertices_for_chunk(
+            &chunk, x, y, z, &chunk_px, &chunk_nx, &chunk_py, &chunk_ny, &chunk_pz, &chunk_nz,
+        );
+
+        let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Vertex Buffer"),
+            contents: bytemuck::cast_slice(&vertex_data),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+
+        let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Index Buffer"),
+            contents: bytemuck::cast_slice(&index_data),
+            usage: wgpu::BufferUsages::INDEX,
+        });
+
+        return (vertex_buf, index_buf, index_data.len() as u32);
+    }
+
     fn generate_projection_matrix(aspect_ratio: f32) -> glam::Mat4 {
         glam::Mat4::perspective_rh(consts::FRAC_PI_4, aspect_ratio, 1.0, 1000.0)
     }
@@ -54,42 +121,21 @@ impl Vox {
         });
         let depth_buffer = draw_depth_buffer.create_view(&wgpu::TextureViewDescriptor::default());
 
-        let chunk: map::Chunk = Map::new(42).get_chunk(0, 0, 0);
-        let mut cubes = Vec::new();
-        for z in 0..CHUNK_SIZE {
-            for y in 0..CHUNK_SIZE {
-                for x in 0..CHUNK_SIZE {
-                    if chunk.cubes[z * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE + x]
-                        == Cube::OnlyOneAtThisTime
-                    {
-                        cubes.push([x as f32, y as f32, z as f32]);
-                    }
-                }
-            }
-        }
-
-        let mut vertex_data = Vec::<Vertex>::new();
-        let mut index_data = Vec::<u16>::new();
-        for (i, &[x, y, z]) in cubes.iter().enumerate() {
-            let (mut vertex, mut index) = create_vertices(x, y, z, i);
-            vertex_data.append(&mut vertex);
-            index_data.append(&mut index);
-        }
-
-        // Create the vertex and index buffers
-        let vertex_size = mem::size_of::<Vertex>();
-
-        let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Vertex Buffer"),
-            contents: bytemuck::cast_slice(&vertex_data),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-
-        let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Index Buffer"),
-            contents: bytemuck::cast_slice(&index_data),
-            usage: wgpu::BufferUsages::INDEX,
-        });
+        let map = Map::new(42);
+        let chunk_x = 0;
+        let chunk_y = 0;
+        let chunk_z = 0;
+        let chunk = map.get_chunk(chunk_x, chunk_y, chunk_z);
+        let chunk_px = map.get_chunk(chunk_x + 1, chunk_y, chunk_z);
+        let chunk_nx = map.get_chunk(chunk_x - 1, chunk_y, chunk_z);
+        let chunk_py = map.get_chunk(chunk_x, chunk_y + 1, chunk_z);
+        let chunk_ny = map.get_chunk(chunk_x, chunk_y - 1, chunk_z);
+        let chunk_pz = map.get_chunk(chunk_x, chunk_y, chunk_z + 1);
+        let chunk_nz = map.get_chunk(chunk_x, chunk_y, chunk_z - 1);
+        let (vertex_data, index_data) = create_vertices_for_chunk(
+            &chunk, chunk_x, chunk_y, chunk_z, &chunk_px, &chunk_nx, &chunk_py, &chunk_ny,
+            &chunk_pz, &chunk_nz,
+        );
 
         // Create pipeline layout
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -186,6 +232,8 @@ impl Vox {
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
         });
 
+        let vertex_size = mem::size_of::<Vertex>();
+
         let vertex_buffers = [wgpu::VertexBufferLayout {
             array_stride: vertex_size as wgpu::BufferAddress,
             step_mode: wgpu::VertexStepMode::Vertex,
@@ -243,9 +291,9 @@ impl Vox {
                 config.width as f32 / config.height as f32,
             ),
             depth_buffer,
-            vertex_buf,
-            index_buf,
-            index_count: index_data.len() as u32,
+            map,
+            chunks: BTreeMap::new(),
+            buffers: BTreeMap::new(),
             bind_group,
             uniform_vp_buffer,
             pipeline,
@@ -327,14 +375,17 @@ impl Vox {
                 timestamp_writes: None,
                 occlusion_query_set: None,
             });
-            rpass.push_debug_group("Prepare data for draw.");
-            rpass.set_pipeline(&self.pipeline);
-            rpass.set_index_buffer(self.index_buf.slice(..), wgpu::IndexFormat::Uint16);
-            rpass.set_vertex_buffer(0, self.vertex_buf.slice(..));
-            rpass.pop_debug_group();
-            rpass.insert_debug_marker("Draw!");
-            rpass.set_bind_group(0, &self.bind_group, &[]);
-            rpass.draw_indexed(0..self.index_count, 0, 0..1);
+            for [x, y, z] in REGIONS {
+                let buffers = self.get_buffers(device, x, y, z);
+                rpass.push_debug_group("Prepare data for draw.");
+                rpass.set_pipeline(&self.pipeline);
+                rpass.set_index_buffer(buffers.1.slice(..), wgpu::IndexFormat::Uint16);
+                rpass.set_vertex_buffer(0, buffers.0.slice(..));
+                rpass.pop_debug_group();
+                rpass.insert_debug_marker("Draw!");
+                rpass.set_bind_group(0, &self.bind_group, &[]);
+                rpass.draw_indexed(0..buffers.2, 0, 0..1);
+            }
         }
 
         queue.submit(Some(encoder.finish()));

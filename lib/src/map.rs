@@ -5,6 +5,11 @@ pub const CHUNK_SIZE: usize = 13;
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Cube {
     Empty,
+    Solid(Solid),
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Solid {
     OnlyOneAtThisTime,
 }
 
@@ -15,6 +20,16 @@ pub struct Chunk {
 
 pub struct Map {
     noise: Noise,
+}
+
+impl Cube {
+    pub fn is_solid(&self) -> bool {
+        if let Cube::Solid(_) = self {
+            true
+        } else {
+            false
+        }
+    }
 }
 
 impl Map {
@@ -55,7 +70,7 @@ impl Map {
                         -1.0,
                     ) + noise;
                     let cube = if density > 0.0 {
-                        Cube::OnlyOneAtThisTime
+                        Cube::Solid(Solid::OnlyOneAtThisTime)
                     } else {
                         Cube::Empty
                     };
