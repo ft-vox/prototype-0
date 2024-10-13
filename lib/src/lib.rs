@@ -418,23 +418,10 @@ pub async fn run() {
                     WindowEvent::KeyboardInput {
                         event:
                             KeyEvent {
-                                logical_key,
-                                state: ElementState::Pressed,
-                                ..
+                                logical_key, state, ..
                             },
                         ..
-                    } => input.set_key_pressed(logical_key),
-
-                    // WASD key released
-                    WindowEvent::KeyboardInput {
-                        event:
-                            KeyEvent {
-                                logical_key,
-                                state: ElementState::Released,
-                                ..
-                            },
-                        ..
-                    } => input.set_key_released(logical_key),
+                    } => input.set_key_state(logical_key, state),
 
                     WindowEvent::CursorMoved {
                         position: local_cursor_position,

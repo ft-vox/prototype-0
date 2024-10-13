@@ -1,5 +1,6 @@
 use winit::{
     dpi::PhysicalPosition,
+    event::ElementState,
     keyboard::{Key, NamedKey},
 };
 
@@ -26,32 +27,21 @@ impl Input {
         }
     }
 
-    pub fn set_key_pressed(&mut self, logical_key: Key) {
-        self.set_key_state(logical_key, true);
-    }
-
-    pub fn set_key_released(&mut self, logical_key: Key) {
-        self.set_key_state(logical_key, false);
-    }
-
-    fn set_key_state(&mut self, logical_key: Key, state: bool) {
+    pub fn set_key_state(&mut self, logical_key: Key, state: ElementState) {
+        let is_pressed = matches!(state, ElementState::Pressed);
         match logical_key {
-            Key::Character(s) => {
-                self.set_character_key_state(s.as_str(), state);
-            }
-            Key::Named(named_key) => {
-                self.set_named_key_state(named_key, state);
-            }
+            Key::Character(s) => self.set_character_key_state(s.as_str(), is_pressed),
+            Key::Named(named_key) => self.set_named_key_state(named_key, is_pressed),
             _ => {}
         }
     }
 
     fn set_character_key_state(&mut self, key: &str, state: bool) {
-        match key {
-            "w" | "W" => self.key_w = state,
-            "a" | "A" => self.key_a = state,
-            "s" | "S" => self.key_s = state,
-            "d" | "D" => self.key_d = state,
+        match key.to_lowercase().as_str() {
+            "w" => self.key_w = state,
+            "a" => self.key_a = state,
+            "s" => self.key_s = state,
+            "d" => self.key_d = state,
             _ => {}
         }
     }
