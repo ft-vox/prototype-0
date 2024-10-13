@@ -1,7 +1,7 @@
 use ft_vox_prototype_0_noise::{Noise, NoiseLayer};
 
-use bmp::{Image, Pixel};
-use std::env;
+use png::Encoder;
+use std::{env, fs::File, io::BufWriter};
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -26,7 +26,7 @@ fn main() {
     }
 
     let noise = Noise::new(&layers, seed);
-    let mut img = Image::new(image_size as u32, image_size as u32);
+    let mut img_data = vec![0u8; image_size * image_size];
 
     for y in 0..image_size {
         for x in 0..image_size {
@@ -34,13 +34,18 @@ fn main() {
             let ny = top_left_y + (bottom_right_y - top_left_y) * (y as f32) / (image_size as f32);
             let value = (noise.noise2(nx, ny) * 0.5 + 0.5) * 255.0;
             let clamped_value = value.clamp(0.0, 255.0) as u8;
-            img.set_pixel(
-                x as u32,
-                y as u32,
-                Pixel::new(clamped_value, clamped_value, clamped_value),
-            );
+            img_data[y * image_size + x] = clamped_value;
         }
     }
 
-    img.save(output_path).expect("Unable to save BMP file");
+    let file = File::create(output_path).expect("Unable to create PNG file");
+    let ref mut w = BufWriter::new(file);
+
+    let mut encoder = Encoder::new(w, image_size as u32, image_size as u32);
+    encoder.set_color(png::ColorType::Grayscale);
+    encoder.set_depth(png::BitDepth::Eight);
+    let mut writer = encoder.write_header().expect("Unable to write PNG header");
+    writer
+        .write_image_data(&img_data)
+        .expect("Unable to write PNG data");
 }
