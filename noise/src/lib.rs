@@ -24,7 +24,7 @@ pub struct Noise {
 }
 
 impl Noise {
-    pub fn new(layers: &[NoiseLayer], seed: u128) -> Noise {
+    pub fn new(layers: &[NoiseLayer], seed: u64) -> Noise {
         let mut permutation = [0u8; PERMUTATION_SIZE * 2];
         let mut p: [u8; PERMUTATION_SIZE] = [0; PERMUTATION_SIZE];
 
@@ -32,7 +32,7 @@ impl Noise {
             p[i] = i as u8;
         }
 
-        let mut seed = seed as u64;
+        let mut seed = seed;
         for i in (0..PERMUTATION_SIZE).rev() {
             seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
             let j = (seed % (i as u64 + 1)) as usize;

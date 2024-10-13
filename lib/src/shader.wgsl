@@ -7,10 +7,6 @@ struct VertexOutput {
 @binding(0)
 var<uniform> vp_matrix: mat4x4<f32>;
 
-@group(0)
-@binding(1)
-var<uniform> m_matrix: mat4x4<f32>;
-
 @vertex
 fn vs_main(
     @location(0) position: vec4<f32>,
@@ -18,12 +14,12 @@ fn vs_main(
 ) -> VertexOutput {
     var result: VertexOutput;
     result.tex_coord = tex_coord;
-    result.position = vp_matrix * m_matrix * position;
+    result.position = vp_matrix * position;
     return result;
 }
 
 @group(0)
-@binding(2)
+@binding(1)
 var r_color: texture_2d<u32>;
 
 @fragment
