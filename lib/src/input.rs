@@ -11,6 +11,8 @@ pub struct Input {
     pub key_d: bool,
     pub key_shift: bool,
     pub key_space: bool,
+    pub key_esc: bool,
+    pub key_tab: bool,
     pub local_cursor_position: PhysicalPosition<f64>,
 }
 
@@ -23,6 +25,8 @@ impl Input {
             key_d: false,
             key_shift: false,
             key_space: false,
+            key_esc: false,
+            key_tab: false,
             local_cursor_position: PhysicalPosition::new(0.0, 0.0),
         }
     }
@@ -50,6 +54,8 @@ impl Input {
         match key {
             NamedKey::Shift => self.key_shift = state,
             NamedKey::Space => self.key_space = state,
+            NamedKey::Escape => self.key_esc = state,
+            NamedKey::Tab => self.key_tab = state,
             _ => {}
         }
     }
