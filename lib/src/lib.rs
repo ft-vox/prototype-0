@@ -1,6 +1,4 @@
-use std::{
-    cell::RefCell, collections::BTreeMap, marker::PhantomData, num::NonZeroU8, rc::Rc, sync::Arc,
-};
+use std::{cell::RefCell, marker::PhantomData, num::NonZeroU8, rc::Rc, sync::Arc};
 use winit::{
     event::{Event, KeyEvent, WindowEvent},
     event_loop::{EventLoop, EventLoopWindowTarget},
