@@ -420,30 +420,7 @@ pub async fn run() {
                                 ..
                             },
                         ..
-                    } => match logical_key {
-                        Key::Character(s) => match s.as_str() {
-                            "w" => {
-                                input.key_w = true;
-                            }
-                            "a" => {
-                                input.key_a = true;
-                            }
-                            "s" => {
-                                input.key_s = true;
-                            }
-                            "d" => {
-                                input.key_d = true;
-                            }
-                            _ => {}
-                        },
-                        Key::Named(NamedKey::Shift) => {
-                            input.key_shift = true;
-                        }
-                        Key::Named(NamedKey::Space) => {
-                            input.key_space = true;
-                        }
-                        _ => {}
-                    },
+                    } => input.set_key_pressed(logical_key),
 
                     // WASD key released
                     WindowEvent::KeyboardInput {
@@ -454,30 +431,7 @@ pub async fn run() {
                                 ..
                             },
                         ..
-                    } => match logical_key {
-                        Key::Character(s) => match s.as_str() {
-                            "w" => {
-                                input.key_w = false;
-                            }
-                            "a" => {
-                                input.key_a = false;
-                            }
-                            "s" => {
-                                input.key_s = false;
-                            }
-                            "d" => {
-                                input.key_d = false;
-                            }
-                            _ => {}
-                        },
-                        Key::Named(NamedKey::Shift) => {
-                            input.key_shift = false;
-                        }
-                        Key::Named(NamedKey::Space) => {
-                            input.key_space = false;
-                        }
-                        _ => {}
-                    },
+                    } => input.set_key_released(logical_key),
 
                     WindowEvent::CursorMoved {
                         position: local_cursor_position,
