@@ -173,11 +173,10 @@ impl Vox {
         });
 
         // Create the texture
-        let size: u32 = 16;
-        let texels = load_texture_from_terrain_png(32, 48, 16, 16);
+        let (texels, width, height) = load_texture_from_terrain_png();
         let texture_extent = wgpu::Extent3d {
-            width: size,
-            height: size,
+            width,
+            height,
             depth_or_array_layers: 1,
         };
         let texture = device.create_texture(&wgpu::TextureDescriptor {
@@ -196,7 +195,7 @@ impl Vox {
             &texels,
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: Some(size * 4),
+                bytes_per_row: Some(width * 4),
                 rows_per_image: None,
             },
             texture_extent,
