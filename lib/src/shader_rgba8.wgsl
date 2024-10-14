@@ -29,9 +29,10 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
     let tex_color: vec4<f32> = textureLoad(diffuse_color, vec2<i32>(input.tex_coord * vec2<f32>(16.0, 16.0)), 0);
 
     let edgeThreshold: f32 = 0.01; // 테두리 두께
+    let tex_pos = fract(input.tex_coord);
 
-    if (input.tex_coord.x < edgeThreshold || input.tex_coord.x > 1.0 - edgeThreshold ||
-        input.tex_coord.y < edgeThreshold || input.tex_coord.y > 1.0 - edgeThreshold) {
+    if (tex_pos.x < edgeThreshold || tex_pos.x > 1.0 - edgeThreshold ||
+        tex_pos.y < edgeThreshold || tex_pos.y > 1.0 - edgeThreshold) {
         output = vec4<f32>(0.0, 0.7, 0.0, 1.0);
     } else {
         output = tex_color;
