@@ -174,7 +174,7 @@ impl Vox {
 
         // Create the texture
         let size: u32 = 16;
-        let texels = load_texture_from_png("terrain.png", 32, 48, 16, 16);
+        let texels = load_texture_from_terrain_png(32, 48, 16, 16);
         let texture_extent = wgpu::Extent3d {
             width: size,
             height: size,
