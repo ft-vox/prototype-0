@@ -46,7 +46,9 @@ impl EventLoopWrapper {
     pub fn new() -> Self {
         let event_loop = EventLoop::new().unwrap();
         let mut builder = winit::window::WindowBuilder::new();
-        builder = builder.with_title("ft_vox");
+        builder = builder
+            .with_title("ft_vox")
+            .with_inner_size(winit::dpi::PhysicalSize::new(1280, 720));
         let window = Arc::new(builder.build(&event_loop).unwrap());
 
         let mut outer_canvas = None;
@@ -212,7 +214,7 @@ pub async fn run() {
                         if let Some(vox) = vox.borrow_mut().as_mut() {
                             // Vox update
                             {
-                                vox.update();
+                                vox.update(&context.device);
                             }
 
                             // Movement by keyboard

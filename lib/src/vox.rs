@@ -302,8 +302,67 @@ impl Vox {
         }
     }
 
-    pub fn update(&mut self) {
-        //empty
+    fn load_map_by_eye_position(
+        &mut self,
+        device: &wgpu::Device,
+        x_offset: i32,
+        y_offset: i32,
+        z_offset: i32,
+    ) {
+        self.get_buffers(
+            device,
+            (self.eye.x / CHUNK_SIZE as f32).floor() as i32 + x_offset,
+            (self.eye.y / CHUNK_SIZE as f32).floor() as i32 + y_offset,
+            (self.eye.z / CHUNK_SIZE as f32).floor() as i32 + z_offset,
+        );
+    }
+
+    fn unload_map_by_eye_position(
+        &mut self,
+        device: &wgpu::Device,
+        x_offset: i32,
+        y_offset: i32,
+        z_offset: i32,
+    ) {
+        self.buffers.remove(&[
+            (self.eye.x / CHUNK_SIZE as f32).floor() as i32 + x_offset,
+            (self.eye.y / CHUNK_SIZE as f32).floor() as i32 + y_offset,
+            (self.eye.z / CHUNK_SIZE as f32).floor() as i32 + z_offset,
+        ]);
+    }
+
+    pub fn update(&mut self, device: &wgpu::Device) {
+        for x_offset in -3..=3 {
+            for y_offset in -3..=3 {
+                for z_offset in -3..=3 {
+                    self.load_map_by_eye_position(device, x_offset, y_offset, z_offset);
+                }
+            }
+        }
+        for x_offset in [-4, 4] {
+            for y_offset in -4..=4 {
+                for z_offset in -4..=4 {
+                    self.unload_map_by_eye_position(device, x_offset, y_offset, z_offset);
+                }
+            }
+        }
+
+        for y_offset in [-4, 4] {
+            for x_offset in (-3..=3).rev() {
+                for z_offset in -4..=4 {
+                    self.unload_map_by_eye_position(device, x_offset, y_offset, z_offset);
+                }
+            }
+        }
+
+        for z_offset in [-4, 4] {
+            for x_offset in (-3..=3).rev() {
+                for y_offset in (-3..=3).rev() {
+                    self.unload_map_by_eye_position(device, x_offset, y_offset, z_offset);
+                }
+            }
+        }
+        println!("buffers size: {}", self.buffers.len());
     }
 
     pub fn resize(
@@ -377,7 +436,8 @@ impl Vox {
                 timestamp_writes: None,
                 occlusion_query_set: None,
             });
-            for [x, y, z] in REGIONS {
+            let keys: Vec<_> = self.buffers.keys().cloned().collect();
+            for [x, y, z] in keys {
                 let buffers = self.get_buffers(device, x, y, z);
                 rpass.push_debug_group("Prepare data for draw.");
                 rpass.set_pipeline(&self.pipeline);
