@@ -303,7 +303,7 @@ impl Vox {
         }
     }
 
-    pub fn update(&mut self, _event: winit::event::WindowEvent) {
+    pub fn update(&mut self) {
         //empty
     }
 

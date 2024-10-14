@@ -210,6 +210,11 @@ pub async fn run() {
                         // See https://github.com/rust-windowing/winit/issues/3235 for some discussion
 
                         if let Some(vox) = vox.borrow_mut().as_mut() {
+                            // Vox update
+                            {
+                                vox.update();
+                            }
+
                             // Movement by keyboard
                             {
                                 if input.key_w && !input.key_s {
@@ -322,11 +327,7 @@ pub async fn run() {
                             window_loop.window.request_redraw();
                         }
                     }
-                    _ => {
-                        if let Some(vox) = vox.borrow_mut().as_mut() {
-                            vox.update(event);
-                        }
-                    }
+                    _ => {}
                 },
                 _ => {}
             }
