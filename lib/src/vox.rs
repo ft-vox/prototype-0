@@ -90,7 +90,7 @@ impl Vox {
             usage: wgpu::BufferUsages::INDEX,
         });
 
-        return (vertex_buf, index_buf, index_data.len() as u32);
+        (vertex_buf, index_buf, index_data.len() as u32)
     }
 
     fn generate_projection_matrix(aspect_ratio: f32) -> glam::Mat4 {
@@ -121,22 +121,6 @@ impl Vox {
             view_formats: &[],
         });
         let depth_buffer = draw_depth_buffer.create_view(&wgpu::TextureViewDescriptor::default());
-
-        let map = Map::new(42);
-        let chunk_x = 0;
-        let chunk_y = 0;
-        let chunk_z = 0;
-        let chunk = map.get_chunk(chunk_x, chunk_y, chunk_z);
-        let chunk_px = map.get_chunk(chunk_x + 1, chunk_y, chunk_z);
-        let chunk_nx = map.get_chunk(chunk_x - 1, chunk_y, chunk_z);
-        let chunk_py = map.get_chunk(chunk_x, chunk_y + 1, chunk_z);
-        let chunk_ny = map.get_chunk(chunk_x, chunk_y - 1, chunk_z);
-        let chunk_pz = map.get_chunk(chunk_x, chunk_y, chunk_z + 1);
-        let chunk_nz = map.get_chunk(chunk_x, chunk_y, chunk_z - 1);
-        let (vertex_data, index_data) = create_vertices_for_chunk(
-            &chunk, chunk_x, chunk_y, chunk_z, &chunk_px, &chunk_nx, &chunk_py, &chunk_ny,
-            &chunk_pz, &chunk_nz,
-        );
 
         // Create pipeline layout
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -293,7 +277,7 @@ impl Vox {
                 config.width as f32 / config.height as f32,
             ),
             depth_buffer,
-            map,
+            map: Map::new(42),
             chunks: BTreeMap::new(),
             buffers: BTreeMap::new(),
             bind_group,
