@@ -5,12 +5,12 @@
 
 #include "internal.h"
 
-static err_t wait(ConditionVariableHandle self, MutexHandle mutex);
-static err_t signal(ConditionVariableHandle self);
+static err_t v_wait(ConditionVariableHandle self, MutexHandle mutex);
+static err_t v_signal(ConditionVariableHandle self);
 static err_t broadcast(ConditionVariableHandle self);
 static void destroy(ConditionVariableHandle self);
 
-static const struct ConditionVariableHandleV v = {wait, signal, broadcast,
+static const struct ConditionVariableHandleV v = {v_wait, v_signal, broadcast,
                                                   destroy};
 
 ConditionVariableHandle conditionVariableNew(void) {
@@ -31,7 +31,7 @@ ConditionVariableHandle conditionVariableNew(void) {
   return (ConditionVariableHandle)result;
 }
 
-static err_t wait(ConditionVariableHandle self, MutexHandle mutex) {
+static err_t v_wait(ConditionVariableHandle self, MutexHandle mutex) {
   ConditionVariableHandleActual *actual = (ConditionVariableHandleActual *)self;
 #ifdef _WIN32
   CRITICAL_SECTION *actual_mutex = &((MutexHandleActual *)mutex)->handle;
@@ -55,7 +55,7 @@ static err_t wait(ConditionVariableHandle self, MutexHandle mutex) {
   return false;
 }
 
-static err_t signal(ConditionVariableHandle self) {
+static err_t v_signal(ConditionVariableHandle self) {
   ConditionVariableHandleActual *actual = (ConditionVariableHandleActual *)self;
 #ifdef _WIN32
   WakeConditionVariable(&actual->cond);

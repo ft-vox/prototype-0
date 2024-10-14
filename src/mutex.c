@@ -60,7 +60,7 @@ static err_t try_lock(MutexHandle self, MutexLockHandle *out) {
     free(result);
     return true;
   }
-  result->handle = actual->handle;
+  result->handle = &actual->handle;
 #endif
   *out = (MutexLockHandle)result;
   return false;
@@ -81,7 +81,7 @@ static err_t lock(MutexHandle self, MutexLockHandle *out) {
     free(result);
     return true;
   }
-  result->handle = actual->handle;
+  result->handle = &actual->handle;
 #endif
   *out = (MutexLockHandle)result;
   return false;
