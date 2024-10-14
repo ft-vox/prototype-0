@@ -121,9 +121,10 @@ pub async fn run() {
                 }
 
                 vox.vertical_rotation -= delta_y as f32 * sensitive;
-                vox.vertical_rotation = vox
-                    .vertical_rotation
-                    .clamp(-0.5 * std::f32::consts::PI, 0.5 * std::f32::consts::PI);
+                vox.vertical_rotation = vox.vertical_rotation.clamp(
+                    -0.4999 * std::f32::consts::PI,
+                    0.4999 * std::f32::consts::PI,
+                );
             }
         }) as Box<dyn FnMut(_)>);
         window_loop
@@ -270,8 +271,8 @@ pub async fn run() {
 
                                     vox.vertical_rotation -= delta_y as f32 * sensitive;
                                     vox.vertical_rotation = vox.vertical_rotation.clamp(
-                                        -0.5 * std::f32::consts::PI,
-                                        0.5 * std::f32::consts::PI,
+                                        -0.4999 * std::f32::consts::PI,
+                                        0.4999 * std::f32::consts::PI,
                                     );
 
                                     let center_x: i32 =
