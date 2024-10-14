@@ -1,5 +1,5 @@
 use crate::map::*;
-use crate::texture::create_texels;
+use crate::texture::*;
 use crate::vertex::*;
 use bytemuck::{Pod, Zeroable};
 use std::{borrow::Cow, collections::BTreeMap, f32::consts, mem, rc::Rc};
@@ -157,7 +157,9 @@ impl Vox {
                     visibility: wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Texture {
                         multisampled: false,
-                        sample_type: wgpu::TextureSampleType::Uint,
+                        sample_type: wgpu::TextureSampleType::Float {
+                            filterable: (false),
+                        },
                         view_dimension: wgpu::TextureViewDimension::D2,
                     },
                     count: None,
@@ -171,8 +173,8 @@ impl Vox {
         });
 
         // Create the texture
-        let size = 256u32;
-        let texels = create_texels(size as usize);
+        let size: u32 = 16;
+        let texels = load_texture_from_png("terrain.png", 32, 48, 16, 16);
         let texture_extent = wgpu::Extent3d {
             width: size,
             height: size,
@@ -184,7 +186,7 @@ impl Vox {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::R8Uint,
+            format: wgpu::TextureFormat::Rgba8UnormSrgb,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });
@@ -194,7 +196,7 @@ impl Vox {
             &texels,
             wgpu::ImageDataLayout {
                 offset: 0,
-                bytes_per_row: Some(size),
+                bytes_per_row: Some(size * 4),
                 rows_per_image: None,
             },
             texture_extent,
@@ -230,7 +232,7 @@ impl Vox {
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
+            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader_rgba8.wgsl"))),
         });
 
         let vertex_size = mem::size_of::<Vertex>();
@@ -357,9 +359,9 @@ impl Vox {
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.1,
-                            g: 0.2,
-                            b: 0.3,
+                            r: 0.5,
+                            g: 0.5,
+                            b: 0.5,
                             a: 1.0,
                         }),
                         store: wgpu::StoreOp::Store,

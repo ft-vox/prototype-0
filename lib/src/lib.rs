@@ -143,7 +143,7 @@ pub async fn run() {
         move |event: Event<()>, target: &EventLoopWindowTarget<()>| {
             match event {
                 ref e if SurfaceWrapper::start_condition(e) => {
-                    surface.resume(&context, window_loop.window.clone(), false);
+                    surface.resume(&context, window_loop.window.clone(), true);
 
                     // If we haven't created the example yet, do so now.
                     if vox.borrow().is_none() {
