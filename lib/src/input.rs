@@ -5,6 +5,7 @@ use winit::{
     keyboard::{Key, NamedKey, SmolStr},
 };
 
+/// EventDrivenInput will reset key state when input events occur.
 pub struct EventDrivenInput {
     pub key_pressed: HashMap<Key, bool>,
     pub local_cursor_position: PhysicalPosition<f64>,
@@ -31,6 +32,8 @@ impl EventDrivenInput {
     }
 }
 
+/// FrameDrivenInput will update input states every frame.
+/// Added up & down state for game logic.
 pub struct FrameDrivenInput {
     pub key_pressed: HashMap<Key, bool>,
     pub key_down: HashMap<Key, bool>,
