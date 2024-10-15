@@ -157,14 +157,14 @@ pub async fn run() {
                 }
 
                 Event::WindowEvent { event, .. } => match event {
-                    /* WindowEvent::Resized(size) => {
+                    WindowEvent::Resized(size) => {
                         surface.resize(&context, size);
                         if let Some(vox) = vox.borrow_mut().as_mut() {
                             vox.resize(surface.config(), &context.device, &context.queue);
                         }
                         window_loop.window.request_redraw();
                     }
-                    WindowEvent::KeyboardInput {
+                    /* WindowEvent::KeyboardInput {
                         event:
                             KeyEvent {
                                 logical_key: Key::Named(NamedKey::Escape),
