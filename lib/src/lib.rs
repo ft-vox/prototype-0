@@ -157,7 +157,7 @@ pub async fn run() {
                 }
 
                 Event::WindowEvent { event, .. } => match event {
-                    WindowEvent::Resized(size) => {
+                    /* WindowEvent::Resized(size) => {
                         surface.resize(&context, size);
                         if let Some(vox) = vox.borrow_mut().as_mut() {
                             vox.resize(surface.config(), &context.device, &context.queue);
@@ -172,7 +172,8 @@ pub async fn run() {
                             },
                         ..
                     }
-                    | WindowEvent::CloseRequested => {
+                    |  */
+                    WindowEvent::CloseRequested => {
                         target.exit();
                     }
 

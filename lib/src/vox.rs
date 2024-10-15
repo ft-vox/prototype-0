@@ -8,7 +8,7 @@ use wgpu::util::DeviceExt;
 use winit::dpi::PhysicalPosition;
 use winit::dpi::PhysicalSize;
 
-pub const RENDER_DISTANCE: f32 = 21.0;
+pub const RENDER_DISTANCE: f32 = 5.0;
 
 #[repr(C)]
 #[derive(Copy, Clone, Pod, Zeroable)]
@@ -22,7 +22,7 @@ pub struct Vox {
     pub vertical_rotation: f32,
     pub window_inner_position: PhysicalPosition<i32>,
     pub window_inner_size: PhysicalSize<u32>,
-    pub mouse_lock: bool,
+    pub is_paused: bool,
     projection_matrix: glam::Mat4,
     depth_buffer: wgpu::TextureView,
     map: Map,
@@ -284,7 +284,7 @@ impl Vox {
             pipeline,
             window_inner_position: PhysicalPosition::new(0, 0),
             window_inner_size: PhysicalSize::new(0, 0),
-            mouse_lock: true,
+            is_paused: true,
         }
     }
 

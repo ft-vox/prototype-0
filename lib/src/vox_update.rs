@@ -2,6 +2,7 @@ use crate::context::Context;
 use crate::input::*;
 use crate::map::*;
 use crate::vox::*;
+use glam::Vec3;
 use winit::dpi::PhysicalPosition;
 use winit::dpi::PhysicalSize;
 
@@ -21,8 +22,8 @@ use core_graphics::{
 /// Sprinting speed (Survival): 5.612 blocks/second
 /// Flying speed (Creative): 10.89 blocks/second
 
-const MOVE_SPEED: f32 = 4.317;
-const FAST_MOVE_SPEED: f32 = 10.89;
+const MOVE_SPEED_PER_SECOND: f32 = 4.317;
+const FAST_MOVE_SPEED_PER_SECOND: f32 = 10.89;
 
 const FPS: f32 = 60.0;
 
@@ -37,57 +38,56 @@ impl Vox {
     }
 
     pub fn update_eye_movement(&mut self, input: &FrameDrivenInput) {
+        if !self.is_paused {
+            return;
+        }
+
         let speed = if input.get_key_pressed("ctrl") {
-            FAST_MOVE_SPEED / FPS
+            FAST_MOVE_SPEED_PER_SECOND / FPS
         } else {
-            MOVE_SPEED / FPS
+            MOVE_SPEED_PER_SECOND / FPS
         };
-        if input.get_key_pressed("w") && !input.get_key_pressed("s") {
-            let forward_x = -self.horizontal_rotation.sin();
-            let forward_y = self.horizontal_rotation.cos();
-            self.eye.x += forward_x * speed;
-            self.eye.y += forward_y * speed;
+
+        let forward = Vec3::new(
+            -self.horizontal_rotation.sin(),
+            self.horizontal_rotation.cos(),
+            0.0,
+        );
+
+        let mut movement = Vec3::ZERO;
+
+        if input.get_key_pressed("w") {
+            movement += forward;
+        }
+        if input.get_key_pressed("s") {
+            movement -= forward;
+        }
+        if input.get_key_pressed("a") {
+            movement.x += -forward.y;
+            movement.y += forward.x;
+        }
+        if input.get_key_pressed("d") {
+            movement.x += forward.y;
+            movement.y += -forward.x;
+        }
+        if input.get_key_pressed("space") {
+            movement.z += 1.0;
+        }
+        if input.get_key_pressed("shift") {
+            movement.z -= 1.0;
+        }
+        if movement.length() > 0.0 {
+            movement = movement.normalize();
         }
 
-        if input.get_key_pressed("a") && !input.get_key_pressed("d") {
-            let forward_x = -self.horizontal_rotation.sin();
-            let forward_y = self.horizontal_rotation.cos();
-            let leftward_x = -forward_y;
-            let leftward_y = forward_x;
-            self.eye.x += leftward_x * speed;
-            self.eye.y += leftward_y * speed;
-        }
-
-        if input.get_key_pressed("s") && !input.get_key_pressed("w") {
-            let forward_x = -self.horizontal_rotation.sin();
-            let forward_y = self.horizontal_rotation.cos();
-            self.eye.x -= forward_x * speed;
-            self.eye.y -= forward_y * speed;
-        }
-
-        if input.get_key_pressed("d") && !input.get_key_pressed("a") {
-            let forward_x = -self.horizontal_rotation.sin();
-            let forward_y = self.horizontal_rotation.cos();
-            let rightward_x = forward_y;
-            let rightward_y = -forward_x;
-            self.eye.x += rightward_x * speed;
-            self.eye.y += rightward_y * speed;
-        }
-
-        if input.get_key_pressed("space") && !input.get_key_pressed("shift") {
-            self.eye.z += 0.1;
-        }
-
-        if input.get_key_pressed("shift") && !input.get_key_pressed("str") {
-            self.eye.z -= 0.1;
-        }
+        self.eye += movement * speed;
     }
 
     pub fn update_eye_rotation(&mut self, input: &FrameDrivenInput) {
-        if input.get_key_down("tab") {
-            self.mouse_lock = !self.mouse_lock;
+        if input.get_key_down("esc") {
+            self.is_paused = !self.is_paused;
         }
-        if !self.mouse_lock {
+        if !self.is_paused {
             return;
         }
 
