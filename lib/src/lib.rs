@@ -2,7 +2,7 @@ use std::{cell::RefCell, marker::PhantomData, num::NonZeroU8, rc::Rc, sync::Arc}
 use winit::{
     event::{Event, KeyEvent, WindowEvent},
     event_loop::{EventLoop, EventLoopWindowTarget},
-    keyboard::{Key, NamedKey},
+    keyboard::{Key, KeyCode, NamedKey, SmolStr},
     window::Window,
 };
 
@@ -30,7 +30,7 @@ mod vertex;
 mod vox;
 
 use context::Context;
-use input::EventDrivenInput;
+use input::*;
 use surface_wrapper::SurfaceWrapper;
 use vox::*;
 
@@ -137,7 +137,10 @@ pub async fn run() {
             .expect("Failed to add mousemove event listener");
         closure.forget();
     }
+
     let mut event_driven_input = EventDrivenInput::new();
+    let mut frame_driven_input = FrameDrivenInput::new();
+
     let event_loop_function = EventLoop::run;
 
     #[allow(clippy::let_unit_value)]
@@ -213,15 +216,16 @@ pub async fn run() {
                         // See https://github.com/rust-windowing/winit/issues/3235 for some discussion
 
                         if let Some(vox) = vox.borrow_mut().as_mut() {
-                            // Vox update
+                            // updates
                             {
                                 vox.update(&context.device);
+                                frame_driven_input.update(&event_driven_input);
                             }
 
                             // Movement by keyboard
                             {
-                                if event_driven_input.input_state.key_w
-                                    && !event_driven_input.input_state.key_s
+                                if frame_driven_input.get_key_pressed("w")
+                                    && !frame_driven_input.get_key_pressed("s")
                                 {
                                     let forward_x = -vox.horizontal_rotation.sin();
                                     let forward_y = vox.horizontal_rotation.cos();
@@ -229,8 +233,8 @@ pub async fn run() {
                                     vox.eye.y += forward_y * 0.1;
                                 }
 
-                                if event_driven_input.input_state.key_a
-                                    && !event_driven_input.input_state.key_d
+                                if frame_driven_input.get_key_pressed("a")
+                                    && !frame_driven_input.get_key_pressed("d")
                                 {
                                     let forward_x = -vox.horizontal_rotation.sin();
                                     let forward_y = vox.horizontal_rotation.cos();
@@ -240,8 +244,8 @@ pub async fn run() {
                                     vox.eye.y += leftward_y * 0.1;
                                 }
 
-                                if event_driven_input.input_state.key_s
-                                    && !event_driven_input.input_state.key_w
+                                if frame_driven_input.get_key_pressed("s")
+                                    && !frame_driven_input.get_key_pressed("w")
                                 {
                                     let forward_x = -vox.horizontal_rotation.sin();
                                     let forward_y = vox.horizontal_rotation.cos();
@@ -249,8 +253,8 @@ pub async fn run() {
                                     vox.eye.y -= forward_y * 0.1;
                                 }
 
-                                if event_driven_input.input_state.key_d
-                                    && !event_driven_input.input_state.key_a
+                                if frame_driven_input.get_key_pressed("d")
+                                    && !frame_driven_input.get_key_pressed("a")
                                 {
                                     let forward_x = -vox.horizontal_rotation.sin();
                                     let forward_y = vox.horizontal_rotation.cos();
@@ -260,14 +264,14 @@ pub async fn run() {
                                     vox.eye.y += rightward_y * 0.1;
                                 }
 
-                                if event_driven_input.input_state.key_space
-                                    && !event_driven_input.input_state.key_shift
+                                if frame_driven_input.get_key_pressed("space")
+                                    && !frame_driven_input.get_key_pressed("shift")
                                 {
                                     vox.eye.z += 0.1;
                                 }
 
-                                if event_driven_input.input_state.key_shift
-                                    && !event_driven_input.input_state.key_space
+                                if frame_driven_input.get_key_pressed("shift")
+                                    && !frame_driven_input.get_key_pressed("str")
                                 {
                                     vox.eye.z -= 0.1;
                                 }
