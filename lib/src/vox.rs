@@ -385,16 +385,14 @@ impl Vox {
                 timestamp_writes: None,
                 occlusion_query_set: None,
             });
+
+            rpass.set_pipeline(&self.pipeline);
+            rpass.set_bind_group(0, &self.bind_group, &[]);
             let keys: Vec<_> = self.buffers.map.keys().cloned().collect();
             for [x, y, z] in keys {
                 let buffers = self.get_buffers(device, x, y, z);
-                rpass.push_debug_group("Prepare data for draw.");
-                rpass.set_pipeline(&self.pipeline);
                 rpass.set_index_buffer(buffers.1.slice(..), wgpu::IndexFormat::Uint16);
                 rpass.set_vertex_buffer(0, buffers.0.slice(..));
-                rpass.pop_debug_group();
-                rpass.insert_debug_marker("Draw!");
-                rpass.set_bind_group(0, &self.bind_group, &[]);
                 rpass.draw_indexed(0..buffers.2, 0, 0..1);
             }
         }

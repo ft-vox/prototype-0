@@ -1,6 +1,8 @@
 use ft_vox_prototype_0_noise::{Noise, NoiseLayer};
 
-pub const CHUNK_SIZE: usize = 13;
+pub const CHUNK_SIZE: usize = 16;
+const MIN_HEIGHT: f32 = -100.0;
+const MAX_HEIGHT: f32 = 42.0;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Cube {
@@ -98,8 +100,6 @@ impl Map {
         for z in 0..CHUNK_SIZE {
             for y in 0..CHUNK_SIZE {
                 for x in 0..CHUNK_SIZE {
-                    const MIN_HEIGHT: f32 = -42.0;
-                    const MAX_HEIGHT: f32 = 42.0;
                     let actual_x = x_offset as f32 + x as f32;
                     let actual_y = y_offset as f32 + y as f32;
                     let actual_z = z_offset as f32 + z as f32;
