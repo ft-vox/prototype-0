@@ -22,6 +22,7 @@ use wasm_bindgen::prelude::*;
 
 mod context;
 mod input;
+mod lru_cache;
 mod map;
 mod surface_wrapper;
 mod texture;

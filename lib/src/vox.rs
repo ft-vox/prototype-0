@@ -5,16 +5,9 @@ use bytemuck::{Pod, Zeroable};
 use std::{borrow::Cow, collections::BTreeMap, f32::consts, mem, rc::Rc};
 use wgpu::util::DeviceExt;
 
-const REGIONS: [[i32; 3]; 8] = [
-    [-1, -1, -1],
-    [-1, -1, 0],
-    [-1, 0, -1],
-    [-1, 0, 0],
-    [0, -1, -1],
-    [0, -1, 0],
-    [0, 0, -1],
-    [0, 0, 0],
-];
+use crate::lru_cache::LRUCache;
+
+const RENDER_DISTANCE: f32 = 6.0;
 
 #[repr(C)]
 #[derive(Copy, Clone, Pod, Zeroable)]
@@ -30,7 +23,7 @@ pub struct Vox {
     depth_buffer: wgpu::TextureView,
     map: Map,
     chunks: BTreeMap<[i32; 3], Rc<Chunk>>,
-    buffers: BTreeMap<[i32; 3], Rc<(wgpu::Buffer, wgpu::Buffer, u32)>>,
+    buffers: LRUCache<[i32; 3], Rc<(wgpu::Buffer, wgpu::Buffer, u32)>>,
     bind_group: wgpu::BindGroup,
     uniform_vp_buffer: wgpu::Buffer,
     pipeline: wgpu::RenderPipeline,
@@ -52,11 +45,13 @@ impl Vox {
         y: i32,
         z: i32,
     ) -> Rc<(wgpu::Buffer, wgpu::Buffer, u32)> {
-        if !self.buffers.contains_key(&[x, y, z]) {
-            let result = Rc::new(self.create_buffers(device, x, y, z));
-            self.buffers.insert([x, y, z], result);
+        if let Some(result) = self.buffers.get(&[x, y, z]) {
+            result
+        } else {
+            let new_value = Rc::new(self.create_buffers(device, x, y, z));
+            self.buffers.put([x, y, z], new_value.clone());
+            new_value
         }
-        Rc::clone(self.buffers.get(&[x, y, z]).unwrap())
     }
 
     fn create_buffers(
@@ -279,74 +274,44 @@ impl Vox {
             depth_buffer,
             map: Map::new(42),
             chunks: BTreeMap::new(),
-            buffers: BTreeMap::new(),
+            buffers: LRUCache::new(Self::get_coords(RENDER_DISTANCE).len()),
             bind_group,
             uniform_vp_buffer,
             pipeline,
         }
     }
 
-    fn load_map_by_eye_position(
-        &mut self,
-        device: &wgpu::Device,
-        x_offset: i32,
-        y_offset: i32,
-        z_offset: i32,
-    ) {
-        self.get_buffers(
-            device,
-            (self.eye.x / CHUNK_SIZE as f32).floor() as i32 + x_offset,
-            (self.eye.y / CHUNK_SIZE as f32).floor() as i32 + y_offset,
-            (self.eye.z / CHUNK_SIZE as f32).floor() as i32 + z_offset,
-        );
-    }
+    fn get_coords(distance: f32) -> Vec<(i32, i32, i32)> {
+        let mut coords = Vec::new();
+        let max_coord = distance.floor() as i32;
+        let distance_squared = distance * distance;
 
-    fn unload_map_by_eye_position(
-        &mut self,
-        device: &wgpu::Device,
-        x_offset: i32,
-        y_offset: i32,
-        z_offset: i32,
-    ) {
-        self.buffers.remove(&[
-            (self.eye.x / CHUNK_SIZE as f32).floor() as i32 + x_offset,
-            (self.eye.y / CHUNK_SIZE as f32).floor() as i32 + y_offset,
-            (self.eye.z / CHUNK_SIZE as f32).floor() as i32 + z_offset,
-        ]);
+        for x in -max_coord..=max_coord {
+            for y in -max_coord..=max_coord {
+                for z in -max_coord..=max_coord {
+                    let dist_sq = (x * x + y * y + z * z) as f32;
+                    if dist_sq <= distance_squared {
+                        coords.push((x, y, z));
+                    }
+                }
+            }
+        }
+
+        coords
     }
 
     pub fn update(&mut self, device: &wgpu::Device) {
-        for x_offset in -3..=3 {
-            for y_offset in -3..=3 {
-                for z_offset in -3..=3 {
-                    self.load_map_by_eye_position(device, x_offset, y_offset, z_offset);
-                }
-            }
+        let coords = Self::get_coords(RENDER_DISTANCE);
+        let where_am_i = self.eye.floor() / CHUNK_SIZE as f32;
+        for coord in coords.iter() {
+            self.get_buffers(
+                device,
+                coord.0 + where_am_i.x as i32,
+                coord.1 + where_am_i.y as i32,
+                coord.2 + where_am_i.z as i32,
+            );
         }
-        for x_offset in [-4, 4] {
-            for y_offset in -4..=4 {
-                for z_offset in -4..=4 {
-                    self.unload_map_by_eye_position(device, x_offset, y_offset, z_offset);
-                }
-            }
-        }
-
-        for y_offset in [-4, 4] {
-            for x_offset in (-3..=3).rev() {
-                for z_offset in -4..=4 {
-                    self.unload_map_by_eye_position(device, x_offset, y_offset, z_offset);
-                }
-            }
-        }
-
-        for z_offset in [-4, 4] {
-            for x_offset in (-3..=3).rev() {
-                for y_offset in (-3..=3).rev() {
-                    self.unload_map_by_eye_position(device, x_offset, y_offset, z_offset);
-                }
-            }
-        }
-        println!("buffers size: {}", self.buffers.len());
+        // println!("buffers size: {}", self.buffers.len());
     }
 
     pub fn resize(
@@ -420,7 +385,7 @@ impl Vox {
                 timestamp_writes: None,
                 occlusion_query_set: None,
             });
-            let keys: Vec<_> = self.buffers.keys().cloned().collect();
+            let keys: Vec<_> = self.buffers.map.keys().cloned().collect();
             for [x, y, z] in keys {
                 let buffers = self.get_buffers(device, x, y, z);
                 rpass.push_debug_group("Prepare data for draw.");

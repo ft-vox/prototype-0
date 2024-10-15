@@ -98,12 +98,14 @@ impl Map {
         for z in 0..CHUNK_SIZE {
             for y in 0..CHUNK_SIZE {
                 for x in 0..CHUNK_SIZE {
-                    const MIN_HEIGHT: f32 = -10.0;
-                    const MAX_HEIGHT: f32 = 10.0;
+                    const MIN_HEIGHT: f32 = -42.0;
+                    const MAX_HEIGHT: f32 = 42.0;
                     let actual_x = x_offset as f32 + x as f32;
                     let actual_y = y_offset as f32 + y as f32;
                     let actual_z = z_offset as f32 + z as f32;
-                    let noise = self.noise.noise3(actual_x, actual_y, actual_z);
+                    let noise =
+                        self.noise
+                            .noise3(actual_x * 0.042, actual_y * 0.042, actual_z * 0.042);
                     let density = lerp(
                         de_lerp(actual_z, MIN_HEIGHT, MAX_HEIGHT).clamp(0.0, 1.0),
                         1.0,
