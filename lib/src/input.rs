@@ -90,6 +90,7 @@ fn str_to_key(str: &str) -> Key {
         "shift" => Key::Named(NamedKey::Shift),
         "tab" => Key::Named(NamedKey::Tab),
         "esc" => Key::Named(NamedKey::Escape),
+        "ctrl" => Key::Named(NamedKey::Control),
         _ => Key::Character(SmolStr::new(str)),
     }
 }
