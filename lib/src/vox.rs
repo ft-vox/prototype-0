@@ -7,7 +7,7 @@ use wgpu::util::DeviceExt;
 
 use crate::lru_cache::LRUCache;
 
-const RENDER_DISTANCE: f32 = 6.0;
+const RENDER_DISTANCE: f32 = 21.0;
 
 #[repr(C)]
 #[derive(Copy, Clone, Pod, Zeroable)]
