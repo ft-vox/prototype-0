@@ -390,10 +390,14 @@ impl Vox {
             rpass.set_bind_group(0, &self.bind_group, &[]);
             let keys: Vec<_> = self.buffers.map.keys().cloned().collect();
             for [x, y, z] in keys {
-                let buffers = self.get_buffers(device, x, y, z);
-                rpass.set_index_buffer(buffers.1.slice(..), wgpu::IndexFormat::Uint16);
-                rpass.set_vertex_buffer(0, buffers.0.slice(..));
-                rpass.draw_indexed(0..buffers.2, 0, 0..1);
+                let (vertex_buffer, index_buffer, index_count) =
+                    &*self.get_buffers(device, x, y, z);
+                if *index_count == 0 {
+                    continue;
+                }
+                rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+                rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
+                rpass.draw_indexed(0..*index_count, 0, 0..1);
             }
         }
 
