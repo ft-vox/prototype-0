@@ -30,7 +30,7 @@ mod vertex;
 mod vox;
 
 use context::Context;
-use input::Input;
+use input::EventDrivenInput;
 use surface_wrapper::SurfaceWrapper;
 use vox::*;
 
@@ -137,7 +137,7 @@ pub async fn run() {
             .expect("Failed to add mousemove event listener");
         closure.forget();
     }
-    let mut input = Input::new();
+    let mut event_driven_input = EventDrivenInput::new();
     let event_loop_function = EventLoop::run;
 
     #[allow(clippy::let_unit_value)]
@@ -199,12 +199,12 @@ pub async fn run() {
                                 logical_key, state, ..
                             },
                         ..
-                    } => input.set_key_state(logical_key, state),
+                    } => event_driven_input.set_key_state(logical_key, state),
 
                     WindowEvent::CursorMoved {
                         position: local_cursor_position,
                         ..
-                    } => input.local_cursor_position = local_cursor_position,
+                    } => event_driven_input.local_cursor_position = local_cursor_position,
 
                     WindowEvent::RedrawRequested => {
                         // On MacOS, currently redraw requested comes in _before_ Init does.
@@ -220,14 +220,18 @@ pub async fn run() {
 
                             // Movement by keyboard
                             {
-                                if input.key_w && !input.key_s {
+                                if event_driven_input.input_state.key_w
+                                    && !event_driven_input.input_state.key_s
+                                {
                                     let forward_x = -vox.horizontal_rotation.sin();
                                     let forward_y = vox.horizontal_rotation.cos();
                                     vox.eye.x += forward_x * 0.1;
                                     vox.eye.y += forward_y * 0.1;
                                 }
 
-                                if input.key_a && !input.key_d {
+                                if event_driven_input.input_state.key_a
+                                    && !event_driven_input.input_state.key_d
+                                {
                                     let forward_x = -vox.horizontal_rotation.sin();
                                     let forward_y = vox.horizontal_rotation.cos();
                                     let leftward_x = -forward_y;
@@ -236,14 +240,18 @@ pub async fn run() {
                                     vox.eye.y += leftward_y * 0.1;
                                 }
 
-                                if input.key_s && !input.key_w {
+                                if event_driven_input.input_state.key_s
+                                    && !event_driven_input.input_state.key_w
+                                {
                                     let forward_x = -vox.horizontal_rotation.sin();
                                     let forward_y = vox.horizontal_rotation.cos();
                                     vox.eye.x -= forward_x * 0.1;
                                     vox.eye.y -= forward_y * 0.1;
                                 }
 
-                                if input.key_d && !input.key_a {
+                                if event_driven_input.input_state.key_d
+                                    && !event_driven_input.input_state.key_a
+                                {
                                     let forward_x = -vox.horizontal_rotation.sin();
                                     let forward_y = vox.horizontal_rotation.cos();
                                     let rightward_x = forward_y;
@@ -252,11 +260,15 @@ pub async fn run() {
                                     vox.eye.y += rightward_y * 0.1;
                                 }
 
-                                if input.key_space && !input.key_shift {
+                                if event_driven_input.input_state.key_space
+                                    && !event_driven_input.input_state.key_shift
+                                {
                                     vox.eye.z += 0.1;
                                 }
 
-                                if input.key_shift && !input.key_space {
+                                if event_driven_input.input_state.key_shift
+                                    && !event_driven_input.input_state.key_space
+                                {
                                     vox.eye.z -= 0.1;
                                 }
                             }
@@ -267,9 +279,9 @@ pub async fn run() {
                                 let sensitive: f32 = 0.0015;
                                 if let Ok(window_position) = window_loop.window.inner_position() {
                                     let window_size = window_loop.window.inner_size();
-                                    let delta_x = input.local_cursor_position.x
+                                    let delta_x = event_driven_input.local_cursor_position.x
                                         - (window_size.width / 2) as f64;
-                                    let delta_y = input.local_cursor_position.y
+                                    let delta_y = event_driven_input.local_cursor_position.y
                                         - (window_size.height / 2) as f64;
                                     vox.horizontal_rotation -= delta_x as f32 * sensitive;
                                     vox.horizontal_rotation %= 2.0 * std::f32::consts::PI;

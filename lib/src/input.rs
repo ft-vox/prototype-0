@@ -4,7 +4,7 @@ use winit::{
     keyboard::{Key, NamedKey},
 };
 
-pub struct Input {
+pub struct InputState {
     pub key_w: bool,
     pub key_a: bool,
     pub key_s: bool,
@@ -13,11 +13,10 @@ pub struct Input {
     pub key_space: bool,
     pub key_esc: bool,
     pub key_tab: bool,
-    pub local_cursor_position: PhysicalPosition<f64>,
 }
 
-impl Input {
-    pub fn new() -> Self {
+impl InputState {
+    fn new() -> Self {
         Self {
             key_w: false,
             key_a: false,
@@ -27,6 +26,19 @@ impl Input {
             key_space: false,
             key_esc: false,
             key_tab: false,
+        }
+    }
+}
+
+pub struct EventDrivenInput {
+    pub input_state: InputState,
+    pub local_cursor_position: PhysicalPosition<f64>,
+}
+
+impl EventDrivenInput {
+    pub fn new() -> Self {
+        Self {
+            input_state: InputState::new(),
             local_cursor_position: PhysicalPosition::new(0.0, 0.0),
         }
     }
@@ -42,21 +54,30 @@ impl Input {
 
     fn set_character_key_state(&mut self, key: &str, state: bool) {
         match key.to_lowercase().as_str() {
-            "w" => self.key_w = state,
-            "a" => self.key_a = state,
-            "s" => self.key_s = state,
-            "d" => self.key_d = state,
+            "w" => self.input_state.key_w = state,
+            "a" => self.input_state.key_a = state,
+            "s" => self.input_state.key_s = state,
+            "d" => self.input_state.key_d = state,
             _ => {}
         }
     }
 
     fn set_named_key_state(&mut self, key: NamedKey, state: bool) {
         match key {
-            NamedKey::Shift => self.key_shift = state,
-            NamedKey::Space => self.key_space = state,
-            NamedKey::Escape => self.key_esc = state,
-            NamedKey::Tab => self.key_tab = state,
+            NamedKey::Shift => self.input_state.key_shift = state,
+            NamedKey::Space => self.input_state.key_space = state,
+            NamedKey::Escape => self.input_state.key_esc = state,
+            NamedKey::Tab => self.input_state.key_tab = state,
             _ => {}
         }
     }
 }
+
+pub struct FrameDrivenInput {
+    pub key_pressed: InputState,
+    pub key_down: InputState,
+    pub key_up: InputState,
+    pub local_cursor_position: PhysicalPosition<f64>,
+}
+
+impl FrameDrivenInput {}
