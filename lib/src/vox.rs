@@ -1,13 +1,14 @@
+use crate::lru_cache::LRUCache;
 use crate::map::*;
 use crate::texture::*;
 use crate::vertex::*;
 use bytemuck::{Pod, Zeroable};
 use std::{borrow::Cow, collections::BTreeMap, f32::consts, mem, rc::Rc};
 use wgpu::util::DeviceExt;
+use winit::dpi::PhysicalPosition;
+use winit::dpi::PhysicalSize;
 
-use crate::lru_cache::LRUCache;
-
-const RENDER_DISTANCE: f32 = 21.0;
+pub const RENDER_DISTANCE: f32 = 5.0;
 
 #[repr(C)]
 #[derive(Copy, Clone, Pod, Zeroable)]
@@ -19,6 +20,9 @@ pub struct Vox {
     pub eye: glam::Vec3,
     pub horizontal_rotation: f32,
     pub vertical_rotation: f32,
+    pub window_inner_position: PhysicalPosition<i32>,
+    pub window_inner_size: PhysicalSize<u32>,
+    pub is_paused: bool,
     projection_matrix: glam::Mat4,
     depth_buffer: wgpu::TextureView,
     map: Map,
@@ -38,7 +42,7 @@ impl Vox {
         Rc::clone(self.chunks.get(&[x, y, z]).unwrap())
     }
 
-    fn get_buffers(
+    pub fn get_buffers(
         &mut self,
         device: &wgpu::Device,
         x: i32,
@@ -278,10 +282,13 @@ impl Vox {
             bind_group,
             uniform_vp_buffer,
             pipeline,
+            window_inner_position: PhysicalPosition::new(0, 0),
+            window_inner_size: PhysicalSize::new(0, 0),
+            is_paused: true,
         }
     }
 
-    fn get_coords(distance: f32) -> Vec<(i32, i32, i32)> {
+    pub fn get_coords(distance: f32) -> Vec<(i32, i32, i32)> {
         let mut coords = Vec::new();
         let max_coord = distance.floor() as i32;
         let distance_squared = distance * distance;
@@ -298,20 +305,6 @@ impl Vox {
         }
 
         coords
-    }
-
-    pub fn update(&mut self, device: &wgpu::Device) {
-        let coords = Self::get_coords(RENDER_DISTANCE);
-        let where_am_i = self.eye.floor() / CHUNK_SIZE as f32;
-        for coord in coords.iter() {
-            self.get_buffers(
-                device,
-                coord.0 + where_am_i.x as i32,
-                coord.1 + where_am_i.y as i32,
-                coord.2 + where_am_i.z as i32,
-            );
-        }
-        // println!("buffers size: {}", self.buffers.len());
     }
 
     pub fn resize(

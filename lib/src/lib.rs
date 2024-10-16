@@ -6,17 +6,6 @@ use winit::{
     window::Window,
 };
 
-#[cfg(target_os = "windows")]
-use winapi::um::winuser::SetCursorPos;
-
-#[cfg(target_os = "macos")]
-use core_graphics::{
-    display::CGDisplay,
-    event::{CGEvent, CGEventType, CGMouseButton},
-    event_source::{CGEventSource, CGEventSourceStateID},
-    geometry::CGPoint,
-};
-
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
@@ -28,9 +17,10 @@ mod surface_wrapper;
 mod texture;
 mod vertex;
 mod vox;
+mod vox_update;
 
 use context::Context;
-use input::Input;
+use input::*;
 use surface_wrapper::SurfaceWrapper;
 use vox::*;
 
@@ -137,7 +127,10 @@ pub async fn run() {
             .expect("Failed to add mousemove event listener");
         closure.forget();
     }
-    let mut input = Input::new();
+
+    let mut event_driven_input = EventDrivenInput::new();
+    let mut frame_driven_input = FrameDrivenInput::new();
+
     let event_loop_function = EventLoop::run;
 
     #[allow(clippy::let_unit_value)]
@@ -158,9 +151,11 @@ pub async fn run() {
                         ));
                     }
                 }
+
                 Event::Suspended => {
                     surface.suspend();
                 }
+
                 Event::WindowEvent { event, .. } => match event {
                     WindowEvent::Resized(size) => {
                         surface.resize(&context, size);
@@ -169,7 +164,7 @@ pub async fn run() {
                         }
                         window_loop.window.request_redraw();
                     }
-                    WindowEvent::KeyboardInput {
+                    /* WindowEvent::KeyboardInput {
                         event:
                             KeyEvent {
                                 logical_key: Key::Named(NamedKey::Escape),
@@ -177,9 +172,11 @@ pub async fn run() {
                             },
                         ..
                     }
-                    | WindowEvent::CloseRequested => {
+                    |  */
+                    WindowEvent::CloseRequested => {
                         target.exit();
                     }
+
                     #[cfg(not(target_arch = "wasm32"))]
                     WindowEvent::KeyboardInput {
                         event:
@@ -192,19 +189,18 @@ pub async fn run() {
                         println!("{:#?}", context.instance.generate_report());
                     }
 
-                    // key pressed
                     WindowEvent::KeyboardInput {
                         event:
                             KeyEvent {
                                 logical_key, state, ..
                             },
                         ..
-                    } => input.set_key_state(logical_key, state),
+                    } => event_driven_input.set_key_state(logical_key, state),
 
                     WindowEvent::CursorMoved {
                         position: local_cursor_position,
                         ..
-                    } => input.local_cursor_position = local_cursor_position,
+                    } => event_driven_input.local_cursor_position = local_cursor_position,
 
                     WindowEvent::RedrawRequested => {
                         // On MacOS, currently redraw requested comes in _before_ Init does.
@@ -212,111 +208,21 @@ pub async fn run() {
                         //
                         // See https://github.com/rust-windowing/winit/issues/3235 for some discussion
 
+                        frame_driven_input.update(&event_driven_input);
+
                         if let Some(vox) = vox.borrow_mut().as_mut() {
-                            // Vox update
                             {
-                                vox.update(&context.device);
-                            }
-
-                            // Movement by keyboard
-                            {
-                                if input.key_w && !input.key_s {
-                                    let forward_x = -vox.horizontal_rotation.sin();
-                                    let forward_y = vox.horizontal_rotation.cos();
-                                    vox.eye.x += forward_x * 0.1;
-                                    vox.eye.y += forward_y * 0.1;
-                                }
-
-                                if input.key_a && !input.key_d {
-                                    let forward_x = -vox.horizontal_rotation.sin();
-                                    let forward_y = vox.horizontal_rotation.cos();
-                                    let leftward_x = -forward_y;
-                                    let leftward_y = forward_x;
-                                    vox.eye.x += leftward_x * 0.1;
-                                    vox.eye.y += leftward_y * 0.1;
-                                }
-
-                                if input.key_s && !input.key_w {
-                                    let forward_x = -vox.horizontal_rotation.sin();
-                                    let forward_y = vox.horizontal_rotation.cos();
-                                    vox.eye.x -= forward_x * 0.1;
-                                    vox.eye.y -= forward_y * 0.1;
-                                }
-
-                                if input.key_d && !input.key_a {
-                                    let forward_x = -vox.horizontal_rotation.sin();
-                                    let forward_y = vox.horizontal_rotation.cos();
-                                    let rightward_x = forward_y;
-                                    let rightward_y = -forward_x;
-                                    vox.eye.x += rightward_x * 0.1;
-                                    vox.eye.y += rightward_y * 0.1;
-                                }
-
-                                if input.key_space && !input.key_shift {
-                                    vox.eye.z += 0.1;
-                                }
-
-                                if input.key_shift && !input.key_space {
-                                    vox.eye.z -= 0.1;
-                                }
-                            }
-
-                            // Rotation by mouse
-                            #[cfg(not(target_arch = "wasm32"))]
-                            {
-                                let sensitive: f32 = 0.0015;
                                 if let Ok(window_position) = window_loop.window.inner_position() {
-                                    let window_size = window_loop.window.inner_size();
-                                    let delta_x = input.local_cursor_position.x
-                                        - (window_size.width / 2) as f64;
-                                    let delta_y = input.local_cursor_position.y
-                                        - (window_size.height / 2) as f64;
-                                    vox.horizontal_rotation -= delta_x as f32 * sensitive;
-                                    vox.horizontal_rotation %= 2.0 * std::f32::consts::PI;
-                                    if vox.horizontal_rotation < 0.0 {
-                                        vox.horizontal_rotation += 2.0 * std::f32::consts::PI;
-                                    }
-
-                                    vox.vertical_rotation -= delta_y as f32 * sensitive;
-                                    vox.vertical_rotation = vox.vertical_rotation.clamp(
-                                        -0.4999 * std::f32::consts::PI,
-                                        0.4999 * std::f32::consts::PI,
+                                    vox.update_window_info(
+                                        window_position,
+                                        window_loop.window.inner_size(),
                                     );
-
-                                    let center_x: i32 =
-                                        window_position.x + (window_size.width / 2) as i32;
-                                    let center_y: i32 =
-                                        window_position.y + (window_size.height / 2) as i32;
-
-                                    #[cfg(target_os = "windows")]
-                                    unsafe {
-                                        SetCursorPos(center_x, center_y);
-                                    }
-
-                                    #[cfg(target_os = "macos")]
-                                    {
-                                        let display_size_os =
-                                            target.primary_monitor().unwrap().size();
-                                        let display_size_cg = CGDisplay::main().bounds().size;
-                                        let scaling_factor =
-                                            display_size_cg.width / display_size_os.width as f64;
-                                        let scaled_x = center_x as f64 * scaling_factor;
-                                        let scaled_y = center_y as f64 * scaling_factor;
-                                        let source = CGEventSource::new(
-                                            CGEventSourceStateID::HIDSystemState,
-                                        )
-                                        .unwrap();
-                                        let event = CGEvent::new_mouse_event(
-                                            source,
-                                            CGEventType::MouseMoved,
-                                            CGPoint::new(scaled_x, scaled_y),
-                                            CGMouseButton::Left,
-                                        )
-                                        .unwrap();
-                                        event.post(core_graphics::event::CGEventTapLocation::HID);
-                                    }
                                 }
+                                vox.update_eye_movement(&frame_driven_input);
+                                vox.update_eye_rotation(&frame_driven_input);
+                                vox.update_nearby_chunks(&context);
                             }
+
                             let frame = surface.acquire(&context);
                             let view = frame.texture.create_view(&wgpu::TextureViewDescriptor {
                                 format: Some(surface.config().view_formats[0]),
