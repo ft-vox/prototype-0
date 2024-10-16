@@ -333,7 +333,7 @@ impl Vox {
             pipeline,
             window_inner_position: PhysicalPosition::new(0, 0),
             window_inner_size: PhysicalSize::new(0, 0),
-            is_paused: true,
+            is_paused: false,
         }
     }
 
