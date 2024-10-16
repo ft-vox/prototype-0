@@ -8,12 +8,17 @@ use wgpu::util::DeviceExt;
 use winit::dpi::PhysicalPosition;
 use winit::dpi::PhysicalSize;
 
-pub const RENDER_DISTANCE: f32 = 5.0;
+pub const RENDER_DISTANCE: f32 = 20.0;
+pub const FOG_START: f32 = (RENDER_DISTANCE * CHUNK_SIZE as f32) * 0.8;
+pub const FOG_END: f32 = (RENDER_DISTANCE * CHUNK_SIZE as f32) * 1.0;
+pub const FOG_COLOR: f64 = 0.8;
 
 #[repr(C)]
 #[derive(Copy, Clone, Pod, Zeroable)]
 struct Uniforms {
     transform: [[f32; 4]; 4], // This represents a single transformation matrix.
+    fog_data: [f32; 4],
+    view_position: f32,
 }
 
 pub struct Vox {
@@ -30,6 +35,7 @@ pub struct Vox {
     buffers: LRUCache<[i32; 3], Rc<(wgpu::Buffer, wgpu::Buffer, u32)>>,
     bind_group: wgpu::BindGroup,
     uniform_vp_buffer: wgpu::Buffer,
+    uniform_view_position_buffer: wgpu::Buffer,
     pipeline: wgpu::RenderPipeline,
 }
 
@@ -147,6 +153,26 @@ impl Vox {
                     },
                     count: None,
                 },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: wgpu::BufferSize::new(16),
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 3,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: wgpu::BufferSize::new(16),
+                    },
+                    count: None,
+                },
             ],
         });
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -197,6 +223,20 @@ impl Vox {
             mapped_at_creation: false,
         });
 
+        let fog_data: [f32; 4] = [FOG_START, FOG_END, FOG_COLOR as f32, 0.0];
+        let uniform_fog_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Uniform Fog Buffer"),
+            contents: bytemuck::cast_slice(&fog_data),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
+        let uniform_view_position_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Uniform View Position Buffer"),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            size: aligned_uniform_size as wgpu::BufferAddress,
+            mapped_at_creation: false,
+        });
+
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &bind_group_layout,
             entries: &[
@@ -208,13 +248,21 @@ impl Vox {
                     binding: 1,
                     resource: wgpu::BindingResource::TextureView(&texture_view),
                 },
+                wgpu::BindGroupEntry {
+                    binding: 2, // 추가: 안개 버퍼 바인딩
+                    resource: uniform_fog_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3, // 추가: 안개 버퍼 바인딩
+                    resource: uniform_view_position_buffer.as_entire_binding(),
+                },
             ],
             label: None,
         });
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader_rgba8.wgsl"))),
+            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader_fog.wgsl"))),
         });
 
         let vertex_size = mem::size_of::<Vertex>();
@@ -281,6 +329,7 @@ impl Vox {
             buffers: LRUCache::new(Self::get_coords(RENDER_DISTANCE).len()),
             bind_group,
             uniform_vp_buffer,
+            uniform_view_position_buffer,
             pipeline,
             window_inner_position: PhysicalPosition::new(0, 0),
             window_inner_size: PhysicalSize::new(0, 0),
@@ -349,6 +398,13 @@ impl Vox {
             let mx_total = self.projection_matrix * view_matrix;
             let mx_ref: &[f32; 16] = mx_total.as_ref();
             queue.write_buffer(&self.uniform_vp_buffer, 0, bytemuck::cast_slice(mx_ref));
+
+            let view_position: [f32; 4] = [self.eye.x, self.eye.y, self.eye.z, 0.0];
+            queue.write_buffer(
+                &self.uniform_view_position_buffer,
+                0,
+                bytemuck::cast_slice(&view_position),
+            );
         }
 
         {
@@ -359,10 +415,10 @@ impl Vox {
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.5,
-                            g: 0.5,
-                            b: 0.5,
-                            a: 1.0,
+                            r: FOG_COLOR,
+                            g: FOG_COLOR,
+                            b: FOG_COLOR,
+                            a: FOG_COLOR,
                         }),
                         store: wgpu::StoreOp::Store,
                     },
