@@ -249,11 +249,11 @@ impl Vox {
                     resource: wgpu::BindingResource::TextureView(&texture_view),
                 },
                 wgpu::BindGroupEntry {
-                    binding: 2, // 추가: 안개 버퍼 바인딩
+                    binding: 2,
                     resource: uniform_fog_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
-                    binding: 3, // 추가: 안개 버퍼 바인딩
+                    binding: 3,
                     resource: uniform_view_position_buffer.as_entire_binding(),
                 },
             ],
