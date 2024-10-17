@@ -7,16 +7,9 @@ html, body {
   overflow: hidden;
 }
 
-#wasm-container, #root {
+#wasm-container {
   inset: 0;
   position: fixed;
-}
-
-#root {
-  padding: 2rem;
-  pointer-events: none;
-  color: white;
-  mix-blend-mode: difference;
 }
 
 #wasm-container canvas {
