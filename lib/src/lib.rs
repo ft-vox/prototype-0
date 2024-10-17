@@ -2,7 +2,7 @@ use std::{cell::RefCell, marker::PhantomData, num::NonZeroU8, rc::Rc, sync::Arc}
 use winit::{
     event::{Event, KeyEvent, WindowEvent},
     event_loop::{EventLoop, EventLoopWindowTarget},
-    keyboard::{Key, NamedKey},
+    keyboard::Key,
     window::Window,
 };
 
@@ -219,7 +219,7 @@ pub async fn run() {
                                     );
                                 }
                                 vox.update_eye_movement(&frame_driven_input);
-                                vox.update_eye_rotation(&frame_driven_input);
+                                vox.update_eye_rotation(&frame_driven_input, target);
                                 vox.update_nearby_chunks(&context);
 
                                 if vox.is_paused {

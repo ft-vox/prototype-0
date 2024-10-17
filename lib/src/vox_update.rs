@@ -16,6 +16,7 @@ use core_graphics::{
     event_source::{CGEventSource, CGEventSourceStateID},
     geometry::CGPoint,
 };
+use winit::event_loop::EventLoopWindowTarget;
 
 /// [ Speed in Minecraft ]
 /// Walking speed: 4.317 blocks/second
@@ -83,7 +84,11 @@ impl Vox {
         self.eye += movement * speed;
     }
 
-    pub fn update_eye_rotation(&mut self, input: &FrameDrivenInput) {
+    pub fn update_eye_rotation(
+        &mut self,
+        input: &FrameDrivenInput,
+        target: &EventLoopWindowTarget<()>,
+    ) {
         if input.get_key_down("esc") {
             self.is_paused = !self.is_paused;
         }
