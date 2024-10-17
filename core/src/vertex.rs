@@ -1,6 +1,5 @@
 use bytemuck::{Pod, Zeroable};
-
-use crate::map::*;
+use ft_vox_prototype_0_map_core::{Chunk, Cube, CHUNK_SIZE};
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]

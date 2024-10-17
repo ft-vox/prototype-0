@@ -1,3 +1,4 @@
+use ft_vox_prototype_0_map_core::Map;
 use std::{cell::RefCell, marker::PhantomData, num::NonZeroU8, rc::Rc, sync::Arc};
 use winit::{
     event::{Event, KeyEvent, WindowEvent},
@@ -12,7 +13,6 @@ use wasm_bindgen::prelude::*;
 mod context;
 mod input;
 mod lru_cache;
-mod map;
 mod surface_wrapper;
 mod texture;
 mod vertex;

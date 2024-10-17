@@ -1,8 +1,10 @@
 use crate::lru_cache::LRUCache;
-use crate::map::*;
 use crate::texture::*;
 use crate::vertex::*;
 use bytemuck::{Pod, Zeroable};
+use ft_vox_prototype_0_map_core::Chunk;
+use ft_vox_prototype_0_map_core::Map;
+use ft_vox_prototype_0_map_core::CHUNK_SIZE;
 use std::{borrow::Cow, collections::BTreeMap, f32::consts, mem, rc::Rc};
 use wgpu::util::DeviceExt;
 use winit::dpi::PhysicalPosition;
