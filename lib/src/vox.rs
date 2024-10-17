@@ -16,9 +16,11 @@ pub const FOG_COLOR: f64 = 0.8;
 #[repr(C)]
 #[derive(Copy, Clone, Pod, Zeroable)]
 struct Uniforms {
-    transform: [[f32; 4]; 4], // This represents a single transformation matrix.
-    fog_data: [f32; 4],
-    view_position: f32,
+    transform: [f32; 16],
+    view_position: [f32; 4],
+    fog_color: [f32; 4],
+    fog_start: f32,
+    fog_end: f32,
 }
 
 pub struct Vox {
@@ -34,8 +36,7 @@ pub struct Vox {
     chunks: BTreeMap<[i32; 3], Rc<Chunk>>,
     buffers: LRUCache<[i32; 3], Rc<(wgpu::Buffer, wgpu::Buffer, u32)>>,
     bind_group: wgpu::BindGroup,
-    uniform_vp_buffer: wgpu::Buffer,
-    uniform_view_position_buffer: wgpu::Buffer,
+    uniform_buffer: wgpu::Buffer,
     pipeline: wgpu::RenderPipeline,
 }
 
@@ -108,6 +109,11 @@ impl Vox {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) -> Self {
+        let min_alignment = device.limits().min_uniform_buffer_offset_alignment as usize;
+        let uniform_size = std::mem::size_of::<Uniforms>();
+        let aligned_uniform_size =
+            ((uniform_size + min_alignment - 1) / min_alignment) * min_alignment;
+
         let texture_extent = wgpu::Extent3d {
             width: config.width,
             height: config.height,
@@ -133,11 +139,11 @@ impl Vox {
             entries: &[
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX,
+                    visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
                         has_dynamic_offset: false,
-                        min_binding_size: wgpu::BufferSize::new(64),
+                        min_binding_size: wgpu::BufferSize::new(aligned_uniform_size as u64),
                     },
                     count: None,
                 },
@@ -150,26 +156,6 @@ impl Vox {
                             filterable: (false),
                         },
                         view_dimension: wgpu::TextureViewDimension::D2,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 2,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: wgpu::BufferSize::new(16),
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 3,
-                    visibility: wgpu::ShaderStages::VERTEX,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: wgpu::BufferSize::new(16),
                     },
                     count: None,
                 },
@@ -210,28 +196,9 @@ impl Vox {
             texture_extent,
         );
 
-        let min_alignment = device.limits().min_uniform_buffer_offset_alignment as usize;
-        let uniform_size = std::mem::size_of::<Uniforms>();
-        let aligned_uniform_size =
-            ((uniform_size + min_alignment - 1) / min_alignment) * min_alignment;
-
         // Create other resources
-        let uniform_vp_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Uniform VP Buffer"),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            size: aligned_uniform_size as wgpu::BufferAddress,
-            mapped_at_creation: false,
-        });
-
-        let fog_data: [f32; 4] = [FOG_START, FOG_END, FOG_COLOR as f32, 0.0];
-        let uniform_fog_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Uniform Fog Buffer"),
-            contents: bytemuck::cast_slice(&fog_data),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
-
-        let uniform_view_position_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Uniform View Position Buffer"),
+        let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Uniform Buffer"),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             size: aligned_uniform_size as wgpu::BufferAddress,
             mapped_at_creation: false,
@@ -242,19 +209,11 @@ impl Vox {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: uniform_vp_buffer.as_entire_binding(),
+                    resource: uniform_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
                     resource: wgpu::BindingResource::TextureView(&texture_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: uniform_fog_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: uniform_view_position_buffer.as_entire_binding(),
                 },
             ],
             label: None,
@@ -328,8 +287,7 @@ impl Vox {
             chunks: BTreeMap::new(),
             buffers: LRUCache::new(Self::get_coords(RENDER_DISTANCE).len()),
             bind_group,
-            uniform_vp_buffer,
-            uniform_view_position_buffer,
+            uniform_buffer,
             pipeline,
             window_inner_position: PhysicalPosition::new(0, 0),
             window_inner_size: PhysicalSize::new(0, 0),
@@ -397,14 +355,18 @@ impl Vox {
             let view_matrix = glam::Mat4::look_to_rh(self.eye, dir, glam::Vec3::Z);
             let mx_total = self.projection_matrix * view_matrix;
             let mx_ref: &[f32; 16] = mx_total.as_ref();
-            queue.write_buffer(&self.uniform_vp_buffer, 0, bytemuck::cast_slice(mx_ref));
-
+            let fog_color: [f32; 4] = [FOG_COLOR as f32, FOG_COLOR as f32, FOG_COLOR as f32, 1.0];
+            let fog_start: f32 = FOG_START;
+            let fog_end: f32 = FOG_END;
             let view_position: [f32; 4] = [self.eye.x, self.eye.y, self.eye.z, 0.0];
-            queue.write_buffer(
-                &self.uniform_view_position_buffer,
-                0,
-                bytemuck::cast_slice(&view_position),
-            );
+            let uniforms = Uniforms {
+                transform: *mx_ref,
+                view_position,
+                fog_color,
+                fog_start,
+                fog_end,
+            };
+            queue.write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[uniforms]));
         }
 
         {

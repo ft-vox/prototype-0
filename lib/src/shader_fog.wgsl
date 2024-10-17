@@ -4,17 +4,17 @@ struct VertexOutput {
     @location(1) distance: f32,
 };
 
+struct Uniforms {
+    vp_matrix: mat4x4<f32>,
+    view_position: vec4<f32>,
+    fog_color: vec4<f32>,
+    fog_start: f32,
+    fog_end: f32,
+};
+
 @group(0)
 @binding(0)
-var<uniform> vp_matrix: mat4x4<f32>;
-
-@group(0)
-@binding(2)
-var<uniform> fog_data: vec4<f32>;
-
-@group(0)
-@binding(3)
-var<uniform> view_position: vec4<f32>;
+var<uniform> uniforms: Uniforms;
 
 @vertex
 fn vs_main(
@@ -23,8 +23,8 @@ fn vs_main(
 ) -> VertexOutput {
     var result: VertexOutput;
     result.tex_coord = tex_coord;
-    result.position = vp_matrix * position;
-    result.distance = length(position.xyz - view_position.xyz);
+    result.position = uniforms.vp_matrix * position;
+    result.distance = length(position.xyz - uniforms.view_position.xyz);
 
     return result;
 }
@@ -39,12 +39,8 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
 
     output = textureLoad(diffuse_color, vec2<i32>(input.tex_coord * vec2<f32>(16.0, 16.0)), 0);
 
-    let fog_start: f32 = fog_data.x;
-    let fog_end: f32 = fog_data.y;
-    let fog_color: f32 = fog_data.z;
+    let fog_factor: f32 = clamp((uniforms.fog_end - input.distance) / (uniforms.fog_end - uniforms.fog_start), 0.0, 1.0);
 
-    let fog_factor: f32 = clamp((fog_end - input.distance) / (fog_end - fog_start), 0.0, 1.0);
-
-    output = mix(vec4<f32>(fog_color, fog_color, fog_color, 1.0), output, fog_factor);
+    output = mix(uniforms.fog_color, output, fog_factor);
     return output;
 }
