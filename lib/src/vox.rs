@@ -8,7 +8,7 @@ use wgpu::util::DeviceExt;
 use winit::dpi::PhysicalPosition;
 use winit::dpi::PhysicalSize;
 
-pub const RENDER_DISTANCE: f32 = 20.0;
+pub const RENDER_DISTANCE: f32 = 5.0;
 pub const FOG_START: f32 = (RENDER_DISTANCE * CHUNK_SIZE as f32) * 0.8;
 pub const FOG_END: f32 = (RENDER_DISTANCE * CHUNK_SIZE as f32) * 1.0;
 pub const FOG_COLOR: f64 = 0.8;
