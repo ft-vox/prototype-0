@@ -221,6 +221,14 @@ pub async fn run() {
                                 vox.update_eye_movement(&frame_driven_input);
                                 vox.update_eye_rotation(&frame_driven_input);
                                 vox.update_nearby_chunks(&context);
+
+                                if vox.is_paused {
+                                    window_loop.window.set_cursor_visible(true);
+                                    window_loop.window.set_title("ft_vox: paused");
+                                } else {
+                                    window_loop.window.set_cursor_visible(false);
+                                    window_loop.window.set_title("ft_vox");
+                                }
                             }
 
                             let frame = surface.acquire(&context);

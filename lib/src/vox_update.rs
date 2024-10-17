@@ -38,7 +38,7 @@ impl Vox {
     }
 
     pub fn update_eye_movement(&mut self, input: &FrameDrivenInput) {
-        if !self.is_paused {
+        if self.is_paused {
             return;
         }
 
@@ -87,7 +87,7 @@ impl Vox {
         if input.get_key_down("esc") {
             self.is_paused = !self.is_paused;
         }
-        if !self.is_paused {
+        if self.is_paused {
             return;
         }
 
