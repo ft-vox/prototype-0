@@ -1,3 +1,3 @@
 [workspace]
 resolver = "2"
-members = ["main", "lib", "noise", "noise_test"]
+members = ["main", "core", "noise", "noise_test"]
