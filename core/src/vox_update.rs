@@ -38,15 +38,15 @@ impl Vox {
         self.window_inner_size = window_inner_size;
     }
 
-    pub fn update_eye_movement(&mut self, input: &FrameDrivenInput) {
+    pub fn update_eye_movement(&mut self, delta_time: f32, input: &FrameDrivenInput) {
         if self.is_paused {
             return;
         }
 
         let speed = if input.get_key_pressed("ctrl") {
-            FAST_MOVE_SPEED_PER_SECOND / FPS
+            FAST_MOVE_SPEED_PER_SECOND
         } else {
-            MOVE_SPEED_PER_SECOND / FPS
+            MOVE_SPEED_PER_SECOND
         };
 
         let forward = Vec3::new(
@@ -81,11 +81,12 @@ impl Vox {
             movement = movement.normalize();
         }
 
-        self.eye += movement * speed;
+        self.eye += movement * speed * delta_time;
     }
 
     pub fn update_eye_rotation(
         &mut self,
+        delta_time: f32,
         input: &FrameDrivenInput,
         target: &EventLoopWindowTarget<()>,
     ) {
@@ -98,7 +99,7 @@ impl Vox {
 
         #[cfg(not(target_arch = "wasm32"))]
         {
-            let sensitive: f32 = 0.0015;
+            let sensitive: f32 = 0.04 * delta_time;
             let window_position = self.window_inner_position;
             let window_size = self.window_inner_size;
             let delta_x = input.local_cursor_position.x - (window_size.width / 2) as f64;

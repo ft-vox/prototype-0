@@ -1,10 +1,10 @@
 use ft_vox_prototype_0_map_core::Map;
-use std::{cell::RefCell, marker::PhantomData, num::NonZeroU8, rc::Rc, sync::Arc};
+use std::{cell::RefCell, marker::PhantomData, num::NonZeroU8, rc::Rc, sync::Arc, time::Instant};
 use winit::{
     event::{Event, KeyEvent, WindowEvent},
     event_loop::{EventLoop, EventLoopWindowTarget},
     keyboard::Key,
-    window::Window,
+    window::{Fullscreen, Window},
 };
 
 #[cfg(target_arch = "wasm32")]
@@ -132,7 +132,7 @@ pub async fn run() {
     let mut frame_driven_input = FrameDrivenInput::new();
 
     let event_loop_function = EventLoop::run;
-
+    let mut last_frame_time = Instant::now();
     #[allow(clippy::let_unit_value)]
     let _ = (event_loop_function)(
         window_loop.event_loop,
@@ -150,6 +150,8 @@ pub async fn run() {
                             &context.queue,
                         ));
                     }
+
+                    println!("\n[ CONTROL KEYS ]\nmovement: WASD + Shift + Space\nspeeding: CTRL\npause: ESC\nscreen mode: Tab");
                 }
 
                 Event::Suspended => {
@@ -164,15 +166,7 @@ pub async fn run() {
                         }
                         window_loop.window.request_redraw();
                     }
-                    /* WindowEvent::KeyboardInput {
-                        event:
-                            KeyEvent {
-                                logical_key: Key::Named(NamedKey::Escape),
-                                ..
-                            },
-                        ..
-                    }
-                    |  */
+
                     WindowEvent::CloseRequested => {
                         target.exit();
                     }
@@ -207,6 +201,9 @@ pub async fn run() {
                         // If this happens, just drop the requested redraw on the floor.
                         //
                         // See https://github.com/rust-windowing/winit/issues/3235 for some discussion
+                        let now = Instant::now();
+                        let delta_time = now.duration_since(last_frame_time).as_secs_f32();
+                        last_frame_time = now;
 
                         frame_driven_input.update(&event_driven_input);
 
@@ -218,8 +215,8 @@ pub async fn run() {
                                         window_loop.window.inner_size(),
                                     );
                                 }
-                                vox.update_eye_movement(&frame_driven_input);
-                                vox.update_eye_rotation(&frame_driven_input, target);
+                                vox.update_eye_movement(delta_time, &frame_driven_input);
+                                vox.update_eye_rotation(delta_time, &frame_driven_input, target);
                                 vox.update_nearby_chunks(&context);
 
                                 if vox.is_paused {
@@ -228,6 +225,16 @@ pub async fn run() {
                                 } else {
                                     window_loop.window.set_cursor_visible(false);
                                     window_loop.window.set_title("ft_vox");
+                                }
+
+                                if frame_driven_input.get_key_down("tab") {
+                                    if window_loop.window.fullscreen().is_some() {
+                                        window_loop.window.set_fullscreen(None);
+                                    } else {
+                                        window_loop
+                                            .window
+                                            .set_fullscreen(Some(Fullscreen::Borderless(None)));
+                                    }
                                 }
                             }
 
