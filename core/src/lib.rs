@@ -4,7 +4,7 @@ use winit::{
     event::{Event, KeyEvent, WindowEvent},
     event_loop::{EventLoop, EventLoopWindowTarget},
     keyboard::Key,
-    window::Window,
+    window::{Fullscreen, Window},
 };
 
 #[cfg(target_arch = "wasm32")]
@@ -150,6 +150,8 @@ pub async fn run() {
                             &context.queue,
                         ));
                     }
+
+                    println!("\n[ CONTROL KEYS ]\nmovement: WASD + Shift + Space\nspeeding: CTRL\npause: ESC\nscreen mode: Tab");
                 }
 
                 Event::Suspended => {
@@ -164,15 +166,7 @@ pub async fn run() {
                         }
                         window_loop.window.request_redraw();
                     }
-                    /* WindowEvent::KeyboardInput {
-                        event:
-                            KeyEvent {
-                                logical_key: Key::Named(NamedKey::Escape),
-                                ..
-                            },
-                        ..
-                    }
-                    |  */
+
                     WindowEvent::CloseRequested => {
                         target.exit();
                     }
@@ -228,6 +222,16 @@ pub async fn run() {
                                 } else {
                                     window_loop.window.set_cursor_visible(false);
                                     window_loop.window.set_title("ft_vox");
+                                }
+
+                                if frame_driven_input.get_key_down("tab") {
+                                    if window_loop.window.fullscreen().is_some() {
+                                        window_loop.window.set_fullscreen(None);
+                                    } else {
+                                        window_loop
+                                            .window
+                                            .set_fullscreen(Some(Fullscreen::Borderless(None)));
+                                    }
                                 }
                             }
 
