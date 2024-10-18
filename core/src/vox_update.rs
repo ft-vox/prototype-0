@@ -1,7 +1,7 @@
 use crate::context::Context;
 use crate::input::*;
 use crate::vox::*;
-use ft_vox_prototype_0_map_core::CHUNK_SIZE;
+use ft_vox_prototype_0_map_types::CHUNK_SIZE;
 use glam::Vec3;
 use winit::dpi::PhysicalPosition;
 use winit::dpi::PhysicalSize;
