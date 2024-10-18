@@ -2,5 +2,5 @@
 
 set -e
 
-wasm-pack build core
+wasm-pack build main
 (cd web && npm i && npx vite dev)
