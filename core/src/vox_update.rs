@@ -26,8 +26,6 @@ use winit::event_loop::EventLoopWindowTarget;
 const MOVE_SPEED_PER_SECOND: f32 = 4.317;
 const FAST_MOVE_SPEED_PER_SECOND: f32 = 10.89;
 
-const FPS: f32 = 60.0;
-
 impl Vox {
     pub fn update_window_info(
         &mut self,

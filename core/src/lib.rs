@@ -1,5 +1,5 @@
 use ft_vox_prototype_0_map_core::Map;
-use std::{cell::RefCell, marker::PhantomData, num::NonZeroU8, rc::Rc, sync::Arc, time::Instant};
+use std::{cell::RefCell, marker::PhantomData, num::NonZeroU8, rc::Rc, sync::Arc};
 use winit::{
     event::{Event, KeyEvent, WindowEvent},
     event_loop::{EventLoop, EventLoopWindowTarget},
@@ -23,6 +23,9 @@ use context::Context;
 use input::*;
 use surface_wrapper::SurfaceWrapper;
 use vox::*;
+
+#[cfg(not(target_arch = "wasm32"))]
+use std::time::Instant;
 
 struct EventLoopWrapper {
     event_loop: EventLoop<()>,
@@ -132,7 +135,16 @@ pub async fn run() {
     let mut frame_driven_input = FrameDrivenInput::new();
 
     let event_loop_function = EventLoop::run;
+
+    #[cfg(not(target_arch = "wasm32"))]
     let mut last_frame_time = Instant::now();
+    #[cfg(target_arch = "wasm32")]
+    fn performance_now() -> f32 {
+        web_sys::window().unwrap().performance().unwrap().now() as f32
+    }
+    #[cfg(target_arch = "wasm32")]
+    let mut last_frame_time = performance_now();
+
     #[allow(clippy::let_unit_value)]
     let _ = (event_loop_function)(
         window_loop.event_loop,
@@ -201,9 +213,21 @@ pub async fn run() {
                         // If this happens, just drop the requested redraw on the floor.
                         //
                         // See https://github.com/rust-windowing/winit/issues/3235 for some discussion
-                        let now = Instant::now();
-                        let delta_time = now.duration_since(last_frame_time).as_secs_f32();
-                        last_frame_time = now;
+
+                        #[cfg(not(target_arch = "wasm32"))]
+                        let delta_time = {
+                            let now = Instant::now();
+                            let delta_time = now.duration_since(last_frame_time).as_secs_f32();
+                            last_frame_time = now;
+                            delta_time
+                        };
+                        #[cfg(target_arch = "wasm32")]
+                        let delta_time = {
+                            let now = performance_now();
+                            let delta_time = now - last_frame_time;
+                            last_frame_time = now;
+                            delta_time / 1000.0
+                        };
 
                         frame_driven_input.update(&event_driven_input);
 
