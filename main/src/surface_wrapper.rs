@@ -1,4 +1,4 @@
-use crate::context::*;
+use crate::wgpu_context::*;
 use std::sync::Arc;
 use wgpu::{Instance, Surface};
 use winit::{
@@ -52,7 +52,7 @@ impl SurfaceWrapper {
     /// On all native platforms, this is where we create the surface.
     ///
     /// Additionally, we configure the surface based on the (now valid) window size.
-    pub fn resume(&mut self, context: &Context, window: Arc<Window>, srgb: bool) {
+    pub fn resume(&mut self, context: &WGPUContext, window: Arc<Window>, srgb: bool) {
         // Window size is only actually valid after we enter the event loop.
         let window_size = window.inner_size();
         let width = window_size.width.max(1);
@@ -89,7 +89,7 @@ impl SurfaceWrapper {
     }
 
     /// Resize the surface, making sure to not resize to zero.
-    pub fn resize(&mut self, context: &Context, size: PhysicalSize<u32>) {
+    pub fn resize(&mut self, context: &WGPUContext, size: PhysicalSize<u32>) {
         log::info!("Surface resize {size:?}");
 
         let config = self.config.as_mut().unwrap();
@@ -108,7 +108,7 @@ impl SurfaceWrapper {
     }
 
     /// Acquire the next surface texture.
-    pub fn acquire(&mut self, context: &Context) -> wgpu::SurfaceTexture {
+    pub fn acquire(&mut self, context: &WGPUContext) -> wgpu::SurfaceTexture {
         let surface = self.surface.as_ref().unwrap();
 
         match surface.get_current_texture() {

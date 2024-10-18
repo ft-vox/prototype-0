@@ -1,5 +1,5 @@
-use ft_vox_prototype_0_map_core::Map;
-use std::{cell::RefCell, marker::PhantomData, num::NonZeroU8, rc::Rc, sync::Arc};
+use context::Context;
+use std::{cell::RefCell, num::NonZeroU8, rc::Rc, sync::Arc};
 use winit::{
     event::{Event, KeyEvent, WindowEvent},
     event_loop::{EventLoop, EventLoopWindowTarget},
@@ -12,17 +12,12 @@ use wasm_bindgen::prelude::*;
 
 mod context;
 mod input;
-mod lru_cache;
 mod surface_wrapper;
-mod texture;
-mod vertex;
-mod vox;
-mod vox_update;
+mod wgpu_context;
 
-use context::Context;
 use input::*;
 use surface_wrapper::SurfaceWrapper;
-use vox::*;
+use wgpu_context::WGPUContext;
 
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
@@ -33,7 +28,7 @@ struct EventLoopWrapper {
     #[cfg(target_arch = "wasm32")]
     canvas: Option<web_sys::Element>,
     #[cfg(not(target_arch = "wasm32"))]
-    canvas: Option<PhantomData<NonZeroU8>>,
+    canvas: Option<NonZeroU8>,
 }
 
 impl EventLoopWrapper {
@@ -98,29 +93,22 @@ pub async fn run() {
 
     let window_loop = EventLoopWrapper::new();
     let mut surface = SurfaceWrapper::new();
-    let context = Context::init_async(&mut surface, window_loop.window.clone()).await;
-    let vox: Rc<RefCell<Option<Vox>>> = Rc::new(RefCell::new(None));
+    let wgpu_context = WGPUContext::init_async(&mut surface, window_loop.window.clone()).await;
+    let context: Rc<RefCell<Option<Context>>> = Rc::new(RefCell::new(None));
     #[cfg(target_arch = "wasm32")]
     {
-        let vox = Rc::clone(&vox);
+        const SENSITIVE: f32 = 0.0015;
 
-        let sensitive: f32 = 0.0015;
+        let vox = Rc::clone(&context);
+
+        let context = context.clone();
         let closure = Closure::wrap(Box::new(move |event: web_sys::MouseEvent| {
-            if let Some(vox) = vox.borrow_mut().as_mut() {
-                let delta_x = event.movement_x() as f64;
-                let delta_y = event.movement_y() as f64;
+            if let Some(context) = context.borrow_mut().as_mut() {
+                let delta_x = event.movement_x() as f32;
+                let delta_y = event.movement_y() as f32;
 
-                vox.horizontal_rotation -= delta_x as f32 * sensitive;
-                vox.horizontal_rotation %= 2.0 * std::f32::consts::PI;
-                if vox.horizontal_rotation < 0.0 {
-                    vox.horizontal_rotation += 2.0 * std::f32::consts::PI;
-                }
-
-                vox.vertical_rotation -= delta_y as f32 * sensitive;
-                vox.vertical_rotation = vox.vertical_rotation.clamp(
-                    -0.4999 * std::f32::consts::PI,
-                    0.4999 * std::f32::consts::PI,
-                );
+                context.horizontal_rotation -= delta_x * SENSITIVE;
+                context.vertical_rotation -= delta_y * SENSITIVE;
             }
         }) as Box<dyn FnMut(_)>);
         window_loop
@@ -151,15 +139,15 @@ pub async fn run() {
         move |event: Event<()>, target: &EventLoopWindowTarget<()>| {
             match event {
                 ref e if SurfaceWrapper::start_condition(e) => {
-                    surface.resume(&context, window_loop.window.clone(), true);
+                    surface.resume(&wgpu_context, window_loop.window.clone(), true);
 
                     // If we haven't created the example yet, do so now.
-                    if vox.borrow().is_none() {
-                        *vox.borrow_mut() = Some(Vox::init(
+                    if context.borrow().is_none() {
+                        *context.borrow_mut() = Some(Context::init(
                             surface.config(),
-                            &context.adapter,
-                            &context.device,
-                            &context.queue,
+                            &wgpu_context.adapter,
+                            &wgpu_context.device,
+                            &wgpu_context.queue,
                         ));
                     }
 
@@ -172,9 +160,13 @@ pub async fn run() {
 
                 Event::WindowEvent { event, .. } => match event {
                     WindowEvent::Resized(size) => {
-                        surface.resize(&context, size);
-                        if let Some(vox) = vox.borrow_mut().as_mut() {
-                            vox.resize(surface.config(), &context.device, &context.queue);
+                        surface.resize(&wgpu_context, size);
+                        if let Some(context) = context.borrow_mut().as_mut() {
+                            context.vox.resize(
+                                surface.config(),
+                                &wgpu_context.device,
+                                &wgpu_context.queue,
+                            );
                         }
                         window_loop.window.request_redraw();
                     }
@@ -192,7 +184,7 @@ pub async fn run() {
                             },
                         ..
                     } if s == "r" => {
-                        println!("{:#?}", context.instance.generate_report());
+                        println!("{:#?}", wgpu_context.instance.generate_report());
                     }
 
                     WindowEvent::KeyboardInput {
@@ -231,19 +223,22 @@ pub async fn run() {
 
                         frame_driven_input.update(&event_driven_input);
 
-                        if let Some(vox) = vox.borrow_mut().as_mut() {
+                        if let Some(context) = context.borrow_mut().as_mut() {
                             {
                                 if let Ok(window_position) = window_loop.window.inner_position() {
-                                    vox.update_window_info(
+                                    context.update_window_info(
                                         window_position,
                                         window_loop.window.inner_size(),
                                     );
                                 }
-                                vox.update_eye_movement(delta_time, &frame_driven_input);
-                                vox.update_eye_rotation(delta_time, &frame_driven_input, target);
-                                vox.update_nearby_chunks(&context);
+                                context.update_eye_movement(delta_time, &frame_driven_input);
+                                context.update_eye_rotation(
+                                    delta_time,
+                                    &frame_driven_input,
+                                    target,
+                                );
 
-                                if vox.is_paused {
+                                if context.vox.is_paused() {
                                     window_loop.window.set_cursor_visible(true);
                                     window_loop.window.set_title("ft_vox: paused");
                                 } else {
@@ -262,13 +257,16 @@ pub async fn run() {
                                 }
                             }
 
-                            let frame = surface.acquire(&context);
+                            let frame = surface.acquire(&wgpu_context);
                             let view = frame.texture.create_view(&wgpu::TextureViewDescriptor {
                                 format: Some(surface.config().view_formats[0]),
                                 ..wgpu::TextureViewDescriptor::default()
                             });
 
-                            vox.render(&view, &context.device, &context.queue);
+                            context.tick(delta_time);
+                            context
+                                .vox
+                                .render(&view, &wgpu_context.device, &wgpu_context.queue);
 
                             frame.present();
 

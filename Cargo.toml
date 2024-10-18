@@ -1,3 +1,11 @@
 [workspace]
 resolver = "2"
-members = ["exe", "main", "noise", "noise_test", "map_types", "map_core"]
+members = [
+    "exe",
+    "main",
+    "core",
+    "noise",
+    "noise_test",
+    "map_types",
+    "map_core",
+]

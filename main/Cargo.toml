@@ -7,16 +7,12 @@ edition = "2021"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-bytemuck = { version = "1.14.3", features = ["derive"] }
 cfg-if = "1.0.0"
 env_logger = "0.11.5"
-ft-vox-prototype-0-map-core = { version = "0.1.0", path = "../map_core" }
-ft-vox-prototype-0-map-types = { version = "0.1.0", path = "../map_types" }
-glam = "0.25.0"
 log = "0.4.22"
 wgpu = "22.0"
 winit = { version = "0.29.10", features = ["rwh_05"] }
-image = "0.25.2"
+ft-vox-prototype-0-core = { version = "0.1.0", path = "../core" }
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["winuser"] }
