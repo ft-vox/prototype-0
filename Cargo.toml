@@ -9,4 +9,5 @@ members = [
     "noise_test",
     "map_types",
     "map_core",
+    "terrain_worker_native",
 ]

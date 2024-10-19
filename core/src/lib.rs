@@ -11,19 +11,46 @@ mod vertex;
 
 use vertex::{create_vertices_for_chunk, Vertex};
 
-pub struct Vox {
+pub trait TerrainWorker {
+    fn new(map: Map, render_distance: f32) -> Self;
+    fn get_available(
+        &mut self,
+        chunk_coords: &[(i32, i32, i32)],
+    ) -> Vec<((i32, i32, i32), Rc<Chunk>)>;
+}
+
+pub fn get_coords(distance: f32) -> Vec<(i32, i32, i32)> {
+    let mut coords = Vec::new();
+    let max_coord = distance.floor() as i32;
+    let distance_squared = distance * distance;
+
+    for x in -max_coord..=max_coord {
+        for y in -max_coord..=max_coord {
+            for z in -max_coord..=max_coord {
+                let dist_sq = (x * x + y * y + z * z) as f32;
+                if dist_sq <= distance_squared {
+                    coords.push((x, y, z));
+                }
+            }
+        }
+    }
+
+    coords
+}
+
+pub struct Vox<T: TerrainWorker> {
     eye: glam::Vec3,
     horizontal_rotation: f32,
     vertical_rotation: f32,
     is_paused: bool,
     projection_matrix: glam::Mat4,
     depth_buffer: wgpu::TextureView,
-    map: Map,
     chunks: LRUCache<[i32; 3], Rc<Chunk>>,
     buffers: LRUCache<[i32; 3], Rc<(wgpu::Buffer, wgpu::Buffer, u32)>>,
     bind_group: wgpu::BindGroup,
     uniform_buffer: wgpu::Buffer,
     pipeline: wgpu::RenderPipeline,
+    terrain_worker: T,
 }
 
 /// [ Speed in Minecraft ]
@@ -48,7 +75,7 @@ impl MoveSpeed {
 
 pub const RENDER_DISTANCE: f32 = 7.0;
 
-impl Vox {
+impl<T: TerrainWorker> Vox<T> {
     pub fn init(
         config: &wgpu::SurfaceConfiguration,
         _adapter: &wgpu::Adapter,
@@ -231,13 +258,13 @@ impl Vox {
                 config.width as f32 / config.height as f32,
             ),
             depth_buffer,
-            map: Map::new(42),
-            chunks: LRUCache::new(Self::get_coords(RENDER_DISTANCE + 3.0).len()),
-            buffers: LRUCache::new(Self::get_coords(RENDER_DISTANCE).len()),
+            chunks: LRUCache::new(get_coords(RENDER_DISTANCE).len() * 2),
+            buffers: LRUCache::new(get_coords(RENDER_DISTANCE).len()),
             bind_group,
             uniform_buffer,
             pipeline,
             is_paused: false,
+            terrain_worker: T::new(Map::new(42), RENDER_DISTANCE),
         }
     }
 
@@ -385,20 +412,29 @@ impl Vox {
 
             rpass.set_pipeline(&self.pipeline);
             rpass.set_bind_group(0, &self.bind_group, &[]);
-            let (eye_x, eye_y, eye_z) = {
-                let eye = (self.eye / CHUNK_SIZE as f32).floor();
-                (eye.x as i32, eye.y as i32, eye.z as i32)
+            let chunk_coords = {
+                let (eye_x, eye_y, eye_z) = {
+                    let eye = (self.eye / CHUNK_SIZE as f32).floor();
+                    (eye.x as i32, eye.y as i32, eye.z as i32)
+                };
+                get_coords(RENDER_DISTANCE)
+                    .into_iter()
+                    .map(|(x, y, z)| (x + eye_x, y + eye_y, z + eye_z))
+                    .collect::<Vec<_>>()
             };
-            let keys = Self::get_coords(RENDER_DISTANCE);
-            for (x, y, z) in keys {
-                let (vertex_buffer, index_buffer, index_count) =
-                    &*self.get_buffers(device, x + eye_x, y + eye_y, z + eye_z);
-                if *index_count == 0 {
-                    continue;
+            for ((x, y, z), chunk) in self.terrain_worker.get_available(&chunk_coords) {
+                self.chunks.put([x, y, z], chunk);
+            }
+            for (x, y, z) in chunk_coords {
+                if let Some(rc) = self.get_buffers(device, x, y, z) {
+                    let (vertex_buffer, index_buffer, index_count) = &*rc;
+                    if *index_count == 0 {
+                        continue;
+                    }
+                    rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+                    rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
+                    rpass.draw_indexed(0..*index_count, 0, 0..1);
                 }
-                rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-                rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
-                rpass.draw_indexed(0..*index_count, 0, 0..1);
             }
         }
 
@@ -411,13 +447,15 @@ impl Vox {
         x: i32,
         y: i32,
         z: i32,
-    ) -> Rc<(wgpu::Buffer, wgpu::Buffer, u32)> {
+    ) -> Option<Rc<(wgpu::Buffer, wgpu::Buffer, u32)>> {
         if let Some(result) = self.buffers.get(&[x, y, z]) {
-            result
+            Some(result)
+        } else if let Some(new_value) = self.create_buffers(device, x, y, z) {
+            let result = Rc::new(new_value);
+            self.buffers.put([x, y, z], result.clone());
+            Some(result)
         } else {
-            let new_value = Rc::new(self.create_buffers(device, x, y, z));
-            self.buffers.put([x, y, z], new_value.clone());
-            new_value
+            None
         }
     }
 
@@ -427,65 +465,53 @@ impl Vox {
         x: i32,
         y: i32,
         z: i32,
-    ) -> (wgpu::Buffer, wgpu::Buffer, u32) {
-        let chunk = self.get_chunk(x, y, z);
-        let chunk_px = self.get_chunk(x + 1, y, z);
-        let chunk_nx = self.get_chunk(x - 1, y, z);
-        let chunk_py = self.get_chunk(x, y + 1, z);
-        let chunk_ny = self.get_chunk(x, y - 1, z);
-        let chunk_pz = self.get_chunk(x, y, z + 1);
-        let chunk_nz = self.get_chunk(x, y, z - 1);
+    ) -> Option<(wgpu::Buffer, wgpu::Buffer, u32)> {
+        let chunk = self.chunks.get(&[x, y, z]);
+        let chunk_px = self.chunks.get(&[x + 1, y, z]);
+        let chunk_nx = self.chunks.get(&[x - 1, y, z]);
+        let chunk_py = self.chunks.get(&[x, y + 1, z]);
+        let chunk_ny = self.chunks.get(&[x, y - 1, z]);
+        let chunk_pz = self.chunks.get(&[x, y, z + 1]);
+        let chunk_nz = self.chunks.get(&[x, y, z - 1]);
 
-        let (vertex_data, index_data) = create_vertices_for_chunk(
-            &chunk, x, y, z, &chunk_px, &chunk_nx, &chunk_py, &chunk_ny, &chunk_pz, &chunk_nz,
-        );
-
-        let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Vertex Buffer"),
-            contents: bytemuck::cast_slice(&vertex_data),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-
-        let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Index Buffer"),
-            contents: bytemuck::cast_slice(&index_data),
-            usage: wgpu::BufferUsages::INDEX,
-        });
-
-        (vertex_buf, index_buf, index_data.len() as u32)
-    }
-
-    fn get_chunk(&mut self, x: i32, y: i32, z: i32) -> Rc<Chunk> {
-        if let Some(result) = self.chunks.get(&[x, y, z]) {
-            result
+        if chunk.is_none()
+            || chunk_px.is_none()
+            || chunk_nx.is_none()
+            || chunk_py.is_none()
+            || chunk_ny.is_none()
+            || chunk_pz.is_none()
+            || chunk_nz.is_none()
+        {
+            None
         } else {
-            let new_value = Rc::new(self.map.get_chunk(x, y, z));
-            self.chunks.put([x, y, z], new_value.clone());
-            new_value
+            let chunk = chunk.unwrap();
+            let chunk_px = chunk_px.unwrap();
+            let chunk_nx = chunk_nx.unwrap();
+            let chunk_py = chunk_py.unwrap();
+            let chunk_ny = chunk_ny.unwrap();
+            let chunk_pz = chunk_pz.unwrap();
+            let chunk_nz = chunk_nz.unwrap();
+
+            let (vertex_data, index_data) = create_vertices_for_chunk(
+                &chunk, x, y, z, &chunk_px, &chunk_nx, &chunk_py, &chunk_ny, &chunk_pz, &chunk_nz,
+            );
+
+            let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Vertex Buffer"),
+                contents: bytemuck::cast_slice(&vertex_data),
+                usage: wgpu::BufferUsages::VERTEX,
+            });
+
+            let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Index Buffer"),
+                contents: bytemuck::cast_slice(&index_data),
+                usage: wgpu::BufferUsages::INDEX,
+            });
+
+            Some((vertex_buf, index_buf, index_data.len() as u32))
         }
-    }
-
-    pub fn get_coords(distance: f32) -> Vec<(i32, i32, i32)> {
-        let mut coords = Vec::new();
-        let max_coord = distance.floor() as i32;
-        let distance_squared = distance * distance;
-
-        for x in -max_coord..=max_coord {
-            for y in -max_coord..=max_coord {
-                for z in -max_coord..=max_coord {
-                    let dist_sq = (x * x + y * y + z * z) as f32;
-                    if dist_sq <= distance_squared {
-                        coords.push((x, y, z));
-                    }
-                }
-            }
-        }
-
-        coords
     }
 }
-
-//
 
 #[repr(C)]
 #[derive(Copy, Clone, Pod, Zeroable)]

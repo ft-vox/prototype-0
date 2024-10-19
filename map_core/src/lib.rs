@@ -4,6 +4,7 @@ use ft_vox_prototype_0_noise::{Noise, NoiseLayer};
 const MIN_HEIGHT: f32 = -100.0;
 const MAX_HEIGHT: f32 = 42.0;
 
+#[derive(Clone)]
 pub struct Map {
     noise: Noise,
 }

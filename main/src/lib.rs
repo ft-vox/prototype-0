@@ -1,4 +1,5 @@
 use context::Context;
+use ft_vox_prototype_0_core::TerrainWorker;
 use std::{cell::RefCell, num::NonZeroU8, rc::Rc, sync::Arc};
 use winit::{
     event::{Event, KeyEvent, WindowEvent},
@@ -81,7 +82,7 @@ impl EventLoopWrapper {
 }
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen(start))]
-pub async fn run() {
+pub async fn run<T: TerrainWorker>() {
     cfg_if::cfg_if! {
         if #[cfg(target_arch = "wasm32")] {
             std::panic::set_hook(Box::new(console_error_panic_hook::hook));
@@ -94,7 +95,7 @@ pub async fn run() {
     let window_loop = EventLoopWrapper::new();
     let mut surface = SurfaceWrapper::new();
     let wgpu_context = WGPUContext::init_async(&mut surface, window_loop.window.clone()).await;
-    let context: Rc<RefCell<Option<Context>>> = Rc::new(RefCell::new(None));
+    let context: Rc<RefCell<Option<Context<T>>>> = Rc::new(RefCell::new(None));
     #[cfg(target_arch = "wasm32")]
     {
         const SENSITIVE: f32 = 0.0015;

@@ -1,4 +1,5 @@
 use ft_vox_prototype_0_core::MoveSpeed;
+use ft_vox_prototype_0_core::TerrainWorker;
 use ft_vox_prototype_0_core::Vox;
 use winit::dpi::PhysicalPosition;
 use winit::dpi::PhysicalSize;
@@ -17,8 +18,8 @@ use core_graphics::{
 
 use crate::input::FrameDrivenInput;
 
-pub struct Context {
-    pub vox: Vox, // TODO: make it private
+pub struct Context<T: TerrainWorker> {
+    pub vox: Vox<T>, // TODO: make it private
     window_inner_position: PhysicalPosition<i32>,
     window_inner_size: PhysicalSize<u32>,
     direction_and_speed: ([f32; 3], MoveSpeed), // TODO: separate
@@ -26,7 +27,7 @@ pub struct Context {
     pub vertical_rotation: f32,
 }
 
-impl Context {
+impl<T: TerrainWorker> Context<T> {
     pub fn init(
         config: &wgpu::SurfaceConfiguration,
         adapter: &wgpu::Adapter,
