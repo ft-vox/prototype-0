@@ -1,6 +1,6 @@
 use bytemuck::{Pod, Zeroable};
 use ft_vox_prototype_0_map_core::Map;
-use ft_vox_prototype_0_map_types::Chunk;
+use ft_vox_prototype_0_map_types::{Chunk, CHUNK_SIZE};
 use glam::{Mat3, Vec3};
 use image::{GenericImageView, Pixel};
 use std::{borrow::Cow, rc::Rc};
@@ -329,7 +329,7 @@ impl Vox {
 
     pub fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
         const FOG_COLOR: f64 = 0.8;
-        const FOG_END: f32 = RENDER_DISTANCE - 3.0;
+        const FOG_END: f32 = (RENDER_DISTANCE - 2.9) * CHUNK_SIZE as f32;
         const FOG_START: f32 = FOG_END * 0.8;
 
         let mut encoder =
@@ -386,10 +386,14 @@ impl Vox {
 
             rpass.set_pipeline(&self.pipeline);
             rpass.set_bind_group(0, &self.bind_group, &[]);
-            let keys: Vec<_> = Self::get_coords(RENDER_DISTANCE);
+            let (eye_x, eye_y, eye_z) = {
+                let eye = (self.eye / CHUNK_SIZE as f32).floor();
+                (eye.x as i32, eye.y as i32, eye.z as i32)
+            };
+            let keys = Self::get_coords(RENDER_DISTANCE);
             for (x, y, z) in keys {
                 let (vertex_buffer, index_buffer, index_count) =
-                    &*self.get_buffers(device, x, y, z);
+                    &*self.get_buffers(device, x + eye_x, y + eye_y, z + eye_z);
                 if *index_count == 0 {
                     continue;
                 }

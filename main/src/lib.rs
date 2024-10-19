@@ -231,12 +231,8 @@ pub async fn run() {
                                         window_loop.window.inner_size(),
                                     );
                                 }
-                                context.update_eye_movement(delta_time, &frame_driven_input);
-                                context.update_eye_rotation(
-                                    delta_time,
-                                    &frame_driven_input,
-                                    target,
-                                );
+                                context.update_eye_movement(&frame_driven_input);
+                                context.update_eye_rotation(&frame_driven_input, target);
 
                                 if context.vox.is_paused() {
                                     window_loop.window.set_cursor_visible(true);

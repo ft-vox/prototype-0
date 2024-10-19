@@ -52,7 +52,7 @@ impl Context {
         self.window_inner_size = window_inner_size;
     }
 
-    pub fn update_eye_movement(&mut self, delta_time: f32, input: &FrameDrivenInput) {
+    pub fn update_eye_movement(&mut self, input: &FrameDrivenInput) {
         if self.vox.is_paused() {
             return;
         }
@@ -91,11 +91,12 @@ impl Context {
 
     pub fn update_eye_rotation(
         &mut self,
-        delta_time: f32,
         input: &FrameDrivenInput,
         target: &EventLoopWindowTarget<()>,
     ) {
-        self.vox.set_is_paused(!self.vox.is_paused());
+        if input.get_key_down("esc") {
+            self.vox.set_is_paused(!self.vox.is_paused());
+        }
         if self.vox.is_paused() {
             return;
         }
