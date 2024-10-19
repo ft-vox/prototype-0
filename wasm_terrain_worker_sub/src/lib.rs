@@ -21,6 +21,10 @@ pub fn start_worker() {
     let map = Rc::new(Map::new(42));
     let worker_id = Rc::new(RefCell::new(42));
 
+    global_scope
+        .post_message(&JsValue::from_str("init"))
+        .unwrap();
+
     {
         let map = map.clone();
         let worker_id = worker_id.clone();
@@ -69,7 +73,7 @@ async fn generate_map(worker_id: Rc<RefCell<i32>>, map: Rc<Map>, (x, y, z): (i32
     let global_scope: DedicatedWorkerGlobalScope = js_sys::global().dyn_into().unwrap();
 
     console::log_1(&JsValue::from_str(&format!(
-        "{} - generating map: {}, {}, {}",
+        "worker {}: generating map ({}, {}, {})",
         *worker_id.borrow(),
         x,
         y,
@@ -85,6 +89,13 @@ async fn generate_map(worker_id: Rc<RefCell<i32>>, map: Rc<Map>, (x, y, z): (i32
 
     let file_name = format!("0_{}_{}_{}.chunk", x, y, z);
 
+    if JsFuture::from(directory.get_file_handle(&file_name))
+        .await
+        .is_ok()
+    {
+        return;
+    }
+
     let option_with_create = FileSystemGetFileOptions::new();
     option_with_create.set_create(true);
 
@@ -95,11 +106,26 @@ async fn generate_map(worker_id: Rc<RefCell<i32>>, map: Rc<Map>, (x, y, z): (i32
             .dyn_into()
             .unwrap();
 
-    let access: FileSystemSyncAccessHandle = JsFuture::from(file.create_sync_access_handle())
-        .await
-        .unwrap()
-        .dyn_into()
-        .unwrap();
+    let access_result = JsFuture::from(file.create_sync_access_handle()).await;
+    if access_result.is_err() {
+        console::error_2(
+            &JsValue::from_str(&format!(
+                "worker {}: Failed to get access ({}, {}, {})",
+                *worker_id.borrow(),
+                x,
+                y,
+                z
+            )),
+            &access_result.unwrap_err(),
+        );
+        return;
+    }
+    let access: FileSystemSyncAccessHandle = access_result.unwrap().dyn_into().unwrap();
+
+    console::log_1(&JsValue::from_str(&format!(
+        "worker {}: 2",
+        *worker_id.borrow(),
+    )));
 
     access
         .write_with_u8_array(&map.get_chunk(x, y, z).to_u8_vec())

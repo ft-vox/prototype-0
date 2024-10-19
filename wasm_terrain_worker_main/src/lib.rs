@@ -6,16 +6,21 @@ use std::str::FromStr;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::JsValue;
-use wasm_bindgen_futures::JsFuture;
+use web_sys::console;
 use web_sys::DedicatedWorkerGlobalScope;
-use web_sys::FileSystemDirectoryHandle;
-use web_sys::FileSystemFileHandle;
-use web_sys::FileSystemSyncAccessHandle;
 use web_sys::MessageEvent;
 use web_sys::Worker;
 
+#[derive(PartialEq, Eq, Clone, Copy)]
 enum QueueItem {
+    Init,
     Generate((i32, i32, i32)),
+}
+
+#[derive(PartialEq, Eq)]
+enum WorkerState {
+    NotReady,
+    Ready(Option<QueueItem>),
 }
 
 #[wasm_bindgen]
@@ -23,13 +28,14 @@ pub fn start_worker() {
     let global_scope: DedicatedWorkerGlobalScope = js_sys::global().dyn_into().unwrap();
     let queue = Rc::new(RefCell::new(VecDeque::<QueueItem>::new()));
     let workers = Rc::new(
-        (0..(global_scope.navigator().hardware_concurrency() as usize - 1).max(1))
-            .map(|i| {
-                let worker = Worker::new("terrain-worker-sub.js").unwrap();
-                worker
-                    .post_message(&JsValue::from_str(&format!("init:{}", i)))
-                    .unwrap();
-                (worker, Rc::new(RefCell::new(false)))
+        (0..(global_scope.navigator().hardware_concurrency() as usize - 1)
+            .max(1)
+            .min(2))
+            .map(|_| {
+                (
+                    Worker::new("terrain-worker-sub.js").unwrap(),
+                    Rc::new(RefCell::new(WorkerState::NotReady)),
+                )
             })
             .collect::<Vec<_>>(),
     );
@@ -50,9 +56,15 @@ pub fn start_worker() {
                 .collect::<Vec<_>>()
                 .try_into()
                 .expect("invalid message given");
-            queue.borrow_mut().push_back(QueueItem::Generate((x, y, z)));
-
-            trigger(&workers, &queue);
+            let item = QueueItem::Generate((x, y, z));
+            if !queue.borrow().contains(&item)
+                && workers
+                    .iter()
+                    .all(|(_, running)| *running.borrow() != WorkerState::Ready(Some(item)))
+            {
+                queue.borrow_mut().push_back(item);
+                trigger(&workers, &queue);
+            }
         }) as Box<dyn FnMut(MessageEvent)>);
 
         global_scope.set_onmessage(Some(onmessage_callback.as_ref().unchecked_ref()));
@@ -60,15 +72,18 @@ pub fn start_worker() {
     }
 
     // per worker
-    for (worker, _) in workers.iter() {
+    for (i, (worker, running)) in workers.iter().enumerate() {
         let queue = queue.clone();
         let workers = workers.clone();
+        let running = running.clone();
 
         let onmessage_callback = Closure::wrap(Box::new(move |event: MessageEvent| {
             let data = event.data();
 
+            *running.borrow_mut() = WorkerState::Ready(None);
+
             wasm_bindgen_futures::spawn_local(
-                QueueItem::from_message(data.as_string().unwrap()).postprocess(),
+                QueueItem::from_message(data.as_string().unwrap()).postprocess(workers.clone(), i),
             );
 
             trigger(&workers, &queue);
@@ -80,21 +95,21 @@ pub fn start_worker() {
 }
 
 fn trigger(
-    workers: &Rc<Vec<(Worker, Rc<RefCell<bool>>)>>,
+    workers: &Rc<Vec<(Worker, Rc<RefCell<WorkerState>>)>>,
     queue: &Rc<RefCell<VecDeque<QueueItem>>>,
 ) {
     if queue.borrow().len() == 0 {
         return;
     }
     for (worker, running) in workers.iter() {
-        if !*running.borrow() {
-            *running.borrow_mut() = true;
+        if *running.borrow() == WorkerState::Ready(None) {
+            let item = queue.borrow_mut().pop_front().unwrap();
+            *running.borrow_mut() = WorkerState::Ready(Some(item));
 
             worker
-                .post_message(&JsValue::from_str(
-                    &queue.borrow_mut().pop_front().unwrap().to_message(),
-                ))
+                .post_message(&JsValue::from_str(&item.to_message()))
                 .unwrap();
+            return;
         }
     }
 }
@@ -116,19 +131,21 @@ impl QueueItem {
                     .expect("Invalid message given");
                 QueueItem::Generate((x, y, z))
             }
+            "init" => QueueItem::Init,
             _ => panic!("Invalid message given"),
         }
     }
 
-    fn to_message(&self) -> String {
+    fn to_message(self) -> String {
         match self {
             QueueItem::Generate((x, y, z)) => {
                 format!("generate:{},{},{}", x, y, z)
             }
+            QueueItem::Init => panic!("Incorrect usage"),
         }
     }
 
-    async fn postprocess(self) {
+    async fn postprocess(self, workers: Rc<Vec<(Worker, Rc<RefCell<WorkerState>>)>>, i: usize) {
         match self {
             QueueItem::Generate((x, y, z)) => {
                 let global_scope: DedicatedWorkerGlobalScope = js_sys::global().dyn_into().unwrap();
@@ -164,6 +181,12 @@ impl QueueItem {
 
                 global_scope
                     .post_message(&JsValue::from_str(&format!("{},{},{}", x, y, z)))
+                    .unwrap();
+            }
+            QueueItem::Init => {
+                workers[i]
+                    .0
+                    .post_message(&JsValue::from_str(&format!("init:{}", i)))
                     .unwrap();
             }
         }
