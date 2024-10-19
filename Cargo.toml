@@ -1,13 +1,15 @@
 [workspace]
 resolver = "2"
 members = [
+    "core",
     "exe",
     "main",
-    "core",
-    "util_lru_cache",
+    "map_core",
+    "map_types",
     "noise",
     "noise_test",
-    "map_types",
-    "map_core",
     "terrain_worker_native",
+    "terrain_worker_web",
+    "util_lru_cache",
+    "wasm_terrain_worker_main",
 ]

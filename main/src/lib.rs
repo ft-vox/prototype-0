@@ -81,8 +81,13 @@ impl EventLoopWrapper {
     }
 }
 
+#[cfg(target_arch = "wasm32")]
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen(start))]
-pub async fn run<T: TerrainWorker>() {
+async fn run_in_wasm() {
+    run::<ft_vox_prototype_0_terrain_worker_web::WebTerrainWorker>().await;
+}
+
+pub async fn run<T: TerrainWorker + 'static>() {
     cfg_if::cfg_if! {
         if #[cfg(target_arch = "wasm32")] {
             std::panic::set_hook(Box::new(console_error_panic_hook::hook));

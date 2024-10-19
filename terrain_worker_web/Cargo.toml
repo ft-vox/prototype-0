@@ -1,0 +1,28 @@
+[package]
+name = "ft-vox-prototype-0-terrain-worker-web"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+ft-vox-prototype-0-core = { version = "0.1.0", path = "../core" }
+ft-vox-prototype-0-map-types = { version = "0.1.0", path = "../map_types" }
+ft-vox-prototype-0-map-core = { version = "0.1.0", path = "../map_core" }
+ft-vox-prototype-0-util-lru-cache = { version = "0.1.0", path = "../util_lru_cache" }
+web-sys = { version = "0.3", features = [
+    "Window",
+    "console",
+    "Worker",
+    "MessageEvent",
+    "Navigator",
+    "StorageManager",
+    "FileSystemDirectoryHandle",
+    "FileSystemFileHandle",
+    "File",
+    "Blob",
+] }
+js-sys = "0.3"
+wasm-bindgen-futures = "0.4.45"
+futures = "0.3.31"

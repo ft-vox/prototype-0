@@ -21,6 +21,7 @@ winapi = { version = "0.3", features = ["winuser"] }
 core-graphics = "0.24.0"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
+ft-vox-prototype-0-terrain-worker-web = { path = "../terrain_worker_web" }
 console_error_panic_hook = "0.1.6"
 console_log = "1.0"
 wgpu = { version = "22.0", features = ["webgl"] }
