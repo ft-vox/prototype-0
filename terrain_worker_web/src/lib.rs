@@ -1,25 +1,26 @@
-use std::{cell::RefCell, fmt::format, rc::Rc};
+use std::{cell::RefCell, rc::Rc};
 
 use ft_vox_prototype_0_core::{get_coords, TerrainWorker};
 use ft_vox_prototype_0_map_core::Map;
-use ft_vox_prototype_0_map_types::Chunk;
+use ft_vox_prototype_0_map_types::{Chunk, CHUNK_SIZE};
 use ft_vox_prototype_0_util_lru_cache::LRUCache;
-use js_sys::wasm_bindgen::{prelude::Closure, JsCast, JsValue};
+use js_sys::{
+    wasm_bindgen::{prelude::Closure, JsCast, JsValue},
+    Uint8Array,
+};
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{
-    console, window, File, FileSystemDirectoryHandle, FileSystemFileHandle, MessageEvent, Window,
-    Worker,
+    console, window, File, FileSystemDirectoryHandle, FileSystemFileHandle, MessageEvent, Worker,
 };
 
 pub struct WebTerrainWorker {
-    map: Map,
     chunks: Rc<RefCell<LRUCache<(i32, i32, i32), Option<Option<Rc<Chunk>>>>>>,
     to_load: Rc<RefCell<Vec<(i32, i32, i32)>>>,
     worker: Worker,
 }
 
 impl TerrainWorker for WebTerrainWorker {
-    fn new(map: Map, render_distance: f32) -> Self {
+    fn new(_map: Map, render_distance: f32) -> Self {
         let chunks = Rc::new(RefCell::new(LRUCache::new(
             get_coords(render_distance).len() * 3,
         )));
@@ -42,7 +43,6 @@ impl TerrainWorker for WebTerrainWorker {
                     worker_clone.clone(),
                     chunks.clone(),
                     (data[0], data[1], data[2]),
-                    false,
                 ));
             }) as Box<dyn FnMut(MessageEvent)>);
 
@@ -51,7 +51,6 @@ impl TerrainWorker for WebTerrainWorker {
         }
 
         Self {
-            map,
             chunks,
             to_load,
             worker,
@@ -71,15 +70,20 @@ impl TerrainWorker for WebTerrainWorker {
                 if let Some(option) = option {
                     if let Some(chunk) = option {
                         result.push((chunk_coord, chunk));
-                    } // else loading
+                    } else {
+                        // loading. nothing to do here.
+                    }
                 } else {
+                    // TODO: distribute jobs to sub workers
+                    let (x, y, z) = chunk_coord;
+                    // console::log_1(&JsValue::from_str(&format!(
+                    //     "generating map: {}, {}, {}",
+                    //     x, y, z
+                    // )));
                     borrow.put(chunk_coord, Some(None));
-                    wasm_bindgen_futures::spawn_local(load_map(
-                        self.worker.clone(),
-                        self.chunks.clone(),
-                        chunk_coord,
-                        true,
-                    ));
+                    self.worker
+                        .post_message(&JsValue::from_str(format!("{},{},{}", x, y, z).as_str()))
+                        .unwrap();
                 }
             } else {
                 borrow.put(chunk_coord, None);
@@ -95,7 +99,6 @@ async fn load_map(
     worker: Worker,
     chunks: Rc<RefCell<LRUCache<(i32, i32, i32), Option<Option<Rc<Chunk>>>>>>,
     (x, y, z): (i32, i32, i32),
-    trigger: bool,
 ) {
     let directory: FileSystemDirectoryHandle =
         JsFuture::from(window().unwrap().navigator().storage().get_directory())
@@ -114,14 +117,18 @@ async fn load_map(
             .unwrap()
             .dyn_into()
             .unwrap();
-        let file_contents = JsFuture::from(file.array_buffer()).await.unwrap();
-        console::log_2(
-            &JsValue::from_str(format!("Loaded {}, {}, {}", x, y, z).as_str()),
-            &file_contents,
-        );
-    } else if trigger {
-        worker
-            .post_message(&JsValue::from_str(format!("{},{},{}", x, y, z).as_str()))
-            .unwrap();
+        let file_contents =
+            Uint8Array::new(&JsFuture::from(file.array_buffer()).await.unwrap()).to_vec();
+        if file_contents.len() == CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE {
+            let chunk = Chunk::from_u8_vec(&file_contents);
+            chunks
+                .borrow_mut()
+                .put((x, y, z), Some(Some(Rc::new(chunk))));
+        } else {
+            console::error_1(&JsValue::from_str(&format!(
+                "File corrupted ({}, {}, {})\nrun `(async () => {{ await (await navigator.storage.getDirectory()).remove({{ recursive: true }}); }})()` and reload.",
+                x, y, z
+            )));
+        }
     }
 }

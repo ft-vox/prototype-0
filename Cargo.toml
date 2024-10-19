@@ -12,4 +12,5 @@ members = [
     "terrain_worker_web",
     "util_lru_cache",
     "wasm_terrain_worker_main",
+    "wasm_terrain_worker_sub",
 ]

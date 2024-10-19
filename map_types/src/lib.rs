@@ -19,6 +19,23 @@ pub struct Chunk {
 }
 
 impl Cube {
+    pub fn to_u8(&self) -> u8 {
+        match self {
+            Cube::Empty => 0,
+            Cube::Solid(solid) => solid.to_u8(),
+        }
+    }
+
+    pub fn from_u8(u8: u8) -> Self {
+        match u8 {
+            0 => Cube::Empty,
+            1 => Cube::Solid(Solid::Grass),
+            2 => Cube::Solid(Solid::Dirt),
+            3 => Cube::Solid(Solid::Stone),
+            _ => panic!("Invalid cube given"),
+        }
+    }
+
     pub fn is_solid(&self) -> bool {
         matches!(self, Cube::Solid(_))
     }
@@ -63,5 +80,29 @@ impl Cube {
             Cube::Solid(Solid::Grass) => [[3.0, 0.0], [2.0, 0.0], [2.0, 1.0], [3.0, 1.0]],
             _ => unreachable!("Incorrect cube type"),
         }
+    }
+}
+
+impl Solid {
+    pub fn to_u8(&self) -> u8 {
+        match self {
+            Solid::Grass => 1,
+            Solid::Dirt => 2,
+            Solid::Stone => 3,
+        }
+    }
+}
+
+impl Chunk {
+    pub fn to_u8_vec(&self) -> Vec<u8> {
+        self.cubes.iter().map(Cube::to_u8).collect()
+    }
+
+    pub fn from_u8_vec(from: &[u8]) -> Self {
+        let mut cubes = [Cube::Empty; CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE];
+        for i in 0..CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE {
+            cubes[i] = Cube::from_u8(from[i]);
+        }
+        Self { cubes }
     }
 }
