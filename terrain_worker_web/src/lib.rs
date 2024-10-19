@@ -64,15 +64,16 @@ impl TerrainWorker for WebTerrainWorker {
     ) -> Vec<((i32, i32, i32), Rc<Chunk>)> {
         let mut result = Vec::new();
         *self.to_load.borrow_mut() = Vec::new();
+        let mut borrow = self.chunks.borrow_mut();
 
         for &chunk_coord in chunk_coords {
-            if let Some(option) = self.chunks.borrow_mut().get(&chunk_coord) {
+            if let Some(option) = borrow.get(&chunk_coord) {
                 if let Some(option) = option {
                     if let Some(chunk) = option {
                         result.push((chunk_coord, chunk));
                     } // else loading
                 } else {
-                    self.chunks.borrow_mut().put(chunk_coord, Some(None));
+                    borrow.put(chunk_coord, Some(None));
                     wasm_bindgen_futures::spawn_local(load_map(
                         self.worker.clone(),
                         self.chunks.clone(),
@@ -81,7 +82,7 @@ impl TerrainWorker for WebTerrainWorker {
                     ));
                 }
             } else {
-                self.chunks.borrow_mut().put(chunk_coord, None);
+                borrow.put(chunk_coord, None);
                 self.to_load.borrow_mut().push(chunk_coord);
             }
         }
@@ -105,17 +106,14 @@ async fn load_map(
 
     let file_name = format!("{}_{}_{}.chunk", x, y, z);
 
-    let file_handle: FileSystemFileHandle = JsFuture::from(directory.get_file_handle(&file_name))
-        .await
-        .unwrap()
-        .dyn_into()
-        .unwrap();
-
-    if let Ok(file) = JsFuture::from(file_handle.get_file())
-        .await
-        .unwrap()
-        .dyn_into::<File>()
-    {
+    let file_handle_result = JsFuture::from(directory.get_file_handle(&file_name)).await;
+    if let Ok(file_handle) = file_handle_result {
+        let file_handle: FileSystemFileHandle = file_handle.dyn_into().unwrap();
+        let file: File = JsFuture::from(file_handle.get_file())
+            .await
+            .unwrap()
+            .dyn_into()
+            .unwrap();
         let file_contents = JsFuture::from(file.array_buffer()).await.unwrap();
         console::log_2(
             &JsValue::from_str(format!("Loaded {}, {}, {}", x, y, z).as_str()),
