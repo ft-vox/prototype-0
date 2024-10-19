@@ -4,6 +4,7 @@ members = [
     "exe",
     "main",
     "core",
+    "util_lru_cache",
     "noise",
     "noise_test",
     "map_types",

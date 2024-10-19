@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, VecDeque};
 
 pub struct LRUCache<Key: Eq + Ord + Clone, Value: Clone> {
-    pub map: BTreeMap<Key, Value>, // TODO: make it private
+    map: BTreeMap<Key, Value>,
     queue: VecDeque<Key>,
     capacity: usize,
 }

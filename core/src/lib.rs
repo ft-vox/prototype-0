@@ -1,15 +1,14 @@
 use bytemuck::{Pod, Zeroable};
 use ft_vox_prototype_0_map_core::Map;
 use ft_vox_prototype_0_map_types::{Chunk, CHUNK_SIZE};
+use ft_vox_prototype_0_util_lru_cache::LRUCache;
 use glam::{Mat3, Vec3};
 use image::{GenericImageView, Pixel};
 use std::{borrow::Cow, rc::Rc};
 use wgpu::util::DeviceExt;
 
-mod lru_cache;
 mod vertex;
 
-use lru_cache::LRUCache;
 use vertex::{create_vertices_for_chunk, Vertex};
 
 pub struct Vox {
