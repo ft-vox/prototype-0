@@ -10,7 +10,8 @@ members = [
     "noise_test",
     "terrain_worker_native",
     "terrain_worker_web",
-    "util_lru_cache",
+    "util_lru_cache_arc",
+    "util_lru_cache_rc",
     "wasm_terrain_worker_main",
     "wasm_terrain_worker_sub",
 ]

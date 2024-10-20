@@ -1,5 +1,5 @@
 [package]
-name = "ft-vox-prototype-0-util-lru-cache"
+name = "ft-vox-prototype-0-util-lru-cache-arc"
 version = "0.1.0"
 edition = "2021"
 

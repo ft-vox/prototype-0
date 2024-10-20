@@ -1,5 +1,4 @@
 use std::{
-    cell::RefCell,
     collections::VecDeque,
     rc::Rc,
     sync::{Arc, Mutex},
@@ -10,7 +9,8 @@ use std::{
 use ft_vox_prototype_0_core::{get_coords, TerrainWorker};
 use ft_vox_prototype_0_map_core::Map;
 use ft_vox_prototype_0_map_types::Chunk;
-use ft_vox_prototype_0_util_lru_cache::LRUCache;
+use ft_vox_prototype_0_util_lru_cache_arc::LRUCache as ArcLRUCache;
+use ft_vox_prototype_0_util_lru_cache_rc::LRUCache;
 
 #[derive(PartialEq, Eq, Clone, Copy)]
 enum QueueItem {
@@ -18,18 +18,18 @@ enum QueueItem {
 }
 
 pub struct NativeTerrainWorker {
-    chunks_arc: Arc<Mutex<RefCell<LRUCache<(i32, i32, i32), Option<Arc<Chunk>>>>>>,
+    chunks_arc: Arc<Mutex<ArcLRUCache<(i32, i32, i32), Option<Arc<Chunk>>>>>,
     chunks_rc: LRUCache<(i32, i32, i32), Rc<Chunk>>,
-    queue: Arc<Mutex<RefCell<VecDeque<QueueItem>>>>,
+    queue: Arc<Mutex<VecDeque<QueueItem>>>,
 }
 
 impl TerrainWorker for NativeTerrainWorker {
     fn new(map: Map, render_distance: f32) -> Self {
-        let chunks_arc = Arc::new(Mutex::new(RefCell::new(LRUCache::new(
+        let chunks_arc = Arc::new(Mutex::new(ArcLRUCache::new(
             get_coords(render_distance + 2.0).len() * 2,
-        ))));
+        )));
         let chunks_rc = LRUCache::new(get_coords(render_distance + 2.0).len() * 2);
-        let queue = Arc::new(Mutex::new(RefCell::new(VecDeque::new())));
+        let queue = Arc::new(Mutex::new(VecDeque::new()));
 
         let cpu_count = available_parallelism().unwrap().get();
         for _ in 0..(cpu_count - 1).max(1) {
@@ -37,12 +37,11 @@ impl TerrainWorker for NativeTerrainWorker {
             let queue = queue.clone();
             let map = map.clone();
             thread::spawn(move || loop {
-                let option = queue.lock().unwrap().borrow_mut().pop_front();
+                let option = queue.lock().unwrap().pop_front();
 
                 if let Some(QueueItem::Generate((x, y, z))) = option {
                     let chunk = map.get_chunk(x, y, z);
-                    let lock = chunks.lock().unwrap();
-                    let mut chunks = lock.borrow_mut();
+                    let mut chunks = chunks.lock().unwrap();
                     chunks.put((x, y, z), Some(Arc::new(chunk)));
                 } else {
                     thread::sleep(Duration::from_millis(100));
@@ -66,8 +65,7 @@ impl TerrainWorker for NativeTerrainWorker {
             if let Some(chunk) = self.chunks_rc.get(&chunk_coord) {
                 result.push((chunk_coord, chunk));
             } else {
-                let lock = self.chunks_arc.lock().unwrap();
-                let mut borrow = lock.borrow_mut();
+                let mut borrow = self.chunks_arc.lock().unwrap();
 
                 if let Some(option) = borrow.get(&chunk_coord) {
                     if let Some(chunk) = option {
@@ -78,8 +76,7 @@ impl TerrainWorker for NativeTerrainWorker {
                         // loading. nothing to do here.
                     }
                 } else {
-                    let lock = self.queue.lock().unwrap();
-                    let mut borrow = lock.borrow_mut();
+                    let mut borrow = self.queue.lock().unwrap();
                     let item = QueueItem::Generate(chunk_coord);
                     if !borrow.contains(&item) {
                         borrow.push_back(item);

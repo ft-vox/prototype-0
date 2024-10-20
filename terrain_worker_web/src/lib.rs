@@ -3,7 +3,7 @@ use std::{cell::RefCell, rc::Rc};
 use ft_vox_prototype_0_core::{get_coords, TerrainWorker};
 use ft_vox_prototype_0_map_core::Map;
 use ft_vox_prototype_0_map_types::{Chunk, CHUNK_SIZE};
-use ft_vox_prototype_0_util_lru_cache::LRUCache;
+use ft_vox_prototype_0_util_lru_cache_rc::LRUCache;
 use js_sys::{
     wasm_bindgen::{prelude::Closure, JsCast, JsValue},
     Uint8Array,
