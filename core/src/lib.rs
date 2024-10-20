@@ -2,7 +2,8 @@ use ft_vox_prototype_0_map_core::Map;
 use ft_vox_prototype_0_map_types::{Chunk, CHUNK_SIZE};
 use ft_vox_prototype_0_util_lru_cache::LRUCache;
 use glam::{Mat3, Vec3};
-use std::rc::Rc;
+use image::{GenericImageView, Pixel};
+use std::{borrow::Cow, collections::HashMap, rc::Rc};
 use wgpu::util::DeviceExt;
 
 mod vertex;
@@ -44,7 +45,9 @@ pub struct Vox<T: TerrainWorker> {
     horizontal_rotation: f32,
     vertical_rotation: f32,
     is_paused: bool,
-    chunks: LRUCache<[i32; 3], Rc<Chunk>>,
+    projection_matrix: glam::Mat4,
+    depth_buffer: wgpu::TextureView,
+    chunks: HashMap<[i32; 3], Rc<Chunk>>,
     buffers: LRUCache<[i32; 3], Rc<(wgpu::Buffer, wgpu::Buffer, u32)>>,
     terrain_worker: T,
 }
@@ -86,7 +89,11 @@ impl<T: TerrainWorker> Vox<T> {
             eye: glam::Vec3::new(0.0, -5.0, 3.0),
             horizontal_rotation: 0.0,
             vertical_rotation: 0.0,
-            chunks: LRUCache::new(get_coords(RENDER_DISTANCE).len() * 2),
+            projection_matrix: Self::generate_projection_matrix(
+                config.width as f32 / config.height as f32,
+            ),
+            depth_buffer,
+            chunks: HashMap::new(),
             buffers: LRUCache::new(get_coords(RENDER_DISTANCE).len()),
             is_paused: false,
             terrain_worker: T::new(Map::new(42), RENDER_DISTANCE),
@@ -154,11 +161,64 @@ impl<T: TerrainWorker> Vox<T> {
     }
 
     pub fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
-        let chunk_coords = {
-            let (eye_x, eye_y, eye_z) = {
-                let eye = (self.eye / CHUNK_SIZE as f32).floor();
-                (eye.x as i32, eye.y as i32, eye.z as i32)
+        const FOG_COLOR: f64 = 0.8;
+        const FOG_END: f32 = (RENDER_DISTANCE - 2.9) * CHUNK_SIZE as f32;
+        const FOG_START: f32 = FOG_END * 0.8;
+
+        let mut encoder =
+            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+
+        {
+            let dir = (glam::Mat3::from_rotation_z(self.horizontal_rotation)
+                * glam::Mat3::from_rotation_x(self.vertical_rotation))
+                * glam::Vec3::Y;
+            let view_matrix = glam::Mat4::look_to_rh(self.eye, dir, glam::Vec3::Z);
+            let mx_total = self.projection_matrix * view_matrix;
+            let mx_ref: &[f32; 16] = mx_total.as_ref();
+            let fog_color: [f32; 4] = [FOG_COLOR as f32, FOG_COLOR as f32, FOG_COLOR as f32, 1.0];
+            let fog_start: f32 = FOG_START;
+            let fog_end: f32 = FOG_END;
+            let view_position: [f32; 4] = [self.eye.x, self.eye.y, self.eye.z, 0.0];
+            let uniforms = Uniforms {
+                transform: *mx_ref,
+                view_position,
+                fog_color,
+                fog_start,
+                fog_end,
             };
+            queue.write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[uniforms]));
+        }
+
+        {
+            let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: None,
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: FOG_COLOR,
+                            g: FOG_COLOR,
+                            b: FOG_COLOR,
+                            a: FOG_COLOR,
+                        }),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &self.depth_buffer,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: wgpu::StoreOp::Store,
+                    }),
+                    stencil_ops: None,
+                }),
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+
+            rpass.set_pipeline(&self.pipeline);
+            rpass.set_bind_group(0, &self.bind_group, &[]);
             get_coords(RENDER_DISTANCE)
                 .into_iter()
                 .map(|(x, y, z)| (x + eye_x, y + eye_y, z + eye_z))
@@ -166,6 +226,30 @@ impl<T: TerrainWorker> Vox<T> {
         };
         for ((x, y, z), chunk) in self.terrain_worker.get_available(&chunk_coords) {
             self.chunks.put([x, y, z], chunk);
+            self.chunks.clear();
+            for ((x, y, z), chunk) in self.terrain_worker.get_available(
+                &get_coords(RENDER_DISTANCE + 2.0)
+                    .into_iter()
+                    .map(|(x, y, z)| (x + eye_x, y + eye_y, z + eye_z))
+                    .collect::<Vec<_>>(),
+            ) {
+                self.chunks.insert([x, y, z], chunk);
+            }
+            for (x, y, z) in get_coords(RENDER_DISTANCE)
+                .into_iter()
+                .map(|(x, y, z)| (x + eye_x, y + eye_y, z + eye_z))
+                .collect::<Vec<_>>()
+            {
+                if let Some(rc) = self.get_buffers(device, x, y, z) {
+                    let (vertex_buffer, index_buffer, index_count) = &*rc;
+                    if *index_count == 0 {
+                        continue;
+                    }
+                    rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+                    rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
+                    rpass.draw_indexed(0..*index_count, 0, 0..1);
+                }
+            }
         }
 
         let buffer_data = chunk_coords

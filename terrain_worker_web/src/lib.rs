@@ -22,7 +22,7 @@ pub struct WebTerrainWorker {
 impl TerrainWorker for WebTerrainWorker {
     fn new(_map: Map, render_distance: f32) -> Self {
         let chunks = Rc::new(RefCell::new(LRUCache::new(
-            get_coords(render_distance).len() * 2,
+            get_coords(render_distance + 2.0).len() * 2,
         )));
         let worker = Worker::new("terrain-worker-main.js").unwrap();
         let worker_ready = Rc::new(RefCell::new(false));
