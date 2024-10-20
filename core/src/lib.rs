@@ -2,8 +2,7 @@ use ft_vox_prototype_0_map_core::Map;
 use ft_vox_prototype_0_map_types::{Chunk, CHUNK_SIZE};
 use ft_vox_prototype_0_util_lru_cache::LRUCache;
 use glam::{Mat3, Vec3};
-use image::{GenericImageView, Pixel};
-use std::{borrow::Cow, collections::HashMap, rc::Rc};
+use std::{collections::HashMap, rc::Rc};
 use wgpu::util::DeviceExt;
 
 mod vertex;
@@ -11,6 +10,8 @@ mod vox_graphics_wrapper;
 
 use vertex::create_vertices_for_chunk;
 use vox_graphics_wrapper::*;
+
+pub const RENDER_DISTANCE: f32 = 10.0;
 
 pub trait TerrainWorker {
     fn new(map: Map, render_distance: f32) -> Self;
@@ -69,8 +70,6 @@ impl MoveSpeed {
         }
     }
 }
-
-pub const RENDER_DISTANCE: f32 = 7.0;
 
 impl<T: TerrainWorker> Vox<T> {
     pub fn init(
