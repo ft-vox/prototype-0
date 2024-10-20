@@ -2,8 +2,7 @@ use ft_vox_prototype_0_map_core::Map;
 use ft_vox_prototype_0_map_types::{Chunk, CHUNK_SIZE};
 use ft_vox_prototype_0_util_lru_cache::LRUCache;
 use glam::{Mat3, Vec3};
-use image::{GenericImageView, Pixel};
-use std::{borrow::Cow, collections::HashMap, rc::Rc};
+use std::{collections::HashMap, rc::Rc, time::Instant};
 use wgpu::util::DeviceExt;
 
 mod vertex;
@@ -70,7 +69,7 @@ impl MoveSpeed {
     }
 }
 
-pub const RENDER_DISTANCE: f32 = 7.0;
+pub const RENDER_DISTANCE: f32 = 22.0;
 
 impl<T: TerrainWorker> Vox<T> {
     pub fn init(
@@ -155,21 +154,24 @@ impl<T: TerrainWorker> Vox<T> {
     }
 
     pub fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
-        let chunk_coords = {
-            let (eye_x, eye_y, eye_z) = {
-                let eye = (self.eye / CHUNK_SIZE as f32).floor();
-                (eye.x as i32, eye.y as i32, eye.z as i32)
-            };
-            get_coords(RENDER_DISTANCE)
+        let (eye_x, eye_y, eye_z) = {
+            let eye = (self.eye / CHUNK_SIZE as f32).floor();
+            (eye.x as i32, eye.y as i32, eye.z as i32)
+        };
+
+        for ((x, y, z), chunk) in self.terrain_worker.get_available(
+            &get_coords(RENDER_DISTANCE + 2.0)
                 .into_iter()
                 .map(|(x, y, z)| (x + eye_x, y + eye_y, z + eye_z))
-                .collect::<Vec<_>>()
-        };
-        for ((x, y, z), chunk) in self.terrain_worker.get_available(&chunk_coords) {
+                .collect::<Vec<_>>(),
+        ) {
             self.chunks.insert([x, y, z], chunk);
         }
 
-        let buffer_data = chunk_coords
+        let buffer_data = get_coords(RENDER_DISTANCE)
+            .into_iter()
+            .map(|(x, y, z)| (x + eye_x, y + eye_y, z + eye_z))
+            .collect::<Vec<_>>()
             .iter()
             .filter_map(|&(x, y, z)| {
                 self.get_buffers(device, x, y, z)
@@ -240,7 +242,7 @@ impl<T: TerrainWorker> Vox<T> {
             let chunk_nz = chunk_nz.unwrap();
 
             let (vertex_data, index_data) = create_vertices_for_chunk(
-                &chunk, x, y, z, &chunk_px, &chunk_nx, &chunk_py, &chunk_ny, &chunk_pz, &chunk_nz,
+                chunk, x, y, z, chunk_px, chunk_nx, chunk_py, chunk_ny, chunk_pz, chunk_nz,
             );
 
             let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
