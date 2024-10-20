@@ -325,7 +325,7 @@ impl VoxGraphicsWrapper {
             rpass.set_pipeline(&self.world_pipeline);
             rpass.set_bind_group(0, &self.world_bind_group, &[]);
 
-            for (x, y, z, buffers) in buffer_data {
+            for (_, _, _, buffers) in buffer_data {
                 let (vertex_buffer, index_buffer, index_count) = &*buffers;
                 if *index_count == 0 {
                     continue;

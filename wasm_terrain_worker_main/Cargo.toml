@@ -10,7 +10,7 @@ crate-type = ["cdylib", "rlib"]
 ft-vox-prototype-0-core = { version = "0.1.0", path = "../core" }
 ft-vox-prototype-0-map-types = { version = "0.1.0", path = "../map_types" }
 ft-vox-prototype-0-map-core = { version = "0.1.0", path = "../map_core" }
-ft-vox-prototype-0-util-lru-cache = { version = "0.1.0", path = "../util_lru_cache" }
+ft-vox-prototype-0-util-lru-cache-rc = { version = "0.1.0", path = "../util_lru_cache_rc" }
 wasm-bindgen = "0.2"
 web-sys = { version = "0.3", features = [
     "Window",
