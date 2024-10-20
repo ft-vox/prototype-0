@@ -26,9 +26,9 @@ pub struct NativeTerrainWorker {
 impl TerrainWorker for NativeTerrainWorker {
     fn new(map: Map, render_distance: f32) -> Self {
         let chunks_arc = Arc::new(Mutex::new(RefCell::new(LRUCache::new(
-            get_coords(render_distance).len() * 2,
+            get_coords(render_distance + 2.0).len() * 2,
         ))));
-        let chunks_rc = LRUCache::new(get_coords(render_distance).len() * 2);
+        let chunks_rc = LRUCache::new(get_coords(render_distance + 2.0).len() * 2);
         let queue = Arc::new(Mutex::new(RefCell::new(VecDeque::new())));
 
         let cpu_count = available_parallelism().unwrap().get();

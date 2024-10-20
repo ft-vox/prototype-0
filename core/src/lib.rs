@@ -4,7 +4,7 @@ use ft_vox_prototype_0_map_types::{Chunk, CHUNK_SIZE};
 use ft_vox_prototype_0_util_lru_cache::LRUCache;
 use glam::{Mat3, Vec3};
 use image::{GenericImageView, Pixel};
-use std::{borrow::Cow, rc::Rc};
+use std::{borrow::Cow, collections::HashMap, rc::Rc};
 use wgpu::util::DeviceExt;
 
 mod vertex;
@@ -45,7 +45,7 @@ pub struct Vox<T: TerrainWorker> {
     is_paused: bool,
     projection_matrix: glam::Mat4,
     depth_buffer: wgpu::TextureView,
-    chunks: LRUCache<[i32; 3], Rc<Chunk>>,
+    chunks: HashMap<[i32; 3], Rc<Chunk>>,
     buffers: LRUCache<[i32; 3], Rc<(wgpu::Buffer, wgpu::Buffer, u32)>>,
     bind_group: wgpu::BindGroup,
     uniform_buffer: wgpu::Buffer,
@@ -258,7 +258,7 @@ impl<T: TerrainWorker> Vox<T> {
                 config.width as f32 / config.height as f32,
             ),
             depth_buffer,
-            chunks: LRUCache::new(get_coords(RENDER_DISTANCE).len() * 2),
+            chunks: HashMap::new(),
             buffers: LRUCache::new(get_coords(RENDER_DISTANCE).len()),
             bind_group,
             uniform_buffer,
@@ -412,20 +412,24 @@ impl<T: TerrainWorker> Vox<T> {
 
             rpass.set_pipeline(&self.pipeline);
             rpass.set_bind_group(0, &self.bind_group, &[]);
-            let chunk_coords = {
-                let (eye_x, eye_y, eye_z) = {
-                    let eye = (self.eye / CHUNK_SIZE as f32).floor();
-                    (eye.x as i32, eye.y as i32, eye.z as i32)
-                };
-                get_coords(RENDER_DISTANCE)
+            let (eye_x, eye_y, eye_z) = {
+                let eye = (self.eye / CHUNK_SIZE as f32).floor();
+                (eye.x as i32, eye.y as i32, eye.z as i32)
+            };
+            self.chunks.clear();
+            for ((x, y, z), chunk) in self.terrain_worker.get_available(
+                &get_coords(RENDER_DISTANCE + 2.0)
                     .into_iter()
                     .map(|(x, y, z)| (x + eye_x, y + eye_y, z + eye_z))
-                    .collect::<Vec<_>>()
-            };
-            for ((x, y, z), chunk) in self.terrain_worker.get_available(&chunk_coords) {
-                self.chunks.put([x, y, z], chunk);
+                    .collect::<Vec<_>>(),
+            ) {
+                self.chunks.insert([x, y, z], chunk);
             }
-            for (x, y, z) in chunk_coords {
+            for (x, y, z) in get_coords(RENDER_DISTANCE)
+                .into_iter()
+                .map(|(x, y, z)| (x + eye_x, y + eye_y, z + eye_z))
+                .collect::<Vec<_>>()
+            {
                 if let Some(rc) = self.get_buffers(device, x, y, z) {
                     let (vertex_buffer, index_buffer, index_count) = &*rc;
                     if *index_count == 0 {
