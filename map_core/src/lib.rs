@@ -26,6 +26,7 @@ impl Map {
         Map { noise }
     }
 
+    // TODO: optimize
     pub fn get_chunk(&self, x: i32, y: i32, z: i32) -> Chunk {
         let mut cubes = [Cube::Empty; CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE];
         let x_offset = x * CHUNK_SIZE as i32;
@@ -46,7 +47,29 @@ impl Map {
                         1.0,
                         -1.0,
                     ) + noise;
-                    let cube = if density > 0.0 {
+                    let up1_density = lerp(
+                        de_lerp(actual_z + 1.0, MIN_HEIGHT, MAX_HEIGHT).clamp(0.0, 1.0),
+                        1.0,
+                        -1.0,
+                    ) + self.noise.noise3(
+                        actual_x * 0.042,
+                        actual_y * 0.042,
+                        (actual_z + 1.0) * 0.042,
+                    );
+                    let up2_density = lerp(
+                        de_lerp(actual_z + 2.0, MIN_HEIGHT, MAX_HEIGHT).clamp(0.0, 1.0),
+                        1.0,
+                        -1.0,
+                    ) + self.noise.noise3(
+                        actual_x * 0.042,
+                        actual_y * 0.042,
+                        (actual_z + 2.0) * 0.042,
+                    );
+                    let cube = if up2_density > 0.0 {
+                        Cube::Solid(Solid::Stone)
+                    } else if up1_density > 0.0 {
+                        Cube::Solid(Solid::Dirt)
+                    } else if density > 0.0 {
                         Cube::Solid(Solid::Grass)
                     } else {
                         Cube::Empty

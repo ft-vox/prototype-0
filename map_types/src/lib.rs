@@ -43,6 +43,8 @@ impl Cube {
     pub fn tex_coord_px(&self) -> [[f32; 2]; 4] {
         match self {
             Cube::Solid(Solid::Grass) => [[4.0, 1.0], [3.0, 1.0], [3.0, 0.0], [4.0, 0.0]],
+            Cube::Solid(Solid::Dirt) => [[3.0, 1.0], [2.0, 1.0], [2.0, 0.0], [3.0, 0.0]],
+            Cube::Solid(Solid::Stone) => [[2.0, 1.0], [1.0, 1.0], [1.0, 0.0], [2.0, 0.0]],
             _ => unreachable!("Incorrect cube type"),
         }
     }
@@ -50,6 +52,8 @@ impl Cube {
     pub fn tex_coord_nx(&self) -> [[f32; 2]; 4] {
         match self {
             Cube::Solid(Solid::Grass) => [[4.0, 0.0], [3.0, 0.0], [3.0, 1.0], [4.0, 1.0]],
+            Cube::Solid(Solid::Dirt) => [[3.0, 1.0], [2.0, 1.0], [2.0, 0.0], [3.0, 0.0]],
+            Cube::Solid(Solid::Stone) => [[2.0, 1.0], [1.0, 1.0], [1.0, 0.0], [2.0, 0.0]],
             _ => unreachable!("Incorrect cube type"),
         }
     }
@@ -57,6 +61,8 @@ impl Cube {
     pub fn tex_coord_py(&self) -> [[f32; 2]; 4] {
         match self {
             Cube::Solid(Solid::Grass) => [[3.0, 1.0], [4.0, 1.0], [4.0, 0.0], [3.0, 0.0]],
+            Cube::Solid(Solid::Dirt) => [[3.0, 1.0], [2.0, 1.0], [2.0, 0.0], [3.0, 0.0]],
+            Cube::Solid(Solid::Stone) => [[2.0, 1.0], [1.0, 1.0], [1.0, 0.0], [2.0, 0.0]],
             _ => unreachable!("Incorrect cube type"),
         }
     }
@@ -64,6 +70,8 @@ impl Cube {
     pub fn tex_coord_ny(&self) -> [[f32; 2]; 4] {
         match self {
             Cube::Solid(Solid::Grass) => [[3.0, 0.0], [4.0, 0.0], [4.0, 1.0], [3.0, 1.0]],
+            Cube::Solid(Solid::Dirt) => [[3.0, 1.0], [2.0, 1.0], [2.0, 0.0], [3.0, 0.0]],
+            Cube::Solid(Solid::Stone) => [[2.0, 1.0], [1.0, 1.0], [1.0, 0.0], [2.0, 0.0]],
             _ => unreachable!("Incorrect cube type"),
         }
     }
@@ -71,6 +79,8 @@ impl Cube {
     pub fn tex_coord_pz(&self) -> [[f32; 2]; 4] {
         match self {
             Cube::Solid(Solid::Grass) => [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]],
+            Cube::Solid(Solid::Dirt) => [[3.0, 1.0], [2.0, 1.0], [2.0, 0.0], [3.0, 0.0]],
+            Cube::Solid(Solid::Stone) => [[2.0, 1.0], [1.0, 1.0], [1.0, 0.0], [2.0, 0.0]],
             _ => unreachable!("Incorrect cube type"),
         }
     }
@@ -78,6 +88,8 @@ impl Cube {
     pub fn tex_coord_nz(&self) -> [[f32; 2]; 4] {
         match self {
             Cube::Solid(Solid::Grass) => [[3.0, 0.0], [2.0, 0.0], [2.0, 1.0], [3.0, 1.0]],
+            Cube::Solid(Solid::Dirt) => [[3.0, 1.0], [2.0, 1.0], [2.0, 0.0], [3.0, 0.0]],
+            Cube::Solid(Solid::Stone) => [[2.0, 1.0], [1.0, 1.0], [1.0, 0.0], [2.0, 0.0]],
             _ => unreachable!("Incorrect cube type"),
         }
     }
