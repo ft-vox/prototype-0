@@ -355,7 +355,7 @@ impl<T: TerrainWorker> Vox<T> {
 
     pub fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
         const FOG_COLOR: f64 = 0.8;
-        const FOG_END: f32 = (RENDER_DISTANCE - 2.9) * CHUNK_SIZE as f32;
+        const FOG_END: f32 = (RENDER_DISTANCE - 2.0) * CHUNK_SIZE as f32;
         const FOG_START: f32 = FOG_END * 0.8;
 
         let mut encoder =
