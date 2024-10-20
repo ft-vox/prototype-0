@@ -2,7 +2,8 @@ use ft_vox_prototype_0_map_core::Map;
 use ft_vox_prototype_0_map_types::{Chunk, CHUNK_SIZE};
 use ft_vox_prototype_0_util_lru_cache::LRUCache;
 use glam::{Mat3, Vec3};
-use std::rc::Rc;
+use image::{GenericImageView, Pixel};
+use std::{borrow::Cow, collections::HashMap, rc::Rc};
 use wgpu::util::DeviceExt;
 
 mod vertex;
@@ -44,7 +45,7 @@ pub struct Vox<T: TerrainWorker> {
     horizontal_rotation: f32,
     vertical_rotation: f32,
     is_paused: bool,
-    chunks: LRUCache<[i32; 3], Rc<Chunk>>,
+    chunks: HashMap<[i32; 3], Rc<Chunk>>,
     buffers: LRUCache<[i32; 3], Rc<(wgpu::Buffer, wgpu::Buffer, u32)>>,
     terrain_worker: T,
 }
@@ -86,7 +87,7 @@ impl<T: TerrainWorker> Vox<T> {
             eye: glam::Vec3::new(0.0, -5.0, 3.0),
             horizontal_rotation: 0.0,
             vertical_rotation: 0.0,
-            chunks: LRUCache::new(get_coords(RENDER_DISTANCE).len() * 2),
+            chunks: HashMap::new(),
             buffers: LRUCache::new(get_coords(RENDER_DISTANCE).len()),
             is_paused: false,
             terrain_worker: T::new(Map::new(42), RENDER_DISTANCE),
@@ -165,7 +166,7 @@ impl<T: TerrainWorker> Vox<T> {
                 .collect::<Vec<_>>()
         };
         for ((x, y, z), chunk) in self.terrain_worker.get_available(&chunk_coords) {
-            self.chunks.put([x, y, z], chunk);
+            self.chunks.insert([x, y, z], chunk);
         }
 
         let buffer_data = chunk_coords
