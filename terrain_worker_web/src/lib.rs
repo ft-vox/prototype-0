@@ -16,6 +16,7 @@ use web_sys::{
 pub struct WebTerrainWorker {
     chunks: Rc<RefCell<LRUCache<(i32, i32, i32), Option<Rc<Chunk>>>>>,
     worker: Worker,
+    worker_ready: Rc<RefCell<bool>>,
 }
 
 impl TerrainWorker for WebTerrainWorker {
@@ -24,28 +25,39 @@ impl TerrainWorker for WebTerrainWorker {
             get_coords(render_distance).len() * 2,
         )));
         let worker = Worker::new("terrain-worker-main.js").unwrap();
+        let worker_ready = Rc::new(RefCell::new(false));
 
         {
             let chunks = chunks.clone();
+            let worker_ready = worker_ready.clone();
             let onmessage_callback = Closure::wrap(Box::new(move |event: MessageEvent| {
-                let [x, y, z] = event
-                    .data()
-                    .as_string()
-                    .unwrap()
-                    .split(',')
-                    .flat_map(&str::parse::<i32>)
-                    .collect::<Vec<_>>()
-                    .try_into()
-                    .unwrap();
+                let data = event.data().as_string().unwrap();
+                match data.as_str() {
+                    "init" => {
+                        *worker_ready.borrow_mut() = true;
+                    }
+                    _ => {
+                        let [x, y, z] = data
+                            .split(',')
+                            .flat_map(&str::parse::<i32>)
+                            .collect::<Vec<_>>()
+                            .try_into()
+                            .unwrap();
 
-                wasm_bindgen_futures::spawn_local(load_map(chunks.clone(), (x, y, z)));
+                        wasm_bindgen_futures::spawn_local(load_map(chunks.clone(), (x, y, z)));
+                    }
+                }
             }) as Box<dyn FnMut(MessageEvent)>);
 
             worker.set_onmessage(Some(onmessage_callback.as_ref().unchecked_ref()));
             onmessage_callback.forget();
         }
 
-        Self { chunks, worker }
+        Self {
+            chunks,
+            worker,
+            worker_ready,
+        }
     }
 
     fn get_available(
@@ -62,7 +74,7 @@ impl TerrainWorker for WebTerrainWorker {
                 } else {
                     // loading. nothing to do here.
                 }
-            } else {
+            } else if *self.worker_ready.borrow() {
                 let (x, y, z) = chunk_coord;
                 borrow.put(chunk_coord, None);
                 self.worker

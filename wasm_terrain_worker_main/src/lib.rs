@@ -6,7 +6,6 @@ use std::str::FromStr;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::JsValue;
-use web_sys::console;
 use web_sys::DedicatedWorkerGlobalScope;
 use web_sys::MessageEvent;
 use web_sys::Worker;
@@ -28,9 +27,7 @@ pub fn start_worker() {
     let global_scope: DedicatedWorkerGlobalScope = js_sys::global().dyn_into().unwrap();
     let queue = Rc::new(RefCell::new(VecDeque::<QueueItem>::new()));
     let workers = Rc::new(
-        (0..(global_scope.navigator().hardware_concurrency() as usize - 1)
-            .max(1)
-            .min(2))
+        (0..(global_scope.navigator().hardware_concurrency() as usize - 1).max(1))
             .map(|_| {
                 (
                     Worker::new("terrain-worker-sub.js").unwrap(),
@@ -92,6 +89,10 @@ pub fn start_worker() {
         worker.set_onmessage(Some(onmessage_callback.as_ref().unchecked_ref()));
         onmessage_callback.forget();
     }
+
+    global_scope
+        .post_message(&JsValue::from_str("init"))
+        .unwrap();
 }
 
 fn trigger(

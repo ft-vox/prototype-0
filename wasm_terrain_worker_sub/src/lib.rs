@@ -21,10 +21,6 @@ pub fn start_worker() {
     let map = Rc::new(Map::new(42));
     let worker_id = Rc::new(RefCell::new(42));
 
-    global_scope
-        .post_message(&JsValue::from_str("init"))
-        .unwrap();
-
     {
         let map = map.clone();
         let worker_id = worker_id.clone();
@@ -37,6 +33,10 @@ pub fn start_worker() {
         global_scope.set_onmessage(Some(onmessage_callback.as_ref().unchecked_ref()));
         onmessage_callback.forget();
     }
+
+    global_scope
+        .post_message(&JsValue::from_str("init"))
+        .unwrap();
 }
 
 async fn process_job(worker_id: Rc<RefCell<i32>>, map: Rc<Map>, data: JsValue) {
@@ -71,14 +71,6 @@ async fn process_job(worker_id: Rc<RefCell<i32>>, map: Rc<Map>, data: JsValue) {
 
 async fn generate_map(worker_id: Rc<RefCell<i32>>, map: Rc<Map>, (x, y, z): (i32, i32, i32)) {
     let global_scope: DedicatedWorkerGlobalScope = js_sys::global().dyn_into().unwrap();
-
-    console::log_1(&JsValue::from_str(&format!(
-        "worker {}: generating map ({}, {}, {})",
-        *worker_id.borrow(),
-        x,
-        y,
-        z
-    )));
 
     let directory: FileSystemDirectoryHandle =
         JsFuture::from(global_scope.navigator().storage().get_directory())
@@ -121,11 +113,6 @@ async fn generate_map(worker_id: Rc<RefCell<i32>>, map: Rc<Map>, (x, y, z): (i32
         return;
     }
     let access: FileSystemSyncAccessHandle = access_result.unwrap().dyn_into().unwrap();
-
-    console::log_1(&JsValue::from_str(&format!(
-        "worker {}: 2",
-        *worker_id.borrow(),
-    )));
 
     access
         .write_with_u8_array(&map.get_chunk(x, y, z).to_u8_vec())

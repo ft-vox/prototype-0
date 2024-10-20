@@ -22,14 +22,12 @@ impl<Key: Eq + Ord + Clone, Value: Clone> LRUCache<Key, Value> {
     pub fn put(&mut self, key: Key, value: Value) {
         self.map.insert(key.clone(), value);
 
-        self.queue.push_back(key.clone());
-
         if self.queue.len() > self.capacity {
             if let Some(lru_key) = self.queue.pop_front() {
                 self.map.remove(&lru_key);
             }
         }
-        self.update_recent_usage(key.clone());
+        self.update_recent_usage(key);
     }
 
     pub fn get(&mut self, key: &Key) -> Option<Value> {
