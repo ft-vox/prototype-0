@@ -269,7 +269,7 @@ impl<T: TerrainWorker> Vox<T> {
     }
 
     fn generate_projection_matrix(aspect_ratio: f32) -> glam::Mat4 {
-        glam::Mat4::perspective_rh(std::f32::consts::FRAC_PI_2, aspect_ratio, 0.25, 1000.0)
+        glam::Mat4::perspective_rh(80.0_f32.to_radians(), aspect_ratio, 0.25, 1000.0)
     }
 
     pub fn is_paused(&self) -> bool {
