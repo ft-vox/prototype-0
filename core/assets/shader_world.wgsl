@@ -41,6 +41,6 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
 
     let fog_factor: f32 = clamp((uniforms.fog_end - input.distance) / (uniforms.fog_end - uniforms.fog_start), 0.0, 1.0);
 
-    output = mix(uniforms.fog_color, output, fog_factor);
+    //output = mix(uniforms.fog_color, output, fog_factor);
     return output;
 }
