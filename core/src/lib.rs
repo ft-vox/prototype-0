@@ -11,6 +11,8 @@ mod vox_graphics_wrapper;
 use vertex::create_vertices_for_chunk;
 use vox_graphics_wrapper::*;
 
+pub const RENDER_DISTANCE: f32 = 22.0;
+
 pub trait TerrainWorker {
     fn new(map: Map, render_distance: f32) -> Self;
     fn get_available(
@@ -68,8 +70,6 @@ impl MoveSpeed {
         }
     }
 }
-
-pub const RENDER_DISTANCE: f32 = 22.0;
 
 impl<T: TerrainWorker> Vox<T> {
     pub fn init(
