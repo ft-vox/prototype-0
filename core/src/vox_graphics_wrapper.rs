@@ -18,10 +18,10 @@ struct Uniforms {
 }
 
 pub struct VoxGraphicsWrapper {
-    world_projection_matrix: Mat4,
-    world_depth_buffer: wgpu::TextureView,
-    world_bind_group: wgpu::BindGroup,
-    world_uniform_buffer: wgpu::Buffer,
+    projection_matrix: Mat4,
+    depth_buffer: wgpu::TextureView,
+    bind_group: wgpu::BindGroup,
+    uniform_buffer: wgpu::Buffer,
     world_pipeline: wgpu::RenderPipeline,
 }
 
@@ -54,8 +54,7 @@ impl VoxGraphicsWrapper {
                 | wgpu::TextureUsages::RENDER_ATTACHMENT,
             view_formats: &[],
         });
-        let world_depth_buffer =
-            draw_depth_buffer.create_view(&wgpu::TextureViewDescriptor::default());
+        let depth_buffer = draw_depth_buffer.create_view(&wgpu::TextureViewDescriptor::default());
 
         // Create pipeline layout
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -121,19 +120,19 @@ impl VoxGraphicsWrapper {
         );
 
         // Create other resources
-        let world_uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Uniform Buffer"),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             size: aligned_uniform_size as wgpu::BufferAddress,
             mapped_at_creation: false,
         });
 
-        let world_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &bind_group_layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: world_uniform_buffer.as_entire_binding(),
+                    resource: uniform_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
@@ -145,9 +144,7 @@ impl VoxGraphicsWrapper {
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!(
-                "../assets/shader_world.wgsl"
-            ))),
+            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("../assets/shader.wgsl"))),
         });
 
         let vertex_size = std::mem::size_of::<Vertex>();
@@ -174,13 +171,13 @@ impl VoxGraphicsWrapper {
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
-                entry_point: "vs_main",
+                entry_point: "vs_world",
                 buffers: &vertex_buffers,
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
-                entry_point: "fs_main",
+                entry_point: "fs_world",
                 targets: &[Some(config.view_formats[0].into())],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             }),
@@ -201,12 +198,12 @@ impl VoxGraphicsWrapper {
         });
 
         VoxGraphicsWrapper {
-            world_projection_matrix: Self::generate_projection_matrix(
+            projection_matrix: Self::generate_projection_matrix(
                 config.width as f32 / config.height as f32,
             ),
-            world_depth_buffer,
-            world_bind_group,
-            world_uniform_buffer,
+            depth_buffer,
+            bind_group,
+            uniform_buffer,
             world_pipeline,
         }
     }
@@ -246,9 +243,9 @@ impl VoxGraphicsWrapper {
             view_formats: &[],
         });
         let depth_buffer = draw_depth_buffer.create_view(&wgpu::TextureViewDescriptor::default());
-        self.world_depth_buffer = depth_buffer;
+        self.depth_buffer = depth_buffer;
 
-        self.world_projection_matrix =
+        self.projection_matrix =
             Self::generate_projection_matrix(config.width as f32 / config.height as f32);
     }
 
@@ -274,7 +271,7 @@ impl VoxGraphicsWrapper {
                 * glam::Mat3::from_rotation_x(vertical_rotation))
                 * glam::Vec3::Y;
             let view_matrix = glam::Mat4::look_to_rh(eye, dir, glam::Vec3::Z);
-            let mx_total = self.world_projection_matrix * view_matrix;
+            let mx_total = self.projection_matrix * view_matrix;
             let mx_ref: &[f32; 16] = mx_total.as_ref();
             let fog_color: [f32; 4] = [FOG_COLOR as f32, FOG_COLOR as f32, FOG_COLOR as f32, 1.0];
             let fog_start: f32 = FOG_START;
@@ -287,11 +284,7 @@ impl VoxGraphicsWrapper {
                 fog_start,
                 fog_end,
             };
-            queue.write_buffer(
-                &self.world_uniform_buffer,
-                0,
-                bytemuck::cast_slice(&[uniforms]),
-            );
+            queue.write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[uniforms]));
         }
 
         {
@@ -311,7 +304,7 @@ impl VoxGraphicsWrapper {
                     },
                 })],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &self.world_depth_buffer,
+                    view: &self.depth_buffer,
                     depth_ops: Some(wgpu::Operations {
                         load: wgpu::LoadOp::Clear(1.0),
                         store: wgpu::StoreOp::Store,
@@ -323,7 +316,7 @@ impl VoxGraphicsWrapper {
             });
 
             rpass.set_pipeline(&self.world_pipeline);
-            rpass.set_bind_group(0, &self.world_bind_group, &[]);
+            rpass.set_bind_group(0, &self.bind_group, &[]);
 
             for (_, _, _, buffers) in buffer_data {
                 let (vertex_buffer, index_buffer, index_count) = &*buffers;
