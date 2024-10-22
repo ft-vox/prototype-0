@@ -522,7 +522,7 @@ fn load_texture_from_terrain_png() -> (Vec<u8>, u32, u32) {
 }
 
 fn load_skybox_texture(device: &wgpu::Device, queue: &wgpu::Queue) -> wgpu::Texture {
-    let skybox_image = include_bytes!("../assets/nemo.png") as &[u8];
+    let skybox_image = include_bytes!("../assets/minecraft.png") as &[u8];
 
     let img = image::load_from_memory(skybox_image).expect("Failed to open image");
     let img = img.to_rgba8();
