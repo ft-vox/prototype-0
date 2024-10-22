@@ -435,7 +435,7 @@ impl VoxGraphicsWrapper {
                 bytemuck::cast_slice(&[WorldUniforms {
                     vp_matrix: *world_view_projection_matrix.as_ref(),
                     view_position: [eye.x, eye.y, eye.z, 0.0],
-                    fog_color: [FOG_COLOR as f32, FOG_COLOR as f32, FOG_COLOR as f32, 1.0],
+                    fog_color: FOG_COLOR,
                     fog_start: FOG_START,
                     fog_end: FOG_END,
                 }]),
@@ -460,10 +460,10 @@ impl VoxGraphicsWrapper {
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: FOG_COLOR,
-                            g: FOG_COLOR,
-                            b: FOG_COLOR,
-                            a: FOG_COLOR,
+                            r: 0.0,
+                            g: 0.0,
+                            b: 0.0,
+                            a: 0.0,
                         }),
                         store: wgpu::StoreOp::Store,
                     },
@@ -522,7 +522,7 @@ fn load_texture_from_terrain_png() -> (Vec<u8>, u32, u32) {
 }
 
 fn load_skybox_texture(device: &wgpu::Device, queue: &wgpu::Queue) -> wgpu::Texture {
-    let skybox_image = include_bytes!("../assets/sky.png") as &[u8];
+    let skybox_image = include_bytes!("../assets/nemo.png") as &[u8];
 
     let img = image::load_from_memory(skybox_image).expect("Failed to open image");
     let img = img.to_rgba8();

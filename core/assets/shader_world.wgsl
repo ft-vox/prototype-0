@@ -39,10 +39,10 @@ fn fs_world(input: VertexOutput) -> @location(0) vec4<f32> {
 
     output = textureLoad(diffuse_color, vec2<i32>(input.tex_coord * vec2<f32>(16.0, 16.0)), 0);
 
-    let fog_factor: f32 = clamp((uniforms.fog_end - input.distance) / (uniforms.fog_end - uniforms.fog_start), 0.0, 1.0);
+    var fog_factor: f32 = clamp((input.distance - uniforms.fog_start) / (uniforms.fog_end - uniforms.fog_start), 0.0, 1.0);
 
-    output *= fog_factor;
+    //output *= fog_factor;
+    output = mix(output, uniforms.fog_color, fog_factor);
 
-    //output = mix(uniforms.fog_color, output, fog_factor);
     return output;
 }

@@ -12,7 +12,7 @@ use vertex::create_vertices_for_chunk;
 use vox_graphics_wrapper::*;
 
 pub const RENDER_DISTANCE: f32 = 8.0;
-pub const FOG_COLOR: f64 = 0.8;
+pub const FOG_COLOR: [f32; 4] = [57.0 / 255.0, 107.0 / 255.0, 251.0 / 255.0, 1.0];
 pub const FOG_END: f32 = (RENDER_DISTANCE - 2.0) * CHUNK_SIZE as f32;
 pub const FOG_START: f32 = FOG_END * 0.8;
 
