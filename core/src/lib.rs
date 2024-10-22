@@ -1,17 +1,18 @@
-use ft_vox_prototype_0_map_core::Map;
 use ft_vox_prototype_0_map_types::{Chunk, CHUNK_SIZE};
 use ft_vox_prototype_0_util_lru_cache_rc::LRUCache;
 use glam::{Mat3, Vec3};
 use std::{collections::HashMap, rc::Rc};
 use wgpu::util::DeviceExt;
 
+pub mod chunk_cache;
 mod vertex;
 mod vox_graphics_wrapper;
 
 use vertex::create_vertices_for_chunk;
 use vox_graphics_wrapper::*;
 
-pub const RENDER_DISTANCE: f32 = 8.0;
+pub const CACHE_DISTANCE: usize = 22;
+pub const RENDER_DISTANCE: f32 = CACHE_DISTANCE as f32;
 
 pub const FOG_COLOR: [f32; 4] = [57.0 / 255.0, 107.0 / 255.0, 251.0 / 255.0, 1.0];
 pub const FOG_END: f32 = (RENDER_DISTANCE - 2.0) * CHUNK_SIZE as f32;
@@ -20,10 +21,11 @@ pub const FOG_START: f32 = FOG_END * 0.8;
 pub const FOV: f32 = 80.0;
 
 pub trait TerrainWorker {
-    fn new(map: Map, render_distance: f32) -> Self;
+    fn new(cache_distance: usize, eye: (f32, f32, f32)) -> Self;
     fn get_available(
         &mut self,
-        chunk_coords: &[(i32, i32, i32)],
+        cache_distance: usize,
+        eye: (f32, f32, f32),
     ) -> Vec<((i32, i32, i32), Rc<Chunk>)>;
 }
 
@@ -85,17 +87,20 @@ impl<T: TerrainWorker> Vox<T> {
         queue: &wgpu::Queue,
     ) -> Self {
         let vox_graphics_wrapper = VoxGraphicsWrapper::init(config, _adapter, device, queue);
+        let eye_x = 0.0;
+        let eye_y = -5.0;
+        let eye_z = 3.0;
 
         // Done
         Vox {
             vox_graphics_wrapper,
-            eye: glam::Vec3::new(0.0, -5.0, 3.0),
+            eye: glam::Vec3::new(eye_x, eye_y, eye_z),
             horizontal_rotation: 0.0,
             vertical_rotation: 0.0,
             chunks: HashMap::new(),
             buffers: LRUCache::new(get_coords(RENDER_DISTANCE).len()),
             is_paused: false,
-            terrain_worker: T::new(Map::new(42), RENDER_DISTANCE),
+            terrain_worker: T::new(CACHE_DISTANCE, (eye_x, eye_y, eye_z)),
         }
     }
 
@@ -165,12 +170,10 @@ impl<T: TerrainWorker> Vox<T> {
             (eye.x as i32, eye.y as i32, eye.z as i32)
         };
 
-        for ((x, y, z), chunk) in self.terrain_worker.get_available(
-            &get_coords(RENDER_DISTANCE + 2.0)
-                .into_iter()
-                .map(|(x, y, z)| (x + eye_x, y + eye_y, z + eye_z))
-                .collect::<Vec<_>>(),
-        ) {
+        for ((x, y, z), chunk) in self
+            .terrain_worker
+            .get_available(CACHE_DISTANCE, (self.eye.x, self.eye.y, self.eye.z))
+        {
             self.chunks.insert([x, y, z], chunk);
         }
 
