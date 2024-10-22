@@ -162,7 +162,9 @@ impl VoxGraphicsWrapper {
 
         let world_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("../assets/shader.wgsl"))),
+            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!(
+                "../assets/shader_world.wgsl"
+            ))),
         });
 
         let world_vertex_size = std::mem::size_of::<Vertex>();
@@ -228,7 +230,9 @@ impl VoxGraphicsWrapper {
 
         let sky_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Skybox Shader"),
-            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("../assets/skybox.wgsl"))),
+            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!(
+                "../assets/shader_sky.wgsl"
+            ))),
         });
 
         let sky_uniform_size = std::mem::size_of::<SkyUniforms>();

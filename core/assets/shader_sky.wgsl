@@ -1,5 +1,5 @@
 struct Uniforms {
-    view_proj: mat4x4<f32>,
+    vp_matrix: mat4x4<f32>,
 };
 
 @group(0)
@@ -48,7 +48,7 @@ fn vs_sky(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
     var output: VertexOutput;
     output.tex_coords = vec3<f32>(vertex_pos.x, vertex_pos.z, vertex_pos.y);
 
-    let projection_only = mat4x4<f32>(uniforms.view_proj);
+    let projection_only = mat4x4<f32>(uniforms.vp_matrix);
     output.position = projection_only * vec4<f32>(vertex_pos, 1.0);
     return output;
 }
