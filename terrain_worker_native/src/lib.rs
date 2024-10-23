@@ -1,16 +1,15 @@
 use std::{
-    collections::VecDeque,
+    collections::{HashSet, VecDeque},
     rc::Rc,
     sync::{Arc, Mutex},
     thread::{self, available_parallelism},
     time::Duration,
 };
 
-use ft_vox_prototype_0_core::{get_coords, TerrainWorker};
+use ft_vox_prototype_0_core::{chunk_cache::ChunkCache, TerrainWorker};
 use ft_vox_prototype_0_map_core::Map;
 use ft_vox_prototype_0_map_types::Chunk;
-use ft_vox_prototype_0_util_lru_cache_arc::LRUCache as ArcLRUCache;
-use ft_vox_prototype_0_util_lru_cache_rc::LRUCache;
+use ft_vox_prototype_0_util_lru_cache_arc::LRUCache;
 
 #[derive(PartialEq, Eq, Clone, Copy)]
 enum QueueItem {
@@ -18,69 +17,75 @@ enum QueueItem {
 }
 
 pub struct NativeTerrainWorker {
-    chunks_arc: Arc<Mutex<ArcLRUCache<(i32, i32, i32), Option<Arc<Chunk>>>>>,
-    chunks_rc: LRUCache<(i32, i32, i32), Rc<Chunk>>,
+    chunks: Arc<Mutex<LRUCache<(i32, i32, i32), Arc<Chunk>>>>,
+    chunk_cache: ChunkCache,
     queue: Arc<Mutex<VecDeque<QueueItem>>>,
+    is_loading: Arc<Mutex<HashSet<(i32, i32, i32)>>>,
 }
 
 impl TerrainWorker for NativeTerrainWorker {
-    fn new(map: Map, render_distance: f32) -> Self {
-        let chunks_arc = Arc::new(Mutex::new(ArcLRUCache::new(
-            get_coords(render_distance + 2.0).len() * 2,
-        )));
-        let chunks_rc = LRUCache::new(get_coords(render_distance + 2.0).len() * 2);
-        let queue = Arc::new(Mutex::new(VecDeque::new()));
-
+    fn new(cache_distance: usize, eye: (f32, f32, f32)) -> Self {
         let cpu_count = available_parallelism().unwrap().get();
-        for _ in 0..(cpu_count - 1).max(1) {
-            let chunks = chunks_arc.clone();
-            let queue = queue.clone();
-            let map = map.clone();
-            thread::spawn(move || loop {
-                let option = queue.lock().unwrap().pop_front();
 
-                if let Some(QueueItem::Generate((x, y, z))) = option {
-                    let chunk = map.get_chunk(x, y, z);
-                    let mut chunks = chunks.lock().unwrap();
-                    chunks.put((x, y, z), Some(Arc::new(chunk)));
-                } else {
-                    thread::sleep(Duration::from_millis(100));
+        let chunks = Arc::new(Mutex::new(LRUCache::new(cpu_count * 420)));
+        let chunk_cache = ChunkCache::new(cache_distance, eye);
+        let queue = Arc::new(Mutex::new(VecDeque::new()));
+        let is_loading = Arc::new(Mutex::new(HashSet::new()));
+
+        for _ in 0..(cpu_count - 1).max(1) {
+            let chunks = chunks.clone();
+            let queue = queue.clone();
+            let is_loading = is_loading.clone();
+            thread::spawn(move || {
+                let map = Map::new(42);
+                loop {
+                    let option = queue.lock().unwrap().pop_front();
+
+                    if let Some(QueueItem::Generate((x, y, z))) = option {
+                        let chunk = map.get_chunk(x, y, z);
+                        let mut chunks = chunks.lock().unwrap();
+                        chunks.put((x, y, z), Arc::new(chunk));
+                        is_loading.lock().unwrap().remove(&(x, y, z));
+                    } else {
+                        thread::sleep(Duration::from_millis(100));
+                    }
                 }
             });
         }
 
         Self {
-            chunks_arc,
-            chunks_rc,
+            chunks,
+            chunk_cache,
             queue,
+            is_loading,
         }
     }
 
     fn get_available(
         &mut self,
-        chunk_coords: &[(i32, i32, i32)],
+        cache_distance: usize,
+        (x, y, z): (f32, f32, f32),
     ) -> Vec<((i32, i32, i32), Rc<Chunk>)> {
         let mut result = Vec::new();
-        for &chunk_coord in chunk_coords {
-            if let Some(chunk) = self.chunks_rc.get(&chunk_coord) {
-                result.push((chunk_coord, chunk));
+        self.chunk_cache.set_cache_distance(cache_distance);
+        self.chunk_cache.set_eye((x, y, z));
+        for (x, y, z) in self.chunk_cache.coords().clone() {
+            if let Some(chunk) = self.chunk_cache.get(x, y, z) {
+                result.push(((x, y, z), chunk));
             } else {
-                let mut borrow = self.chunks_arc.lock().unwrap();
+                let mut chunks = self.chunks.lock().unwrap();
 
-                if let Some(option) = borrow.get(&chunk_coord) {
-                    if let Some(chunk) = option {
-                        let chunk = Rc::new((*chunk).clone());
-                        self.chunks_rc.put(chunk_coord, chunk.clone());
-                        result.push((chunk_coord, chunk));
-                    } else {
-                        // loading. nothing to do here.
-                    }
-                } else {
-                    let mut borrow = self.queue.lock().unwrap();
-                    let item = QueueItem::Generate(chunk_coord);
-                    if !borrow.contains(&item) {
-                        borrow.push_back(item);
-                    }
+                if let Some(chunk) = chunks.get(&(x, y, z)) {
+                    let chunk = Rc::new((*chunk).clone());
+                    self.chunk_cache.set(x, y, z, Some(chunk.clone()));
+                    result.push(((x, y, z), chunk));
+                    println!("Loaded {}, {}, {}", x, y, z);
+                } else if !self.is_loading.lock().unwrap().contains(&(x, y, z)) {
+                    self.is_loading.lock().unwrap().insert((x, y, z));
+                    self.queue
+                        .lock()
+                        .unwrap()
+                        .push_back(QueueItem::Generate((x, y, z)));
                 }
             }
         }
