@@ -6,6 +6,7 @@ members = [
     "main",
     "map_core",
     "map_types",
+    "module_loader",
     "noise",
     "noise_test",
     "terrain_worker_native",
