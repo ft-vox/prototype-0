@@ -15,3 +15,4 @@ members = [
     "wasm_terrain_worker_main",
     "wasm_terrain_worker_sub",
 ]
+default-members = ["exe"]

@@ -232,7 +232,7 @@ impl ChunkCache {
         fn dst((x, y, z): (i32, i32, i32)) -> i32 {
             x * x + y * y + z * z
         }
-        result.sort_by(|&a, &b| dst(a).cmp(&dst(b)));
+        result.sort_unstable_by(|&a, &b| dst(a).cmp(&dst(b)));
 
         result
     }

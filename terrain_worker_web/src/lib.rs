@@ -15,7 +15,7 @@ pub struct WebTerrainWorker {
     worker: Worker,
     worker_ready: Rc<RefCell<bool>>,
     chunk_cache: Rc<RefCell<ChunkCache>>,
-    is_loading: HashSet<(i32, i32, i32)>,
+    is_loading: Rc<RefCell<HashSet<(i32, i32, i32)>>>,
 }
 
 impl TerrainWorker for WebTerrainWorker {
@@ -23,10 +23,12 @@ impl TerrainWorker for WebTerrainWorker {
         let chunk_cache = Rc::new(RefCell::new(ChunkCache::new(cache_distance, eye)));
         let worker = Worker::new("terrain-worker-main.js").unwrap();
         let worker_ready = Rc::new(RefCell::new(false));
+        let is_loading = Rc::new(RefCell::new(HashSet::new()));
 
         {
             let chunk_cache = chunk_cache.clone();
             let worker_ready = worker_ready.clone();
+            let is_loading = is_loading.clone();
             let onmessage_callback = Closure::wrap(Box::new(move |event: MessageEvent| {
                 let data = event.data().as_string().unwrap();
                 match data.as_str() {
@@ -40,6 +42,7 @@ impl TerrainWorker for WebTerrainWorker {
                             .collect::<Vec<_>>()
                             .try_into()
                             .unwrap();
+                        is_loading.borrow_mut().remove(&(x, y, z));
 
                         wasm_bindgen_futures::spawn_local(load_map(chunk_cache.clone(), (x, y, z)));
                     }
@@ -54,7 +57,7 @@ impl TerrainWorker for WebTerrainWorker {
             worker,
             worker_ready,
             chunk_cache,
-            is_loading: HashSet::new(),
+            is_loading,
         }
     }
 
@@ -71,8 +74,9 @@ impl TerrainWorker for WebTerrainWorker {
         for (x, y, z) in borrow.coords().clone() {
             if let Some(chunk) = borrow.get(x, y, z) {
                 result.push(((x, y, z), chunk));
-            } else if *self.worker_ready.borrow() && !self.is_loading.contains(&(x, y, z)) {
-                self.is_loading.insert((x, y, z));
+            } else if *self.worker_ready.borrow() && !self.is_loading.borrow().contains(&(x, y, z))
+            {
+                self.is_loading.borrow_mut().insert((x, y, z));
                 self.worker
                     .post_message(&JsValue::from_str(format!("{},{},{}", x, y, z).as_str()))
                     .unwrap();
