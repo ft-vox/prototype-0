@@ -29,6 +29,11 @@ pub trait TerrainWorker {
     ) -> Vec<((i32, i32, i32), Rc<Chunk>)>;
 }
 
+pub trait ModuleLoader {
+    fn new() -> Self;
+    fn load(&mut self, src: &[u8]);
+}
+
 pub fn get_coords(distance: f32) -> Vec<(i32, i32, i32)> {
     let mut coords = Vec::new();
     let max_coord = distance.floor() as i32;
