@@ -4,7 +4,7 @@ use image::{GenericImageView, Pixel};
 use std::{borrow::Cow, rc::Rc};
 
 use crate::vertex::Vertex;
-use crate::{FOG_COLOR, FOG_END, FOG_START};
+use crate::{FOG_COLOR, FOG_END, FOG_START, FOV};
 
 #[repr(C)]
 #[derive(Copy, Clone, Pod, Zeroable)]
@@ -369,7 +369,7 @@ impl VoxGraphicsWrapper {
     }
 
     fn generate_projection_matrix(aspect_ratio: f32) -> glam::Mat4 {
-        let fov_x_radians = 80.0_f32.to_radians();
+        let fov_x_radians = FOV.to_radians();
 
         glam::Mat4::perspective_rh(
             2.0 * (0.5 * fov_x_radians).tan() / aspect_ratio,
