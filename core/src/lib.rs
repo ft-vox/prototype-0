@@ -175,10 +175,11 @@ impl<T: TerrainWorker> Vox<T> {
             (eye.x as i32, eye.y as i32, eye.z as i32)
         };
 
-        for ((x, y, z), chunk) in self
+        let res = self
             .terrain_worker
-            .get_available(CACHE_DISTANCE, (self.eye.x, self.eye.y, self.eye.z))
-        {
+            .get_available(CACHE_DISTANCE, (self.eye.x, self.eye.y, self.eye.z));
+
+        for ((x, y, z), chunk) in res {
             self.chunks.insert([x, y, z], chunk);
         }
 
