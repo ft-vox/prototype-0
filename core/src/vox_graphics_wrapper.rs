@@ -1,6 +1,8 @@
 use bytemuck::{Pod, Zeroable};
+
 use glam::{Mat4, Vec3};
 use image::{GenericImageView, Pixel};
+
 use std::{borrow::Cow, rc::Rc};
 
 use crate::vertex::Vertex;
@@ -375,7 +377,7 @@ impl VoxGraphicsWrapper {
             2.0 * (0.5 * fov_x_radians).tan() / aspect_ratio,
             aspect_ratio,
             0.25,
-            1000.0,
+            368.0,
         )
     }
 
@@ -422,35 +424,35 @@ impl VoxGraphicsWrapper {
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
-        {
-            let dir = (glam::Mat3::from_rotation_z(horizontal_rotation)
-                * glam::Mat3::from_rotation_x(vertical_rotation))
-                * glam::Vec3::Y;
+        let dir = (glam::Mat3::from_rotation_z(horizontal_rotation)
+            * glam::Mat3::from_rotation_x(vertical_rotation))
+            * glam::Vec3::Y;
 
-            let world_view_matrix = glam::Mat4::look_to_rh(eye, dir, glam::Vec3::Z);
-            let world_view_projection_matrix = self.projection_matrix * world_view_matrix;
-            queue.write_buffer(
-                &self.world_uniform_buffer,
-                0,
-                bytemuck::cast_slice(&[WorldUniforms {
-                    vp_matrix: *world_view_projection_matrix.as_ref(),
-                    view_position: [eye.x, eye.y, eye.z, 0.0],
-                    fog_color: FOG_COLOR,
-                    fog_start: FOG_START,
-                    fog_end: FOG_END,
-                }]),
-            );
+        let world_view_matrix = glam::Mat4::look_to_rh(eye, dir, glam::Vec3::Z);
+        let world_view_projection_matrix = self.projection_matrix * world_view_matrix;
+        let frustum_planes = extract_frustum_planes(&world_view_projection_matrix);
 
-            let sky_view_matrix = glam::Mat4::look_to_rh(Vec3::ZERO, dir, glam::Vec3::Z);
-            let sky_view_projection_matrix = self.projection_matrix * sky_view_matrix;
-            queue.write_buffer(
-                &self.sky_uniform_buffer,
-                0,
-                bytemuck::cast_slice(&[SkyUniforms {
-                    vp_matrix: *sky_view_projection_matrix.as_ref(),
-                }]),
-            );
-        }
+        queue.write_buffer(
+            &self.world_uniform_buffer,
+            0,
+            bytemuck::cast_slice(&[WorldUniforms {
+                vp_matrix: *world_view_projection_matrix.as_ref(),
+                view_position: [eye.x, eye.y, eye.z, 0.0],
+                fog_color: FOG_COLOR,
+                fog_start: FOG_START,
+                fog_end: FOG_END,
+            }]),
+        );
+
+        let sky_view_matrix = glam::Mat4::look_to_rh(Vec3::ZERO, dir, glam::Vec3::Z);
+        let sky_view_projection_matrix = self.projection_matrix * sky_view_matrix;
+        queue.write_buffer(
+            &self.sky_uniform_buffer,
+            0,
+            bytemuck::cast_slice(&[SkyUniforms {
+                vp_matrix: *sky_view_projection_matrix.as_ref(),
+            }]),
+        );
 
         {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -487,15 +489,37 @@ impl VoxGraphicsWrapper {
             rpass.set_pipeline(&self.world_pipeline);
             rpass.set_bind_group(0, &self.world_bind_group, &[]);
 
-            for (_, _, _, buffers) in buffer_data {
+            let mut skip_frustum = 0;
+            let mut skip_zero_index = 0;
+            let mut drawed = 0;
+            for (x, y, z, buffers) in buffer_data {
+                if !is_sphere_in_frustum_planes(
+                    &frustum_planes,
+                    Vec3::new(
+                        x as f32 * 16.0 + 8.0,
+                        y as f32 * 16.0 + 8.0,
+                        z as f32 * 16.0 + 8.0,
+                    ),
+                    11.3137, // sqrt(8^2 + 8^2)
+                ) {
+                    skip_frustum += 1;
+                    continue;
+                }
+
                 let (vertex_buffer, index_buffer, index_count) = &*buffers;
                 if *index_count == 0 {
+                    skip_zero_index += 1;
                     continue;
                 }
                 rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
                 rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
                 rpass.draw_indexed(0..*index_count, 0, 0..1);
+                drawed += 1;
             }
+            println!(
+                "skip_frustum: {}, skip_zero_index: {}, drawed: {}",
+                skip_frustum, skip_zero_index, drawed
+            );
         }
         queue.submit(Some(encoder.finish()));
     }
@@ -593,4 +617,91 @@ fn load_skybox_texture(device: &wgpu::Device, queue: &wgpu::Queue) -> wgpu::Text
     }
 
     texture
+}
+
+struct FrustumPlane {
+    normal: Vec3,
+    distance: f32,
+}
+
+impl FrustumPlane {
+    fn normalize(&mut self) {
+        let length = self.normal.length();
+        self.normal /= length;
+        self.distance /= length;
+    }
+}
+
+fn extract_frustum_planes(view_projectioon: &Mat4) -> [FrustumPlane; 6] {
+    let matrix_array = view_projectioon.to_cols_array_2d();
+    let mut planes = [
+        FrustumPlane {
+            normal: Vec3::new(
+                matrix_array[0][3] + matrix_array[0][0],
+                matrix_array[1][3] + matrix_array[1][0],
+                matrix_array[2][3] + matrix_array[2][0],
+            ),
+            distance: matrix_array[3][3] + matrix_array[3][0],
+        }, // Left
+        FrustumPlane {
+            normal: Vec3::new(
+                matrix_array[0][3] - matrix_array[0][0],
+                matrix_array[1][3] - matrix_array[1][0],
+                matrix_array[2][3] - matrix_array[2][0],
+            ),
+            distance: matrix_array[3][3] - matrix_array[3][0],
+        }, // Right
+        FrustumPlane {
+            normal: Vec3::new(
+                matrix_array[0][3] + matrix_array[0][1],
+                matrix_array[1][3] + matrix_array[1][1],
+                matrix_array[2][3] + matrix_array[2][1],
+            ),
+            distance: matrix_array[3][3] + matrix_array[3][1],
+        }, // Near
+        FrustumPlane {
+            normal: Vec3::new(
+                matrix_array[0][3] - matrix_array[0][1],
+                matrix_array[1][3] - matrix_array[1][1],
+                matrix_array[2][3] - matrix_array[2][1],
+            ),
+            distance: matrix_array[3][3] - matrix_array[3][1],
+        }, // Far
+        FrustumPlane {
+            normal: Vec3::new(
+                matrix_array[0][3] + matrix_array[0][2],
+                matrix_array[1][3] + matrix_array[1][2],
+                matrix_array[2][3] + matrix_array[2][2],
+            ),
+            distance: matrix_array[3][3] + matrix_array[3][2],
+        }, // Bottom
+        FrustumPlane {
+            normal: Vec3::new(
+                matrix_array[0][3] - matrix_array[0][2],
+                matrix_array[1][3] - matrix_array[1][2],
+                matrix_array[2][3] - matrix_array[2][2],
+            ),
+            distance: matrix_array[3][3] - matrix_array[3][2],
+        }, // Top
+    ];
+
+    for plane in planes.iter_mut() {
+        plane.normalize();
+    }
+
+    planes
+}
+
+fn is_sphere_in_frustum_planes(
+    frustum_planes: &[FrustumPlane; 6],
+    center: Vec3,
+    radius: f32,
+) -> bool {
+    for plane in frustum_planes {
+        let distance = plane.normal.dot(center) + plane.distance;
+        if distance < -radius {
+            return false;
+        }
+    }
+    true
 }
