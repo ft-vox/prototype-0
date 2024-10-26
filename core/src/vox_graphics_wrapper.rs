@@ -500,7 +500,7 @@ impl VoxGraphicsWrapper {
                         y as f32 * 16.0 + 8.0,
                         z as f32 * 16.0 + 8.0,
                     ),
-                    11.3137, // sqrt(8^2 + 8^2)
+                    13.8564, // sqrt(8^2 + 8^2 + 8^2)
                 ) {
                     skip_frustum += 1;
                     continue;
