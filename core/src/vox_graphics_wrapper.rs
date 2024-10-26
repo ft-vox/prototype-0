@@ -489,10 +489,11 @@ impl VoxGraphicsWrapper {
             rpass.set_pipeline(&self.world_pipeline);
             rpass.set_bind_group(0, &self.world_bind_group, &[]);
 
-            let mut skip_frustum = 0;
-            let mut skip_zero_index = 0;
-            let mut drawed = 0;
             for (x, y, z, buffers) in buffer_data {
+                let (vertex_buffer, index_buffer, index_count) = &*buffers;
+                if *index_count == 0 {
+                    continue;
+                }
                 if !is_sphere_in_frustum_planes(
                     &frustum_planes,
                     Vec3::new(
@@ -502,24 +503,13 @@ impl VoxGraphicsWrapper {
                     ),
                     13.8564, // sqrt(8^2 + 8^2 + 8^2)
                 ) {
-                    skip_frustum += 1;
                     continue;
                 }
 
-                let (vertex_buffer, index_buffer, index_count) = &*buffers;
-                if *index_count == 0 {
-                    skip_zero_index += 1;
-                    continue;
-                }
                 rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
                 rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
                 rpass.draw_indexed(0..*index_count, 0, 0..1);
-                drawed += 1;
             }
-            println!(
-                "skip_frustum: {}, skip_zero_index: {}, drawed: {}",
-                skip_frustum, skip_zero_index, drawed
-            );
         }
         queue.submit(Some(encoder.finish()));
     }
