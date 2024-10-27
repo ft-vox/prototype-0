@@ -18,6 +18,9 @@ struct ChunkCacheCache {
     pub cache_distance: usize,
     pub cache: Vec<Option<Arc<Chunk>>>,
     pub coords: Vec<(i32, i32, i32)>,
+    pub x: i32,
+    pub y: i32,
+    pub z: i32,
     pub eye_x_upper: bool,
     pub eye_y_upper: bool,
     pub eye_z_upper: bool,
@@ -27,22 +30,22 @@ impl ChunkCacheCache {
     pub fn get(&self, x: i32, y: i32, z: i32) -> Option<Arc<Chunk>> {
         let size = self.cache_distance * 2 + 2;
 
-        let min_x = x - self.cache_distance as i32 - if self.eye_x_upper { 0 } else { 1 };
-        let max_x = x + self.cache_distance as i32 + if self.eye_x_upper { 1 } else { 0 };
+        let min_x = self.x - self.cache_distance as i32 - if self.eye_x_upper { 0 } else { 1 };
+        let max_x = self.x + self.cache_distance as i32 + if self.eye_x_upper { 1 } else { 0 };
         if min_x > x || x > max_x {
             return None;
         }
         let x = x.rem_euclid(size as i32) as usize;
 
-        let min_y = y - self.cache_distance as i32 - if self.eye_y_upper { 0 } else { 1 };
-        let max_y = y + self.cache_distance as i32 + if self.eye_y_upper { 1 } else { 0 };
+        let min_y = self.y - self.cache_distance as i32 - if self.eye_y_upper { 0 } else { 1 };
+        let max_y = self.y + self.cache_distance as i32 + if self.eye_y_upper { 1 } else { 0 };
         if min_y > y || y > max_y {
             return None;
         }
         let y = y.rem_euclid(size as i32) as usize;
 
-        let min_z = z - self.cache_distance as i32 - if self.eye_z_upper { 0 } else { 1 };
-        let max_z = z + self.cache_distance as i32 + if self.eye_z_upper { 1 } else { 0 };
+        let min_z = self.z - self.cache_distance as i32 - if self.eye_z_upper { 0 } else { 1 };
+        let max_z = self.z + self.cache_distance as i32 + if self.eye_z_upper { 1 } else { 0 };
         if min_z > z || z > max_z {
             return None;
         }
@@ -54,22 +57,22 @@ impl ChunkCacheCache {
     pub fn set(&mut self, x: i32, y: i32, z: i32, chunk: Option<Arc<Chunk>>) {
         let size = self.cache_distance * 2 + 2;
 
-        let min_x = x - self.cache_distance as i32 - if self.eye_x_upper { 0 } else { 1 };
-        let max_x = x + self.cache_distance as i32 + if self.eye_x_upper { 1 } else { 0 };
+        let min_x = self.x - self.cache_distance as i32 - if self.eye_x_upper { 0 } else { 1 };
+        let max_x = self.x + self.cache_distance as i32 + if self.eye_x_upper { 1 } else { 0 };
         if min_x > x || x > max_x {
             return;
         }
         let x = x.rem_euclid(size as i32) as usize;
 
-        let min_y = y - self.cache_distance as i32 - if self.eye_y_upper { 0 } else { 1 };
-        let max_y = y + self.cache_distance as i32 + if self.eye_y_upper { 1 } else { 0 };
+        let min_y = self.y - self.cache_distance as i32 - if self.eye_y_upper { 0 } else { 1 };
+        let max_y = self.y + self.cache_distance as i32 + if self.eye_y_upper { 1 } else { 0 };
         if min_y > y || y > max_y {
             return;
         }
         let y = y.rem_euclid(size as i32) as usize;
 
-        let min_z = z - self.cache_distance as i32 - if self.eye_z_upper { 0 } else { 1 };
-        let max_z = z + self.cache_distance as i32 + if self.eye_z_upper { 1 } else { 0 };
+        let min_z = self.z - self.cache_distance as i32 - if self.eye_z_upper { 0 } else { 1 };
+        let max_z = self.z + self.cache_distance as i32 + if self.eye_z_upper { 1 } else { 0 };
         if min_z > z || z > max_z {
             return;
         }
@@ -86,7 +89,7 @@ impl ChunkCacheCache {
     fn get_available(&self) -> Vec<((i32, i32, i32), Arc<Chunk>)> {
         self.coords
             .iter()
-            .filter_map(|&(x, y, z)| self.get(x, y, z).and_then(|chunk| Some(((x, y, z), chunk))))
+            .filter_map(|&(x, y, z)| self.get(x, y, z).map(|chunk| ((x, y, z), chunk)))
             .collect()
     }
 }
@@ -102,6 +105,9 @@ impl<T: TerrainWorker> ChunkCache<T> {
                 cache_distance,
                 cache: vec![None; size * size * size],
                 coords: Self::calculate_coords(cache_distance as f32),
+                x: (x / CHUNK_SIZE as f32).floor() as i32,
+                y: (y / CHUNK_SIZE as f32).floor() as i32,
+                z: (z / CHUNK_SIZE as f32).floor() as i32,
                 eye_x_upper: x % CHUNK_SIZE as f32 > CHUNK_SIZE as f32 / 2.0,
                 eye_y_upper: y % CHUNK_SIZE as f32 > CHUNK_SIZE as f32 / 2.0,
                 eye_z_upper: z % CHUNK_SIZE as f32 > CHUNK_SIZE as f32 / 2.0,
@@ -126,10 +132,10 @@ impl<T: TerrainWorker> ChunkCache<T> {
                     let result = cache
                         .coords
                         .iter()
-                        .find(|&&(x, y, z)| {
+                        .map(|&(x, y, z)| (x + cache.x, y + cache.y, z + cache.z))
+                        .find(|&(x, y, z)| {
                             cache.get(x, y, z).is_none() && !cache.loading.contains(&(x, y, z))
-                        })
-                        .copied();
+                        });
                     if let Some((x, y, z)) = result {
                         cache.loading.insert((x, y, z));
                     }
@@ -176,10 +182,9 @@ impl<T: TerrainWorker> ChunkCache<T> {
             }
         }
         let size = cache.cache_distance * 2 + 2;
-        let (old_eye_x, old_eye_y, old_eye_z) = self.eye;
-        let old_eye_chunk_x = (old_eye_x / CHUNK_SIZE as f32).floor() as i32;
-        let old_eye_chunk_y = (old_eye_y / CHUNK_SIZE as f32).floor() as i32;
-        let old_eye_chunk_z = (old_eye_z / CHUNK_SIZE as f32).floor() as i32;
+        let old_eye_chunk_x = cache.x;
+        let old_eye_chunk_y = cache.y;
+        let old_eye_chunk_z = cache.z;
         let old_eye_x_upper = cache.eye_x_upper;
         let old_eye_y_upper = cache.eye_y_upper;
         let old_eye_z_upper = cache.eye_z_upper;
@@ -210,6 +215,9 @@ impl<T: TerrainWorker> ChunkCache<T> {
         cache.eye_x_upper = new_eye_x_upper;
         cache.eye_y_upper = new_eye_y_upper;
         cache.eye_z_upper = new_eye_z_upper;
+        cache.x = new_eye_chunk_x;
+        cache.y = new_eye_chunk_y;
+        cache.z = new_eye_chunk_z;
 
         match new_min_x - old_min_x {
             0 => {}

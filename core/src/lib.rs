@@ -178,6 +178,7 @@ impl<T: TerrainWorker> Vox<T> {
             .set_eye((self.eye.x, self.eye.y, self.eye.z));
         let res = self.chunk_cache.get_available();
 
+        self.chunks.clear();
         for ((x, y, z), chunk) in res {
             self.chunks.insert([x, y, z], chunk);
         }
