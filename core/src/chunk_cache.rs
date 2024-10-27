@@ -1,48 +1,30 @@
-use std::rc::Rc;
+use std::{
+    collections::HashSet,
+    sync::{Arc, Mutex},
+};
 
 use ft_vox_prototype_0_map_types::{Chunk, CHUNK_SIZE};
 
-use crate::get_coords;
+use crate::{get_coords, TerrainWorker};
 
-pub struct ChunkCache {
-    cache_distance: usize,
-    cache: Vec<Option<Rc<Chunk>>>,
-    coords: Vec<(i32, i32, i32)>,
+pub struct ChunkCache<T: TerrainWorker> {
+    cache: Arc<Mutex<ChunkCacheCache>>,
     eye: (f32, f32, f32),
-    eye_x_upper: bool,
-    eye_y_upper: bool,
-    eye_z_upper: bool,
+    terrain_worker: T,
 }
 
-impl ChunkCache {
-    pub fn new(cache_distance: usize, eye: (f32, f32, f32)) -> Self {
-        let size = cache_distance * 2 + 2;
-        let (x, y, z) = eye;
+struct ChunkCacheCache {
+    pub loading: HashSet<(i32, i32, i32)>,
+    pub cache_distance: usize,
+    pub cache: Vec<Option<Arc<Chunk>>>,
+    pub coords: Vec<(i32, i32, i32)>,
+    pub eye_x_upper: bool,
+    pub eye_y_upper: bool,
+    pub eye_z_upper: bool,
+}
 
-        Self {
-            cache_distance,
-            cache: vec![None; size * size * size],
-            coords: Self::calculate_coords(cache_distance as f32),
-            eye,
-            eye_x_upper: x % CHUNK_SIZE as f32 > CHUNK_SIZE as f32 / 2.0,
-            eye_y_upper: y % CHUNK_SIZE as f32 > CHUNK_SIZE as f32 / 2.0,
-            eye_z_upper: z % CHUNK_SIZE as f32 > CHUNK_SIZE as f32 / 2.0,
-        }
-    }
-
-    pub fn set_cache_distance(&mut self, new_cache_distance: usize) {
-        if self.cache_distance == new_cache_distance {
-            return;
-        }
-
-        // TODO: add resize without reset
-
-        self.cache_distance = new_cache_distance;
-        self.coords = Self::calculate_coords(self.cache_distance as f32);
-        self.reset();
-    }
-
-    pub fn get(&self, x: i32, y: i32, z: i32) -> Option<Rc<Chunk>> {
+impl ChunkCacheCache {
+    pub fn get(&self, x: i32, y: i32, z: i32) -> Option<Arc<Chunk>> {
         let size = self.cache_distance * 2 + 2;
 
         let min_x = x - self.cache_distance as i32 - if self.eye_x_upper { 0 } else { 1 };
@@ -69,7 +51,7 @@ impl ChunkCache {
         self.cache[z * size * size + y * size + x].clone()
     }
 
-    pub fn set(&mut self, x: i32, y: i32, z: i32, chunk: Option<Rc<Chunk>>) {
+    pub fn set(&mut self, x: i32, y: i32, z: i32, chunk: Option<Arc<Chunk>>) {
         let size = self.cache_distance * 2 + 2;
 
         let min_x = x - self.cache_distance as i32 - if self.eye_x_upper { 0 } else { 1 };
@@ -96,14 +78,95 @@ impl ChunkCache {
         self.cache[z * size * size + y * size + x] = chunk;
     }
 
-    pub fn get_available(&self) -> Vec<Rc<Chunk>> {
+    fn reset(&mut self) {
+        let size = self.cache_distance * 2 + 2;
+        self.cache = vec![None; size * size * size];
+    }
+
+    fn get_available(&self) -> Vec<((i32, i32, i32), Arc<Chunk>)> {
         self.coords
             .iter()
-            .flat_map(|&(x, y, z)| self.get(x, y, z))
+            .filter_map(|&(x, y, z)| self.get(x, y, z).and_then(|chunk| Some(((x, y, z), chunk))))
             .collect()
+    }
+}
+
+impl<T: TerrainWorker> ChunkCache<T> {
+    pub fn new(cache_distance: usize, eye: (f32, f32, f32)) -> Self {
+        let size = cache_distance * 2 + 2;
+        let (x, y, z) = eye;
+
+        let mut result = Self {
+            cache: Arc::new(Mutex::new(ChunkCacheCache {
+                loading: HashSet::new(),
+                cache_distance,
+                cache: vec![None; size * size * size],
+                coords: Self::calculate_coords(cache_distance as f32),
+                eye_x_upper: x % CHUNK_SIZE as f32 > CHUNK_SIZE as f32 / 2.0,
+                eye_y_upper: y % CHUNK_SIZE as f32 > CHUNK_SIZE as f32 / 2.0,
+                eye_z_upper: z % CHUNK_SIZE as f32 > CHUNK_SIZE as f32 / 2.0,
+            })),
+            eye,
+            terrain_worker: T::new(
+                Arc::new(Mutex::new(|| None)),
+                Arc::new(Mutex::new(|_pos, _chunk| ())),
+            ),
+        };
+        result.init();
+
+        result
+    }
+
+    fn init(&mut self) {
+        self.terrain_worker = T::new(
+            Arc::new(Mutex::new({
+                let cache = self.cache.clone();
+                move || {
+                    let mut cache = cache.lock().unwrap();
+                    let result = cache
+                        .coords
+                        .iter()
+                        .find(|&&(x, y, z)| {
+                            cache.get(x, y, z).is_none() && !cache.loading.contains(&(x, y, z))
+                        })
+                        .copied();
+                    if let Some((x, y, z)) = result {
+                        cache.loading.insert((x, y, z));
+                    }
+                    result
+                }
+            })),
+            Arc::new(Mutex::new({
+                let cache = self.cache.clone();
+                move |(x, y, z), chunk| {
+                    let mut cache = cache.lock().unwrap();
+                    cache.loading.remove(&(x, y, z));
+                    cache.set(x, y, z, Some(chunk));
+                }
+            })),
+        );
+    }
+
+    pub fn set_cache_distance(&mut self, new_cache_distance: usize) {
+        let mut cache = self.cache.lock().unwrap();
+
+        if cache.cache_distance == new_cache_distance {
+            return;
+        }
+
+        // TODO: add resize without reset
+
+        cache.cache_distance = new_cache_distance;
+        cache.coords = Self::calculate_coords(cache.cache_distance as f32);
+        cache.reset();
+    }
+
+    pub fn get_available(&self) -> Vec<((i32, i32, i32), Arc<Chunk>)> {
+        self.cache.lock().unwrap().get_available()
     }
 
     pub fn set_eye(&mut self, eye: (f32, f32, f32)) {
+        let mut cache = self.cache.lock().unwrap();
         fn upper(value: f32, old: bool) -> bool {
             let value = (value.fract() + 1.0).fract();
             if old {
@@ -112,20 +175,20 @@ impl ChunkCache {
                 value > 0.75
             }
         }
-        let size = self.cache_distance * 2 + 2;
+        let size = cache.cache_distance * 2 + 2;
         let (old_eye_x, old_eye_y, old_eye_z) = self.eye;
         let old_eye_chunk_x = (old_eye_x / CHUNK_SIZE as f32).floor() as i32;
         let old_eye_chunk_y = (old_eye_y / CHUNK_SIZE as f32).floor() as i32;
         let old_eye_chunk_z = (old_eye_z / CHUNK_SIZE as f32).floor() as i32;
-        let old_eye_x_upper = self.eye_x_upper;
-        let old_eye_y_upper = self.eye_y_upper;
-        let old_eye_z_upper = self.eye_z_upper;
+        let old_eye_x_upper = cache.eye_x_upper;
+        let old_eye_y_upper = cache.eye_y_upper;
+        let old_eye_z_upper = cache.eye_z_upper;
         let old_min_x =
-            old_eye_chunk_x - self.cache_distance as i32 - if old_eye_x_upper { 0 } else { 1 };
+            old_eye_chunk_x - cache.cache_distance as i32 - if old_eye_x_upper { 0 } else { 1 };
         let old_min_y =
-            old_eye_chunk_y - self.cache_distance as i32 - if old_eye_y_upper { 0 } else { 1 };
+            old_eye_chunk_y - cache.cache_distance as i32 - if old_eye_y_upper { 0 } else { 1 };
         let old_min_z =
-            old_eye_chunk_z - self.cache_distance as i32 - if old_eye_z_upper { 0 } else { 1 };
+            old_eye_chunk_z - cache.cache_distance as i32 - if old_eye_z_upper { 0 } else { 1 };
         let (new_eye_x, new_eye_y, new_eye_z) = eye;
         let new_eye_chunk_x = (new_eye_x / CHUNK_SIZE as f32).floor() as i32;
         let new_eye_chunk_y = (new_eye_y / CHUNK_SIZE as f32).floor() as i32;
@@ -134,19 +197,19 @@ impl ChunkCache {
         let new_eye_y_upper = upper(new_eye_y / CHUNK_SIZE as f32, old_eye_y_upper);
         let new_eye_z_upper = upper(new_eye_z / CHUNK_SIZE as f32, old_eye_z_upper);
         let new_min_x =
-            new_eye_chunk_x - self.cache_distance as i32 - if new_eye_x_upper { 0 } else { 1 };
+            new_eye_chunk_x - cache.cache_distance as i32 - if new_eye_x_upper { 0 } else { 1 };
         let new_min_y =
-            new_eye_chunk_y - self.cache_distance as i32 - if new_eye_y_upper { 0 } else { 1 };
+            new_eye_chunk_y - cache.cache_distance as i32 - if new_eye_y_upper { 0 } else { 1 };
         let new_min_z =
-            new_eye_chunk_z - self.cache_distance as i32 - if new_eye_z_upper { 0 } else { 1 };
+            new_eye_chunk_z - cache.cache_distance as i32 - if new_eye_z_upper { 0 } else { 1 };
         let new_max_x = new_min_x + size as i32 - 1;
         let new_max_y = new_min_y + size as i32 - 1;
         let new_max_z = new_min_z + size as i32 - 1;
 
         self.eye = eye;
-        self.eye_x_upper = new_eye_x_upper;
-        self.eye_y_upper = new_eye_y_upper;
-        self.eye_z_upper = new_eye_z_upper;
+        cache.eye_x_upper = new_eye_x_upper;
+        cache.eye_y_upper = new_eye_y_upper;
+        cache.eye_z_upper = new_eye_z_upper;
 
         match new_min_x - old_min_x {
             0 => {}
@@ -154,7 +217,7 @@ impl ChunkCache {
                 for z in 0..size {
                     for y in 0..size {
                         let x = new_max_x.rem_euclid(size as i32) as usize;
-                        self.cache[z * size * size + y * size + x] = None;
+                        cache.cache[z * size * size + y * size + x] = None;
                     }
                 }
             }
@@ -162,12 +225,12 @@ impl ChunkCache {
                 for z in 0..size {
                     for y in 0..size {
                         let x = new_min_x.rem_euclid(size as i32) as usize;
-                        self.cache[z * size * size + y * size + x] = None;
+                        cache.cache[z * size * size + y * size + x] = None;
                     }
                 }
             }
             _ => {
-                self.reset();
+                cache.reset();
                 return;
             }
         }
@@ -178,7 +241,7 @@ impl ChunkCache {
                 for z in 0..size {
                     for x in 0..size {
                         let y = new_max_y.rem_euclid(size as i32) as usize;
-                        self.cache[z * size * size + y * size + x] = None;
+                        cache.cache[z * size * size + y * size + x] = None;
                     }
                 }
             }
@@ -186,12 +249,12 @@ impl ChunkCache {
                 for z in 0..size {
                     for x in 0..size {
                         let y = new_min_y.rem_euclid(size as i32) as usize;
-                        self.cache[z * size * size + y * size + x] = None;
+                        cache.cache[z * size * size + y * size + x] = None;
                     }
                 }
             }
             _ => {
-                self.reset();
+                cache.reset();
                 return;
             }
         }
@@ -202,7 +265,7 @@ impl ChunkCache {
                 for x in 0..size {
                     for y in 0..size {
                         let z = new_max_z.rem_euclid(size as i32) as usize;
-                        self.cache[z * size * size + y * size + x] = None;
+                        cache.cache[z * size * size + y * size + x] = None;
                     }
                 }
             }
@@ -210,20 +273,15 @@ impl ChunkCache {
                 for x in 0..size {
                     for y in 0..size {
                         let z = new_min_z.rem_euclid(size as i32) as usize;
-                        self.cache[z * size * size + y * size + x] = None;
+                        cache.cache[z * size * size + y * size + x] = None;
                     }
                 }
             }
             _ => {
-                self.reset();
+                cache.reset();
                 // return;
             }
         }
-    }
-
-    fn reset(&mut self) {
-        let size = self.cache_distance * 2 + 2;
-        self.cache = vec![None; size * size * size];
     }
 
     fn calculate_coords(distance: f32) -> Vec<(i32, i32, i32)> {
@@ -235,9 +293,5 @@ impl ChunkCache {
         result.sort_unstable_by(|&a, &b| dst(a).cmp(&dst(b)));
 
         result
-    }
-
-    pub fn coords(&self) -> &Vec<(i32, i32, i32)> {
-        &self.coords
     }
 }

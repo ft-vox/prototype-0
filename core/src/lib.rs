@@ -1,7 +1,12 @@
+use chunk_cache::ChunkCache;
 use ft_vox_prototype_0_map_types::{Chunk, CHUNK_SIZE};
 use ft_vox_prototype_0_util_lru_cache_rc::LRUCache;
 use glam::{Mat3, Vec3};
-use std::{collections::HashMap, rc::Rc};
+use std::{
+    collections::HashMap,
+    rc::Rc,
+    sync::{Arc, Mutex},
+};
 use wgpu::util::DeviceExt;
 
 pub mod chunk_cache;
@@ -21,17 +26,10 @@ pub const FOG_START: f32 = FOG_END * 0.8;
 pub const FOV: f32 = 80.0;
 
 pub trait TerrainWorker {
-    fn new(cache_distance: usize, eye: (f32, f32, f32)) -> Self;
-    fn get_available(
-        &mut self,
-        cache_distance: usize,
-        eye: (f32, f32, f32),
-    ) -> Vec<((i32, i32, i32), Rc<Chunk>)>;
-}
-
-pub trait ModuleLoader {
-    fn new() -> Self;
-    fn load(&mut self, src: &[u8]);
+    fn new(
+        before_load_callback: Arc<Mutex<dyn Send + Sync + FnMut() -> Option<(i32, i32, i32)>>>,
+        after_load_callback: Arc<Mutex<dyn Send + Sync + FnMut((i32, i32, i32), Arc<Chunk>)>>,
+    ) -> Self;
 }
 
 pub fn get_coords(distance: f32) -> Vec<(i32, i32, i32)> {
@@ -59,9 +57,9 @@ pub struct Vox<T: TerrainWorker> {
     horizontal_rotation: f32,
     vertical_rotation: f32,
     is_paused: bool,
-    chunks: HashMap<[i32; 3], Rc<Chunk>>,
+    chunks: HashMap<[i32; 3], Arc<Chunk>>,
     buffers: LRUCache<[i32; 3], Rc<(wgpu::Buffer, wgpu::Buffer, u32)>>,
-    terrain_worker: T,
+    chunk_cache: ChunkCache<T>,
 }
 
 /// [ Speed in Minecraft ]
@@ -105,7 +103,7 @@ impl<T: TerrainWorker> Vox<T> {
             chunks: HashMap::new(),
             buffers: LRUCache::new(get_coords(RENDER_DISTANCE).len()),
             is_paused: false,
-            terrain_worker: T::new(CACHE_DISTANCE, (eye_x, eye_y, eye_z)),
+            chunk_cache: ChunkCache::new(CACHE_DISTANCE, (eye_x, eye_y, eye_z)),
         }
     }
 
@@ -175,9 +173,10 @@ impl<T: TerrainWorker> Vox<T> {
             (eye.x as i32, eye.y as i32, eye.z as i32)
         };
 
-        let res = self
-            .terrain_worker
-            .get_available(CACHE_DISTANCE, (self.eye.x, self.eye.y, self.eye.z));
+        self.chunk_cache.set_cache_distance(CACHE_DISTANCE);
+        self.chunk_cache
+            .set_eye((self.eye.x, self.eye.y, self.eye.z));
+        let res = self.chunk_cache.get_available();
 
         for ((x, y, z), chunk) in res {
             self.chunks.insert([x, y, z], chunk);
