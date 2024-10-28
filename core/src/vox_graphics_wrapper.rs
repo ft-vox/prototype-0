@@ -371,14 +371,11 @@ impl VoxGraphicsWrapper {
     }
 
     fn generate_projection_matrix(aspect_ratio: f32) -> glam::Mat4 {
-        let fov_x_radians = FOV.to_radians();
+        let fov_y_radians =
+            2.0 * (FOV.to_radians() / 2.0).tan() / (1.0 + aspect_ratio * aspect_ratio).sqrt();
+        let fov_y_radians = fov_y_radians.atan() * 2.0;
 
-        glam::Mat4::perspective_rh(
-            2.0 * (0.5 * fov_x_radians).tan() / aspect_ratio,
-            aspect_ratio,
-            0.25,
-            368.0,
-        )
+        glam::Mat4::perspective_rh(fov_y_radians, aspect_ratio, 0.25, 368.0)
     }
 
     pub fn resize(
