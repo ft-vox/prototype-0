@@ -23,7 +23,7 @@ impl TerrainWorker for NativeTerrainWorker {
         let mut handles = Vec::new();
         let running = Arc::new(Mutex::new(true));
 
-        for i in 0..worker_count {
+        for _ in 0..worker_count {
             handles.push(thread::spawn({
                 let before_load_callback = before_load_callback.clone();
                 let after_load_callback = after_load_callback.clone();

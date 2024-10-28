@@ -89,7 +89,8 @@ impl ChunkCacheCache {
     fn get_available(&self) -> Vec<((i32, i32, i32), Arc<Chunk>)> {
         self.coords
             .iter()
-            .filter_map(|&(x, y, z)| self.get(x, y, z).map(|chunk| ((x, y, z), chunk)))
+            .map(|&(x, y, z)| (x + self.x, y + self.y, z + self.z))
+            .filter_map(|(x, y, z)| self.get(x, y, z).map(|chunk| ((x, y, z), chunk)))
             .collect()
     }
 }
