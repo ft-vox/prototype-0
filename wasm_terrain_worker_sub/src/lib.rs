@@ -50,8 +50,8 @@ async fn process_job(map: Rc<Map>, data: JsValue) {
         delay_ms(100).await
     } else {
         generate_map(map, (x, y, z)).await;
+        global_scope.post_message(&data).unwrap();
     }
-    global_scope.post_message(&data).unwrap();
     global_scope
         .post_message(&JsValue::from_str("request"))
         .unwrap();
