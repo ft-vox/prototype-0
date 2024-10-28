@@ -1,5 +1,3 @@
-use context::Context;
-use ft_vox_prototype_0_core::TerrainWorker;
 use std::{cell::RefCell, num::NonZeroU8, rc::Rc, sync::Arc};
 use winit::{
     event::{Event, KeyEvent, WindowEvent},
@@ -16,9 +14,12 @@ mod input;
 mod surface_wrapper;
 mod wgpu_context;
 
+use context::Context;
 use input::*;
 use surface_wrapper::SurfaceWrapper;
 use wgpu_context::WGPUContext;
+
+use ft_vox_prototype_0_core::TerrainWorker;
 
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
@@ -39,6 +40,7 @@ impl EventLoopWrapper {
         builder = builder
             .with_title("ft_vox")
             .with_inner_size(winit::dpi::PhysicalSize::new(1280, 720));
+        //.with_min_inner_size(winit::dpi::LogicalSize::new(320.0, 180.0));
         let window = Arc::new(builder.build(&event_loop).unwrap());
 
         let mut outer_canvas = None;
@@ -157,6 +159,17 @@ pub async fn run<T: TerrainWorker + 'static>() {
                         ));
                     }
 
+                    if let Some(context) = context.borrow_mut().as_mut() {
+                        {
+                            if let Ok(window_position) = window_loop.window.inner_position() {
+                                context.update_window_info(
+                                    window_position,
+                                    window_loop.window.inner_size(),
+                                );
+                                context.set_mouse_center();
+                            }
+                        }
+                    }
                     println!("\n[ CONTROL KEYS ]\nmovement: WASD + Shift + Space\nspeeding: CTRL\npause: ESC\nscreen mode: Tab");
                 }
 
