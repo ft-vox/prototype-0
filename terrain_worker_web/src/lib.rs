@@ -1,6 +1,10 @@
-use std::{cell::RefCell, collections::HashSet, rc::Rc};
+use std::{
+    cell::RefCell,
+    rc::Rc,
+    sync::{Arc, Mutex},
+};
 
-use ft_vox_prototype_0_core::{chunk_cache::ChunkCache, TerrainWorker};
+use ft_vox_prototype_0_core::TerrainWorker;
 use ft_vox_prototype_0_map_types::{Chunk, CHUNK_SIZE};
 use js_sys::{
     wasm_bindgen::{prelude::Closure, JsCast, JsValue},
@@ -8,86 +12,73 @@ use js_sys::{
 };
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{
-    console, window, File, FileSystemDirectoryHandle, FileSystemFileHandle, MessageEvent, Worker,
+    console, window, File, FileSystemDirectoryHandle, FileSystemFileHandle, MessageEvent, Window,
+    Worker,
 };
 
-pub struct WebTerrainWorker {
-    worker: Worker,
-    worker_ready: Rc<RefCell<bool>>,
-    chunk_cache: Rc<RefCell<ChunkCache>>,
-    is_loading: Rc<RefCell<HashSet<(i32, i32, i32)>>>,
-}
+pub struct WebTerrainWorker {}
 
 impl TerrainWorker for WebTerrainWorker {
-    fn new(cache_distance: usize, eye: (f32, f32, f32)) -> Self {
-        let chunk_cache = Rc::new(RefCell::new(ChunkCache::new(cache_distance, eye)));
+    fn new(
+        before_load_callback: Arc<Mutex<dyn Send + Sync + FnMut() -> Option<(i32, i32, i32)>>>,
+        after_load_callback: Arc<Mutex<dyn Send + Sync + FnMut((i32, i32, i32), Arc<Chunk>)>>,
+    ) -> Self {
         let worker = Worker::new("terrain-worker-main.js").unwrap();
-        let worker_ready = Rc::new(RefCell::new(false));
-        let is_loading = Rc::new(RefCell::new(HashSet::new()));
 
         {
-            let chunk_cache = chunk_cache.clone();
-            let worker_ready = worker_ready.clone();
-            let is_loading = is_loading.clone();
+            let worker = worker.clone();
+            let worker_clone = worker.clone();
+            let before_load_callback = before_load_callback.clone();
             let onmessage_callback = Closure::wrap(Box::new(move |event: MessageEvent| {
                 let data = event.data().as_string().unwrap();
-                match data.as_str() {
-                    "init" => {
-                        *worker_ready.borrow_mut() = true;
-                    }
-                    _ => {
-                        let [x, y, z] = data
-                            .split(',')
-                            .flat_map(&str::parse::<i32>)
-                            .collect::<Vec<_>>()
-                            .try_into()
-                            .unwrap();
-                        is_loading.borrow_mut().remove(&(x, y, z));
 
-                        wasm_bindgen_futures::spawn_local(load_map(chunk_cache.clone(), (x, y, z)));
+                if data.starts_with("request,") {
+                    let [i] = data
+                        .split(',')
+                        .flat_map(&str::parse::<usize>)
+                        .collect::<Vec<_>>()
+                        .try_into()
+                        .unwrap();
+
+                    if let Some((x, y, z)) = before_load_callback.lock().unwrap()() {
+                        worker
+                            .post_message(&JsValue::from_str(&format!("{},{},{},{}", i, x, y, z)))
+                            .unwrap();
+                    } else {
+                        worker
+                            .post_message(&JsValue::from_str(&format!(
+                                "{},-2147483648,-2147483648,-2147483648",
+                                i
+                            )))
+                            .unwrap();
                     }
+                } else {
+                    let [x, y, z] = data
+                        .split(',')
+                        .flat_map(&str::parse::<i32>)
+                        .collect::<Vec<_>>()
+                        .try_into()
+                        .unwrap();
+
+                    wasm_bindgen_futures::spawn_local(load_map(
+                        after_load_callback.clone(),
+                        (x, y, z),
+                    ));
                 }
             }) as Box<dyn FnMut(MessageEvent)>);
 
-            worker.set_onmessage(Some(onmessage_callback.as_ref().unchecked_ref()));
+            worker_clone.set_onmessage(Some(onmessage_callback.as_ref().unchecked_ref()));
             onmessage_callback.forget();
         }
 
-        Self {
-            worker,
-            worker_ready,
-            chunk_cache,
-            is_loading,
-        }
-    }
-
-    fn get_available(
-        &mut self,
-        cache_distance: usize,
-        (x, y, z): (f32, f32, f32),
-    ) -> Vec<((i32, i32, i32), Rc<Chunk>)> {
-        let mut result = Vec::new();
-        let mut borrow = self.chunk_cache.borrow_mut();
-        borrow.set_cache_distance(cache_distance);
-        borrow.set_eye((x, y, z));
-
-        for (x, y, z) in borrow.coords().clone() {
-            if let Some(chunk) = borrow.get(x, y, z) {
-                result.push(((x, y, z), chunk));
-            } else if *self.worker_ready.borrow() && !self.is_loading.borrow().contains(&(x, y, z))
-            {
-                self.is_loading.borrow_mut().insert((x, y, z));
-                self.worker
-                    .post_message(&JsValue::from_str(format!("{},{},{}", x, y, z).as_str()))
-                    .unwrap();
-            }
-        }
-
-        result
+        Self {}
     }
 }
 
-async fn load_map(chunks: Rc<RefCell<ChunkCache>>, (x, y, z): (i32, i32, i32)) {
+async fn load_map(
+    after_load_callback: Arc<Mutex<dyn Send + Sync + FnMut((i32, i32, i32), Arc<Chunk>)>>,
+    (x, y, z): (i32, i32, i32),
+) {
     let directory: FileSystemDirectoryHandle =
         JsFuture::from(window().unwrap().navigator().storage().get_directory())
             .await
@@ -109,7 +100,7 @@ async fn load_map(chunks: Rc<RefCell<ChunkCache>>, (x, y, z): (i32, i32, i32)) {
             Uint8Array::new(&JsFuture::from(file.array_buffer()).await.unwrap()).to_vec();
         if file_contents.len() == CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE {
             let chunk = Chunk::from_u8_vec(&file_contents);
-            chunks.borrow_mut().set(x, y, z, Some(Rc::new(chunk)));
+            after_load_callback.lock().unwrap()((x, y, z), Arc::new(chunk));
         } else {
             console::error_1(&JsValue::from_str(&format!(
                 "File corrupted ({}, {}, {})\nrun `(async () => {{ await (await navigator.storage.getDirectory()).remove({{ recursive: true }}); }})()` and reload.",

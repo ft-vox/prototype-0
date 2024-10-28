@@ -1,6 +1,4 @@
-use std::cell::RefCell;
 use std::rc::Rc;
-use std::str::FromStr;
 
 use ft_vox_prototype_0_map_core::Map;
 use wasm_bindgen::prelude::*;
@@ -19,15 +17,12 @@ use web_sys::MessageEvent;
 pub fn start_worker() {
     let global_scope: DedicatedWorkerGlobalScope = js_sys::global().dyn_into().unwrap();
     let map = Rc::new(Map::new(42));
-    let worker_id = Rc::new(RefCell::new(42));
 
     {
-        let map = map.clone();
-        let worker_id = worker_id.clone();
         let onmessage_callback = Closure::wrap(Box::new(move |event: MessageEvent| {
             let data = event.data();
 
-            wasm_bindgen_futures::spawn_local(process_job(worker_id.clone(), map.clone(), data));
+            wasm_bindgen_futures::spawn_local(process_job(map.clone(), data));
         }) as Box<dyn FnMut(MessageEvent)>);
 
         global_scope.set_onmessage(Some(onmessage_callback.as_ref().unchecked_ref()));
@@ -35,41 +30,34 @@ pub fn start_worker() {
     }
 
     global_scope
-        .post_message(&JsValue::from_str("init"))
+        .post_message(&JsValue::from_str("request"))
         .unwrap();
 }
 
-async fn process_job(worker_id: Rc<RefCell<i32>>, map: Rc<Map>, data: JsValue) {
+async fn process_job(map: Rc<Map>, data: JsValue) {
     let global_scope: DedicatedWorkerGlobalScope = js_sys::global().dyn_into().unwrap();
 
-    let args = data
+    let [x, y, z] = data
         .as_string()
         .unwrap()
-        .split(':')
-        .flat_map(String::from_str)
-        .collect::<Vec<_>>();
+        .split(',')
+        .flat_map(&str::parse::<i32>)
+        .collect::<Vec<_>>()
+        .try_into()
+        .unwrap();
 
-    match args[0].as_str() {
-        "init" => {
-            *worker_id.borrow_mut() = args[1].parse().unwrap();
-        }
-        "generate" => {
-            let [x, y, z] = args[1]
-                .split(',')
-                .flat_map(&str::parse::<i32>)
-                .collect::<Vec<_>>()
-                .try_into()
-                .expect("Invalid message given");
-            generate_map(worker_id, map, (x, y, z)).await;
-            global_scope
-                .post_message(&JsValue::from_str(&format!("generate:{},{},{}", x, y, z)))
-                .unwrap();
-        }
-        _ => panic!("Invalid message given"),
+    if x == i32::MIN && y == i32::MIN && z == i32::MIN {
+        delay_ms(100).await
+    } else {
+        generate_map(map, (x, y, z)).await;
+        global_scope.post_message(&data).unwrap();
     }
+    global_scope
+        .post_message(&JsValue::from_str("request"))
+        .unwrap();
 }
 
-async fn generate_map(worker_id: Rc<RefCell<i32>>, map: Rc<Map>, (x, y, z): (i32, i32, i32)) {
+async fn generate_map(map: Rc<Map>, (x, y, z): (i32, i32, i32)) {
     let global_scope: DedicatedWorkerGlobalScope = js_sys::global().dyn_into().unwrap();
 
     let directory: FileSystemDirectoryHandle =
@@ -102,11 +90,8 @@ async fn generate_map(worker_id: Rc<RefCell<i32>>, map: Rc<Map>, (x, y, z): (i32
     if access_result.is_err() {
         console::error_2(
             &JsValue::from_str(&format!(
-                "worker {}: Failed to get access ({}, {}, {})",
-                *worker_id.borrow(),
-                x,
-                y,
-                z
+                "worker: Failed to get access ({}, {}, {})",
+                x, y, z
             )),
             &access_result.unwrap_err(),
         );
@@ -119,4 +104,15 @@ async fn generate_map(worker_id: Rc<RefCell<i32>>, map: Rc<Map>, (x, y, z): (i32
         .unwrap();
     access.flush().unwrap();
     access.close();
+}
+
+async fn delay_ms(ms: i32) {
+    let promise = js_sys::Promise::new(&mut |resolve, _| {
+        js_sys::global()
+            .dyn_into::<DedicatedWorkerGlobalScope>()
+            .unwrap()
+            .set_timeout_with_callback_and_timeout_and_arguments_0(&resolve, ms)
+            .unwrap();
+    });
+    JsFuture::from(promise).await.unwrap();
 }
