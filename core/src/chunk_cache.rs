@@ -5,18 +5,23 @@ use std::{
 
 use ft_vox_prototype_0_map_types::{Chunk, CHUNK_SIZE};
 
+use crate::vertex::Vertex;
 use crate::{get_coords, TerrainWorker};
 
 pub struct ChunkCache<T: TerrainWorker> {
-    cache: Arc<Mutex<ChunkCacheCache>>,
+    cache: Arc<Mutex<Cache>>,
     eye: (f32, f32, f32),
     terrain_worker: T,
 }
 
-struct ChunkCacheCache {
-    pub loading: HashSet<(i32, i32, i32)>,
+struct Cache {
+    pub chunk_loading: HashSet<(i32, i32, i32)>,
+    pub chunk_cache: Vec<Option<Arc<Chunk>>>,
+
+    pub mesh_loading: HashSet<(i32, i32, i32)>,
+    pub mesh_cache: Vec<Option<Arc<(Vec<Vertex>, Vec<u16>)>>>,
+
     pub cache_distance: usize,
-    pub cache: Vec<Option<Arc<Chunk>>>,
     pub coords: Vec<(i32, i32, i32)>,
     pub x: i32,
     pub y: i32,
@@ -26,8 +31,8 @@ struct ChunkCacheCache {
     pub eye_z_upper: bool,
 }
 
-impl ChunkCacheCache {
-    pub fn get(&self, x: i32, y: i32, z: i32) -> Option<Arc<Chunk>> {
+impl Cache {
+    pub fn get_chunk(&self, x: i32, y: i32, z: i32) -> Option<Arc<Chunk>> {
         let size = self.cache_distance * 2 + 2;
 
         let min_x = self.x - self.cache_distance as i32 - if self.eye_x_upper { 0 } else { 1 };
@@ -51,10 +56,10 @@ impl ChunkCacheCache {
         }
         let z = z.rem_euclid(size as i32) as usize;
 
-        self.cache[z * size * size + y * size + x].clone()
+        self.chunk_cache[z * size * size + y * size + x].clone()
     }
 
-    pub fn set(&mut self, x: i32, y: i32, z: i32, chunk: Option<Arc<Chunk>>) {
+    pub fn set_chunk(&mut self, x: i32, y: i32, z: i32, chunk: Option<Arc<Chunk>>) {
         let size = self.cache_distance * 2 + 2;
 
         let min_x = self.x - self.cache_distance as i32 - if self.eye_x_upper { 0 } else { 1 };
@@ -78,19 +83,76 @@ impl ChunkCacheCache {
         }
         let z = z.rem_euclid(size as i32) as usize;
 
-        self.cache[z * size * size + y * size + x] = chunk;
+        self.chunk_cache[z * size * size + y * size + x] = chunk;
+    }
+
+    pub fn get_mesh(&self, x: i32, y: i32, z: i32) -> Option<Arc<(Vec<Vertex>, Vec<u16>)>> {
+        let size = self.cache_distance * 2 + 2;
+
+        let min_x = self.x - self.cache_distance as i32 - if self.eye_x_upper { 0 } else { 1 };
+        let max_x = self.x + self.cache_distance as i32 + if self.eye_x_upper { 1 } else { 0 };
+        if min_x > x || x > max_x {
+            return None;
+        }
+        let x = x.rem_euclid(size as i32) as usize;
+
+        let min_y = self.y - self.cache_distance as i32 - if self.eye_y_upper { 0 } else { 1 };
+        let max_y = self.y + self.cache_distance as i32 + if self.eye_y_upper { 1 } else { 0 };
+        if min_y > y || y > max_y {
+            return None;
+        }
+        let y = y.rem_euclid(size as i32) as usize;
+
+        let min_z = self.z - self.cache_distance as i32 - if self.eye_z_upper { 0 } else { 1 };
+        let max_z = self.z + self.cache_distance as i32 + if self.eye_z_upper { 1 } else { 0 };
+        if min_z > z || z > max_z {
+            return None;
+        }
+        let z = z.rem_euclid(size as i32) as usize;
+
+        self.mesh_cache[z * size * size + y * size + x].clone()
+    }
+
+    pub fn set_mesh(&mut self, x: i32, y: i32, z: i32, mesh: Option<Arc<(Vec<Vertex>, Vec<u16>)>>) {
+        let size = self.cache_distance * 2 + 2;
+
+        let min_x = self.x - self.cache_distance as i32 - if self.eye_x_upper { 0 } else { 1 };
+        let max_x = self.x + self.cache_distance as i32 + if self.eye_x_upper { 1 } else { 0 };
+        if min_x > x || x > max_x {
+            return;
+        }
+        let x = x.rem_euclid(size as i32) as usize;
+
+        let min_y = self.y - self.cache_distance as i32 - if self.eye_y_upper { 0 } else { 1 };
+        let max_y = self.y + self.cache_distance as i32 + if self.eye_y_upper { 1 } else { 0 };
+        if min_y > y || y > max_y {
+            return;
+        }
+        let y = y.rem_euclid(size as i32) as usize;
+
+        let min_z = self.z - self.cache_distance as i32 - if self.eye_z_upper { 0 } else { 1 };
+        let max_z = self.z + self.cache_distance as i32 + if self.eye_z_upper { 1 } else { 0 };
+        if min_z > z || z > max_z {
+            return;
+        }
+        let z = z.rem_euclid(size as i32) as usize;
+
+        self.mesh_cache[z * size * size + y * size + x] = mesh;
     }
 
     fn reset(&mut self) {
         let size = self.cache_distance * 2 + 2;
-        self.cache = vec![None; size * size * size];
+        self.chunk_cache = vec![None; size * size * size];
+        self.mesh_cache = vec![None; size * size * size];
+        self.chunk_loading.clear();
+        self.mesh_loading.clear();
     }
 
-    fn get_available(&self) -> Vec<((i32, i32, i32), Arc<Chunk>)> {
+    fn get_available(&self) -> Vec<((i32, i32, i32), Arc<(Vec<Vertex>, Vec<u16>)>)> {
         self.coords
             .iter()
             .map(|&(x, y, z)| (x + self.x, y + self.y, z + self.z))
-            .filter_map(|(x, y, z)| self.get(x, y, z).map(|chunk| ((x, y, z), chunk)))
+            .filter_map(|(x, y, z)| self.get_mesh(x, y, z).map(|mesh| ((x, y, z), mesh)))
             .collect()
     }
 }
@@ -101,10 +163,12 @@ impl<T: TerrainWorker> ChunkCache<T> {
         let (x, y, z) = eye;
 
         let mut result = Self {
-            cache: Arc::new(Mutex::new(ChunkCacheCache {
-                loading: HashSet::new(),
+            cache: Arc::new(Mutex::new(Cache {
+                chunk_loading: HashSet::new(),
+                chunk_cache: vec![None; size * size * size],
+                mesh_loading: HashSet::new(),
+                mesh_cache: vec![None; size * size * size],
                 cache_distance,
-                cache: vec![None; size * size * size],
                 coords: Self::calculate_coords(cache_distance as f32),
                 x: (x / CHUNK_SIZE as f32).floor() as i32,
                 y: (y / CHUNK_SIZE as f32).floor() as i32,
@@ -117,6 +181,8 @@ impl<T: TerrainWorker> ChunkCache<T> {
             terrain_worker: T::new(
                 Arc::new(Mutex::new(|| None)),
                 Arc::new(Mutex::new(|_pos, _chunk| ())),
+                Arc::new(Mutex::new(|| None)),
+                Arc::new(Mutex::new(|_pos, _mesh| ())),
             ),
         };
         result.init();
@@ -135,10 +201,11 @@ impl<T: TerrainWorker> ChunkCache<T> {
                         .iter()
                         .map(|&(x, y, z)| (x + cache.x, y + cache.y, z + cache.z))
                         .find(|&(x, y, z)| {
-                            cache.get(x, y, z).is_none() && !cache.loading.contains(&(x, y, z))
+                            cache.get_chunk(x, y, z).is_none()
+                                && !cache.chunk_loading.contains(&(x, y, z))
                         });
                     if let Some((x, y, z)) = result {
-                        cache.loading.insert((x, y, z));
+                        cache.chunk_loading.insert((x, y, z));
                     }
                     result
                 }
@@ -147,8 +214,47 @@ impl<T: TerrainWorker> ChunkCache<T> {
                 let cache = self.cache.clone();
                 move |(x, y, z), chunk| {
                     let mut cache = cache.lock().unwrap();
-                    cache.loading.remove(&(x, y, z));
-                    cache.set(x, y, z, Some(chunk));
+                    cache.chunk_loading.remove(&(x, y, z));
+                    cache.set_chunk(x, y, z, Some(chunk));
+                    cache.mesh_loading.insert((x, y, z));
+                }
+            })),
+            Arc::new(Mutex::new({
+                let cache = self.cache.clone();
+                move || {
+                    let mut cache = cache.lock().unwrap();
+                    let mut result: Option<((i32, i32, i32), Vec<Arc<Chunk>>)> = None;
+
+                    for &(x, y, z) in &cache.mesh_loading {
+                        let directions = [
+                            (0, 0, 0),
+                            (1, 0, 0),  // x+1
+                            (-1, 0, 0), // x-1
+                            (0, 1, 0),  // y+1
+                            (0, -1, 0), // y-1
+                            (0, 0, 1),  // z+1
+                            (0, 0, -1), // z-1
+                        ];
+                        let mut chunks: Vec<Arc<Chunk>> = Vec::new();
+                        for (dx, dy, dz) in directions.iter() {
+                            if let Some(chunk) = cache.get_chunk(x + dx, y + dy, z + dz) {
+                                chunks.push(chunk.clone());
+                            }
+                        }
+                        if chunks.len() == 7 {
+                            result = Some(((x, y, z), chunks));
+                            cache.mesh_loading.remove(&(x, y, z));
+                            break;
+                        }
+                    }
+                    result
+                }
+            })),
+            Arc::new(Mutex::new({
+                let cache = self.cache.clone();
+                move |(x, y, z), mesh| {
+                    let mut cache = cache.lock().unwrap();
+                    cache.set_mesh(x, y, z, Some(mesh));
                 }
             })),
         );
@@ -168,7 +274,7 @@ impl<T: TerrainWorker> ChunkCache<T> {
         cache.reset();
     }
 
-    pub fn get_available(&self) -> Vec<((i32, i32, i32), Arc<Chunk>)> {
+    pub fn get_available(&self) -> Vec<((i32, i32, i32), Arc<(Vec<Vertex>, Vec<u16>)>)> {
         self.cache.lock().unwrap().get_available()
     }
 
@@ -226,7 +332,8 @@ impl<T: TerrainWorker> ChunkCache<T> {
                 for z in 0..size {
                     for y in 0..size {
                         let x = new_max_x.rem_euclid(size as i32) as usize;
-                        cache.cache[z * size * size + y * size + x] = None;
+                        cache.chunk_cache[z * size * size + y * size + x] = None;
+                        cache.mesh_cache[z * size * size + y * size + x] = None;
                     }
                 }
             }
@@ -234,7 +341,8 @@ impl<T: TerrainWorker> ChunkCache<T> {
                 for z in 0..size {
                     for y in 0..size {
                         let x = new_min_x.rem_euclid(size as i32) as usize;
-                        cache.cache[z * size * size + y * size + x] = None;
+                        cache.chunk_cache[z * size * size + y * size + x] = None;
+                        cache.mesh_cache[z * size * size + y * size + x] = None;
                     }
                 }
             }
@@ -250,7 +358,8 @@ impl<T: TerrainWorker> ChunkCache<T> {
                 for z in 0..size {
                     for x in 0..size {
                         let y = new_max_y.rem_euclid(size as i32) as usize;
-                        cache.cache[z * size * size + y * size + x] = None;
+                        cache.chunk_cache[z * size * size + y * size + x] = None;
+                        cache.mesh_cache[z * size * size + y * size + x] = None;
                     }
                 }
             }
@@ -258,7 +367,8 @@ impl<T: TerrainWorker> ChunkCache<T> {
                 for z in 0..size {
                     for x in 0..size {
                         let y = new_min_y.rem_euclid(size as i32) as usize;
-                        cache.cache[z * size * size + y * size + x] = None;
+                        cache.chunk_cache[z * size * size + y * size + x] = None;
+                        cache.mesh_cache[z * size * size + y * size + x] = None;
                     }
                 }
             }
@@ -274,7 +384,8 @@ impl<T: TerrainWorker> ChunkCache<T> {
                 for x in 0..size {
                     for y in 0..size {
                         let z = new_max_z.rem_euclid(size as i32) as usize;
-                        cache.cache[z * size * size + y * size + x] = None;
+                        cache.chunk_cache[z * size * size + y * size + x] = None;
+                        cache.mesh_cache[z * size * size + y * size + x] = None;
                     }
                 }
             }
@@ -282,7 +393,8 @@ impl<T: TerrainWorker> ChunkCache<T> {
                 for x in 0..size {
                     for y in 0..size {
                         let z = new_min_z.rem_euclid(size as i32) as usize;
-                        cache.cache[z * size * size + y * size + x] = None;
+                        cache.chunk_cache[z * size * size + y * size + x] = None;
+                        cache.mesh_cache[z * size * size + y * size + x] = None;
                     }
                 }
             }
