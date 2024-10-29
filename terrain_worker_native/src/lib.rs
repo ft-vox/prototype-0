@@ -4,6 +4,7 @@ use std::{
     time::Duration,
 };
 
+use ft_vox_prototype_0_core::vertex::*;
 use ft_vox_prototype_0_core::TerrainWorker;
 use ft_vox_prototype_0_map_core::Map;
 use ft_vox_prototype_0_map_types::Chunk;
@@ -15,8 +16,14 @@ pub struct NativeTerrainWorker {
 
 impl TerrainWorker for NativeTerrainWorker {
     fn new(
-        before_load_callback: Arc<Mutex<dyn Send + Sync + FnMut() -> Option<(i32, i32, i32)>>>,
-        after_load_callback: Arc<Mutex<dyn Send + Sync + FnMut((i32, i32, i32), Arc<Chunk>)>>,
+        before_chunk_callback: Arc<Mutex<dyn Send + Sync + FnMut() -> Option<(i32, i32, i32)>>>,
+        after_chunk_callback: Arc<Mutex<dyn Send + Sync + FnMut((i32, i32, i32), Arc<Chunk>)>>,
+        before_mesh_callback: Arc<
+            Mutex<dyn Send + Sync + FnMut() -> Option<((i32, i32, i32), Vec<Arc<Chunk>>)>>,
+        >,
+        after_mesh_callback: Arc<
+            Mutex<dyn Send + Sync + FnMut((i32, i32, i32), Arc<(Vec<Vertex>, Vec<u16>)>)>,
+        >,
     ) -> Self {
         let cpu_count = num_cpus::get_physical();
         let worker_count = (cpu_count - 1).max(1);
@@ -25,19 +32,34 @@ impl TerrainWorker for NativeTerrainWorker {
 
         for _ in 0..worker_count {
             handles.push(thread::spawn({
-                let before_load_callback = before_load_callback.clone();
-                let after_load_callback = after_load_callback.clone();
+                let before_chunk_callback = before_chunk_callback.clone();
+                let after_chunk_callback = after_chunk_callback.clone();
+
+                let before_mesh_callback = before_mesh_callback.clone();
+                let after_mesh_callback = after_mesh_callback.clone();
                 let running = running.clone();
                 move || {
                     let map = Map::new(42);
                     while *running.lock().unwrap() {
-                        let option = before_load_callback.lock().unwrap()();
+                        {
+                            let option = before_chunk_callback.lock().unwrap()();
 
-                        if let Some((x, y, z)) = option {
-                            let chunk = map.get_chunk(x, y, z);
-                            after_load_callback.lock().unwrap()((x, y, z), Arc::new(chunk));
-                        } else {
-                            thread::sleep(Duration::from_millis(100));
+                            if let Some((x, y, z)) = option {
+                                let chunk = map.get_chunk(x, y, z);
+                                after_chunk_callback.lock().unwrap()((x, y, z), Arc::new(chunk));
+                            }
+                        }
+                        {
+                            let option = before_mesh_callback.lock().unwrap()();
+                            if let Some(chunks) = option {
+                                let (x, y, z) = chunks.0;
+                                let chunks = chunks.1;
+                                let graphics = create_vertices_for_chunk(
+                                    &chunks[0], x, y, z, &chunks[1], &chunks[2], &chunks[3],
+                                    &chunks[4], &chunks[5], &chunks[6],
+                                );
+                                after_mesh_callback.lock().unwrap()((x, y, z), Arc::new(graphics));
+                            }
                         }
                     }
                 }

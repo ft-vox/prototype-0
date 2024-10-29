@@ -10,10 +10,10 @@ use std::{
 use wgpu::util::DeviceExt;
 
 pub mod chunk_cache;
-mod vertex;
+pub mod vertex;
 mod vox_graphics_wrapper;
 
-use vertex::create_vertices_for_chunk;
+use vertex::{create_vertices_for_chunk, Vertex};
 use vox_graphics_wrapper::*;
 
 pub const CACHE_DISTANCE: usize = 22;
@@ -27,8 +27,14 @@ pub const FOV: f32 = 80.0;
 
 pub trait TerrainWorker {
     fn new(
-        before_load_callback: Arc<Mutex<dyn Send + Sync + FnMut() -> Option<(i32, i32, i32)>>>,
-        after_load_callback: Arc<Mutex<dyn Send + Sync + FnMut((i32, i32, i32), Arc<Chunk>)>>,
+        before_chunk_callback: Arc<Mutex<dyn Send + Sync + FnMut() -> Option<(i32, i32, i32)>>>,
+        after_chunk_callback: Arc<Mutex<dyn Send + Sync + FnMut((i32, i32, i32), Arc<Chunk>)>>,
+        before_mesh_callback: Arc<
+            Mutex<dyn Send + Sync + FnMut() -> Option<((i32, i32, i32), Vec<Arc<Chunk>>)>>,
+        >,
+        after_mesh_callback: Arc<
+            Mutex<dyn Send + Sync + FnMut((i32, i32, i32), Arc<(Vec<Vertex>, Vec<u16>)>)>,
+        >,
     ) -> Self;
 }
 
@@ -58,6 +64,7 @@ pub struct Vox<T: TerrainWorker> {
     vertical_rotation: f32,
     is_paused: bool,
     chunks: HashMap<[i32; 3], Arc<Chunk>>,
+    wgpu_buffers: HashMap<[i32; 3], Rc<(wgpu::Buffer, wgpu::Buffer, u32)>>,
     buffers: LRUCache<[i32; 3], Rc<(wgpu::Buffer, wgpu::Buffer, u32)>>,
     chunk_cache: ChunkCache<T>,
 }
@@ -101,6 +108,7 @@ impl<T: TerrainWorker> Vox<T> {
             horizontal_rotation: 0.0,
             vertical_rotation: 0.0,
             chunks: HashMap::new(),
+            wgpu_buffers: HashMap::new(),
             buffers: LRUCache::new(get_coords(RENDER_DISTANCE).len()),
             is_paused: false,
             chunk_cache: ChunkCache::new(CACHE_DISTANCE, (eye_x, eye_y, eye_z)),
@@ -173,26 +181,35 @@ impl<T: TerrainWorker> Vox<T> {
             (eye.x as i32, eye.y as i32, eye.z as i32)
         };
 
+        let start = std::time::Instant::now();
+
         self.chunk_cache.set_cache_distance(CACHE_DISTANCE);
         self.chunk_cache
             .set_eye((self.eye.x, self.eye.y, self.eye.z));
         let res = self.chunk_cache.get_available();
 
-        self.chunks.clear();
-        for ((x, y, z), chunk) in res {
-            self.chunks.insert([x, y, z], chunk);
+        let part1 = start.elapsed().as_nanos();
+
+        let mut graphics_buffer: Vec<(i32, i32, i32, Rc<(wgpu::Buffer, wgpu::Buffer, u32)>)> =
+            Vec::new();
+        for ((x, y, z), graphics) in res {
+            self.wgpu_buffers.entry([x, y, z]).or_insert_with(|| {
+                let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("Vertex Buffer"),
+                    contents: bytemuck::cast_slice(&graphics.0),
+                    usage: wgpu::BufferUsages::VERTEX,
+                });
+                let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("Index Buffer"),
+                    contents: bytemuck::cast_slice(&graphics.1),
+                    usage: wgpu::BufferUsages::INDEX,
+                });
+                Rc::new((vertex_buf, index_buf, graphics.1.len() as u32))
+            });
+            graphics_buffer.push((x, y, z, self.wgpu_buffers.get(&[x, y, z]).unwrap().clone()));
         }
 
-        let buffer_data = get_coords(RENDER_DISTANCE)
-            .into_iter()
-            .map(|(x, y, z)| (x + eye_x, y + eye_y, z + eye_z))
-            .collect::<Vec<_>>()
-            .iter()
-            .filter_map(|&(x, y, z)| {
-                self.get_buffers(device, x, y, z)
-                    .map(|buffers| (x, y, z, buffers))
-            })
-            .collect::<Vec<_>>();
+        let part2 = start.elapsed().as_nanos();
 
         self.vox_graphics_wrapper.render(
             view,
@@ -201,7 +218,15 @@ impl<T: TerrainWorker> Vox<T> {
             self.eye,
             self.horizontal_rotation,
             self.vertical_rotation,
-            buffer_data,
+            graphics_buffer,
+        );
+
+        let part3 = start.elapsed().as_nanos();
+        println!(
+            "1: {}    2: {}    3: {}",
+            part1 as f32 / 1000000.0,
+            part2 as f32 / 1000000.0,
+            part3 as f32 / 1000000.0
         );
     }
 
