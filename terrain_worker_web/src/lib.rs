@@ -4,7 +4,10 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use ft_vox_prototype_0_core::TerrainWorker;
+use ft_vox_prototype_0_core::{
+    vertex::{create_vertices_for_chunk, Vertex},
+    TerrainWorker, TerrainWorkerJob,
+};
 use ft_vox_prototype_0_map_types::{Chunk, CHUNK_SIZE};
 use js_sys::{
     wasm_bindgen::{prelude::Closure, JsCast, JsValue},
@@ -20,15 +23,19 @@ pub struct WebTerrainWorker {}
 
 impl TerrainWorker for WebTerrainWorker {
     fn new(
-        before_load_callback: Arc<Mutex<dyn Send + Sync + FnMut() -> Option<(i32, i32, i32)>>>,
-        after_load_callback: Arc<Mutex<dyn Send + Sync + FnMut((i32, i32, i32), Arc<Chunk>)>>,
+        job_callback: Arc<Mutex<dyn Send + Sync + FnMut() -> Option<TerrainWorkerJob>>>,
+        chunk_callback: Arc<Mutex<dyn Send + Sync + FnMut((i32, i32, i32), Arc<Chunk>)>>,
+        mesh_callback: Arc<
+            Mutex<dyn Send + Sync + FnMut((i32, i32, i32), (Vec<Vertex>, Vec<u16>))>,
+        >,
     ) -> Self {
         let worker = Worker::new("terrain-worker-main.js").unwrap();
 
         {
             let worker = worker.clone();
             let worker_clone = worker.clone();
-            let before_load_callback = before_load_callback.clone();
+            let job_callback = job_callback.clone();
+            let mesh_callback = mesh_callback.clone();
             let onmessage_callback = Closure::wrap(Box::new(move |event: MessageEvent| {
                 let data = event.data().as_string().unwrap();
 
@@ -40,10 +47,47 @@ impl TerrainWorker for WebTerrainWorker {
                         .try_into()
                         .unwrap();
 
-                    if let Some((x, y, z)) = before_load_callback.lock().unwrap()() {
-                        worker
-                            .post_message(&JsValue::from_str(&format!("{},{},{},{}", i, x, y, z)))
-                            .unwrap();
+                    if let Some(job) = job_callback.lock().unwrap()() {
+                        match job {
+                            TerrainWorkerJob::Map((x, y, z)) => {
+                                worker
+                                    .post_message(&JsValue::from_str(&format!(
+                                        "{},{},{},{}",
+                                        i, x, y, z
+                                    )))
+                                    .unwrap();
+                            }
+                            TerrainWorkerJob::Mesh {
+                                position: (x, y, z),
+                                zero,
+                                positive_x,
+                                negative_x,
+                                positive_y,
+                                negative_y,
+                                positive_z,
+                                negative_z,
+                            } => {
+                                let mesh = create_vertices_for_chunk(
+                                    &zero,
+                                    x,
+                                    y,
+                                    z,
+                                    &positive_x,
+                                    &negative_x,
+                                    &positive_y,
+                                    &negative_y,
+                                    &positive_z,
+                                    &negative_z,
+                                );
+                                mesh_callback.lock().unwrap()((x, y, z), mesh);
+                                worker
+                                    .post_message(&JsValue::from_str(&format!(
+                                        "{},-2147483648,-2147483648,-2147483648",
+                                        i
+                                    )))
+                                    .unwrap();
+                            }
+                        }
                     } else {
                         worker
                             .post_message(&JsValue::from_str(&format!(
@@ -60,10 +104,7 @@ impl TerrainWorker for WebTerrainWorker {
                         .try_into()
                         .unwrap();
 
-                    wasm_bindgen_futures::spawn_local(load_map(
-                        after_load_callback.clone(),
-                        (x, y, z),
-                    ));
+                    wasm_bindgen_futures::spawn_local(load_map(chunk_callback.clone(), (x, y, z)));
                 }
             }) as Box<dyn FnMut(MessageEvent)>);
 

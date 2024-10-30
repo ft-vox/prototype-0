@@ -1,12 +1,7 @@
 use chunk_cache::TerrainManager;
 use ft_vox_prototype_0_map_types::{Chunk, CHUNK_SIZE};
-use ft_vox_prototype_0_util_lru_cache_rc::LRUCache;
 use glam::{Mat3, Vec3};
-use std::{
-    collections::HashMap,
-    rc::Rc,
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 use wgpu::util::DeviceExt;
 
 pub mod chunk_cache;
@@ -74,9 +69,6 @@ pub struct Vox<T: TerrainWorker> {
     horizontal_rotation: f32,
     vertical_rotation: f32,
     is_paused: bool,
-    chunks: HashMap<[i32; 3], Arc<Chunk>>,
-    wgpu_buffers: HashMap<[i32; 3], Rc<(wgpu::Buffer, wgpu::Buffer, u32)>>,
-    buffers: LRUCache<[i32; 3], Rc<(wgpu::Buffer, wgpu::Buffer, u32)>>,
     chunk_cache: TerrainManager<T, Arc<(wgpu::Buffer, wgpu::Buffer, u32)>>,
 }
 
@@ -120,9 +112,6 @@ impl<T: TerrainWorker> Vox<T> {
             eye: glam::Vec3::new(eye_x, eye_y, eye_z),
             horizontal_rotation: 0.0,
             vertical_rotation: 0.0,
-            chunks: HashMap::new(),
-            wgpu_buffers: HashMap::new(),
-            buffers: LRUCache::new(get_coords(RENDER_DISTANCE).len()),
             is_paused: false,
             chunk_cache: TerrainManager::new(CACHE_DISTANCE, (eye_x, eye_y, eye_z)),
         }
@@ -189,13 +178,6 @@ impl<T: TerrainWorker> Vox<T> {
     }
 
     pub fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
-        let (eye_x, eye_y, eye_z) = {
-            let eye = (self.eye / CHUNK_SIZE as f32).floor();
-            (eye.x as i32, eye.y as i32, eye.z as i32)
-        };
-
-        let start = std::time::Instant::now();
-
         self.chunk_cache.set_cache_distance(CACHE_DISTANCE);
         self.chunk_cache
             .set_eye((self.eye.x, self.eye.y, self.eye.z));
@@ -215,8 +197,6 @@ impl<T: TerrainWorker> Vox<T> {
             ))
         });
 
-        let part1 = start.elapsed().as_nanos();
-
         self.vox_graphics_wrapper.render(
             view,
             device,
@@ -226,13 +206,5 @@ impl<T: TerrainWorker> Vox<T> {
             self.vertical_rotation,
             res,
         );
-
-        let part3 = start.elapsed().as_nanos();
-        /* println!(
-            "1: {}    2: {}    3: {}",
-            part1 as f32 / 1000000.0,
-            part2 as f32 / 1000000.0,
-            part3 as f32 / 1000000.0
-        ); */
     }
 }
