@@ -166,7 +166,7 @@ pub async fn run<T: TerrainWorker + 'static>() {
                                     window_position,
                                     window_loop.window.inner_size(),
                                 );
-                                context.set_mouse_center();
+                                context.set_mouse_center(target);
                             }
                         }
                     }

@@ -154,7 +154,7 @@ impl<T: TerrainWorker> Context<T> {
         self.vertical_rotation = 0.0;
     }
 
-    pub fn set_mouse_center(&mut self) {
+    pub fn set_mouse_center(&mut self, target: &EventLoopWindowTarget<()>) {
         #[cfg(not(target_arch = "wasm32"))]
         {
             let window_position = self.window_inner_position;
