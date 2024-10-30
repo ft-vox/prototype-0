@@ -1,4 +1,4 @@
-use chunk_cache::ChunkCache;
+use chunk_cache::TerrainManager;
 use ft_vox_prototype_0_map_types::{Chunk, CHUNK_SIZE};
 use ft_vox_prototype_0_util_lru_cache_rc::LRUCache;
 use glam::{Mat3, Vec3};
@@ -77,7 +77,7 @@ pub struct Vox<T: TerrainWorker> {
     chunks: HashMap<[i32; 3], Arc<Chunk>>,
     wgpu_buffers: HashMap<[i32; 3], Rc<(wgpu::Buffer, wgpu::Buffer, u32)>>,
     buffers: LRUCache<[i32; 3], Rc<(wgpu::Buffer, wgpu::Buffer, u32)>>,
-    chunk_cache: ChunkCache<T>,
+    chunk_cache: TerrainManager<T>,
 }
 
 /// [ Speed in Minecraft ]
@@ -124,7 +124,7 @@ impl<T: TerrainWorker> Vox<T> {
             wgpu_buffers: HashMap::new(),
             buffers: LRUCache::new(get_coords(RENDER_DISTANCE).len()),
             is_paused: false,
-            chunk_cache: ChunkCache::new(CACHE_DISTANCE, (eye_x, eye_y, eye_z)),
+            chunk_cache: TerrainManager::new(CACHE_DISTANCE, (eye_x, eye_y, eye_z)),
         }
     }
 

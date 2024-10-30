@@ -8,23 +8,19 @@ use ft_vox_prototype_0_map_types::{Chunk, CHUNK_SIZE};
 use crate::{get_coords, TerrainWorker};
 use crate::{vertex::Vertex, TerrainWorkerJob};
 
-type I32Position = (i32, i32, i32);
-
-pub struct ChunkCache<T: TerrainWorker> {
-    cache: Arc<Mutex<Cache>>,
+pub struct TerrainManager<T: TerrainWorker> {
+    map_cache: Arc<Mutex<MapCache>>,
+    mesh_cache: Arc<Mutex<MeshCache>>,
     eye: (f32, f32, f32),
     terrain_worker: T,
 }
 
-struct Cache {
-    pub chunk_loading: HashSet<I32Position>,
-    pub chunk_cache: Vec<Option<Arc<Chunk>>>,
-
-    pub mesh_load_request: VecDeque<(I32Position, Vec<Arc<Chunk>>)>,
-    pub mesh_cache: Vec<Option<(Vec<Vertex>, Vec<u16>)>>,
+struct MapCache {
+    pub chunk_loading: HashSet<(i32, i32, i32)>,
+    pub chunks: Vec<Option<Arc<Chunk>>>,
 
     pub cache_distance: usize,
-    pub coords: Vec<I32Position>,
+    pub coords: Vec<(i32, i32, i32)>,
     pub x: i32,
     pub y: i32,
     pub z: i32,
@@ -33,7 +29,24 @@ struct Cache {
     pub eye_z_upper: bool,
 }
 
-impl Cache {
+impl MapCache {
+    pub fn new(cache_distance: usize, eye: (f32, f32, f32)) -> Self {
+        let size = cache_distance * 2 + 2;
+        let (x, y, z) = eye;
+
+        MapCache {
+            chunk_loading: HashSet::new(),
+            chunks: vec![None; size * size * size],
+            cache_distance,
+            coords: calculate_coords(cache_distance as f32),
+            x: (x / CHUNK_SIZE as f32).floor() as i32,
+            y: (y / CHUNK_SIZE as f32).floor() as i32,
+            z: (z / CHUNK_SIZE as f32).floor() as i32,
+            eye_x_upper: x % CHUNK_SIZE as f32 > CHUNK_SIZE as f32 / 2.0,
+            eye_y_upper: y % CHUNK_SIZE as f32 > CHUNK_SIZE as f32 / 2.0,
+            eye_z_upper: z % CHUNK_SIZE as f32 > CHUNK_SIZE as f32 / 2.0,
+        }
+    }
     pub fn get_chunk(&self, x: i32, y: i32, z: i32) -> Option<Arc<Chunk>> {
         let size = self.cache_distance * 2 + 2;
 
@@ -58,7 +71,7 @@ impl Cache {
         }
         let z = z.rem_euclid(size as i32) as usize;
 
-        self.chunk_cache[z * size * size + y * size + x].clone()
+        self.chunks[z * size * size + y * size + x].clone()
     }
 
     pub fn set_chunk(&mut self, x: i32, y: i32, z: i32, chunk: Option<Arc<Chunk>>) {
@@ -85,9 +98,56 @@ impl Cache {
         }
         let z = z.rem_euclid(size as i32) as usize;
 
-        self.chunk_cache[z * size * size + y * size + x] = chunk;
+        self.chunks[z * size * size + y * size + x] = chunk;
     }
 
+    fn reset(&mut self) {
+        let size = self.cache_distance * 2 + 2;
+        self.chunks = vec![None; size * size * size];
+        self.chunk_loading.clear();
+    }
+
+    fn get_available(&self) -> Vec<((i32, i32, i32), Arc<Chunk>)> {
+        self.coords
+            .iter()
+            .map(|&(x, y, z)| (x + self.x, y + self.y, z + self.z))
+            .filter_map(|(x, y, z)| self.get_chunk(x, y, z).map(|chunk| ((x, y, z), chunk)))
+            .collect()
+    }
+}
+
+struct MeshCache {
+    pub mesh_load_request: VecDeque<((i32, i32, i32), Vec<Arc<Chunk>>)>,
+    pub meshes: Vec<Option<(Vec<Vertex>, Vec<u16>)>>,
+
+    pub cache_distance: usize,
+    pub coords: Vec<(i32, i32, i32)>,
+    pub x: i32,
+    pub y: i32,
+    pub z: i32,
+    pub eye_x_upper: bool,
+    pub eye_y_upper: bool,
+    pub eye_z_upper: bool,
+}
+
+impl MeshCache {
+    pub fn new(cache_distance: usize, eye: (f32, f32, f32)) -> Self {
+        let size = cache_distance * 2 + 2;
+        let (x, y, z) = eye;
+
+        MeshCache {
+            mesh_load_request: VecDeque::new(),
+            meshes: vec![None; size * size * size],
+            cache_distance,
+            coords: calculate_coords(cache_distance as f32),
+            x: (x / CHUNK_SIZE as f32).floor() as i32,
+            y: (y / CHUNK_SIZE as f32).floor() as i32,
+            z: (z / CHUNK_SIZE as f32).floor() as i32,
+            eye_x_upper: x % CHUNK_SIZE as f32 > CHUNK_SIZE as f32 / 2.0,
+            eye_y_upper: y % CHUNK_SIZE as f32 > CHUNK_SIZE as f32 / 2.0,
+            eye_z_upper: z % CHUNK_SIZE as f32 > CHUNK_SIZE as f32 / 2.0,
+        }
+    }
     pub fn take_mesh(&mut self, x: i32, y: i32, z: i32) -> Option<(Vec<Vertex>, Vec<u16>)> {
         let size = self.cache_distance * 2 + 2;
 
@@ -112,7 +172,7 @@ impl Cache {
         }
         let z = z.rem_euclid(size as i32) as usize;
 
-        self.mesh_cache[z * size * size + y * size + x].take()
+        self.meshes[z * size * size + y * size + x].take()
     }
 
     pub fn set_mesh(&mut self, x: i32, y: i32, z: i32, mesh: Option<(Vec<Vertex>, Vec<u16>)>) {
@@ -139,18 +199,16 @@ impl Cache {
         }
         let z = z.rem_euclid(size as i32) as usize;
 
-        self.mesh_cache[z * size * size + y * size + x] = mesh;
+        self.meshes[z * size * size + y * size + x] = mesh;
     }
 
     fn reset(&mut self) {
         let size = self.cache_distance * 2 + 2;
-        self.chunk_cache = vec![None; size * size * size];
-        self.mesh_cache = vec![None; size * size * size];
-        self.chunk_loading.clear();
+        self.meshes = vec![None; size * size * size];
         self.mesh_load_request.clear();
     }
 
-    fn get_available(&self) -> Vec<(I32Position, Arc<(Vec<Vertex>, Vec<u16>)>)> {
+    fn get_available(&self) -> Vec<((i32, i32, i32), Arc<(Vec<Vertex>, Vec<u16>)>)> {
         self.coords
             .iter()
             .map(|&(x, y, z)| (x + self.x, y + self.y, z + self.z))
@@ -159,26 +217,11 @@ impl Cache {
     }
 }
 
-impl<T: TerrainWorker> ChunkCache<T> {
+impl<T: TerrainWorker> TerrainManager<T> {
     pub fn new(cache_distance: usize, eye: (f32, f32, f32)) -> Self {
-        let size = cache_distance * 2 + 2;
-        let (x, y, z) = eye;
-
         let mut result = Self {
-            cache: Arc::new(Mutex::new(Cache {
-                chunk_loading: HashSet::new(),
-                chunk_cache: vec![None; size * size * size],
-                mesh_load_request: VecDeque::new(),
-                mesh_cache: vec![None; size * size * size],
-                cache_distance,
-                coords: Self::calculate_coords(cache_distance as f32),
-                x: (x / CHUNK_SIZE as f32).floor() as i32,
-                y: (y / CHUNK_SIZE as f32).floor() as i32,
-                z: (z / CHUNK_SIZE as f32).floor() as i32,
-                eye_x_upper: x % CHUNK_SIZE as f32 > CHUNK_SIZE as f32 / 2.0,
-                eye_y_upper: y % CHUNK_SIZE as f32 > CHUNK_SIZE as f32 / 2.0,
-                eye_z_upper: z % CHUNK_SIZE as f32 > CHUNK_SIZE as f32 / 2.0,
-            })),
+            map_cache: Arc::new(Mutex::new(MapCache::new(cache_distance, eye))),
+            mesh_cache: Arc::new(Mutex::new(MeshCache::new(cache_distance, eye))),
             eye,
             terrain_worker: T::new(
                 Arc::new(Mutex::new(|| None)),
@@ -194,42 +237,47 @@ impl<T: TerrainWorker> ChunkCache<T> {
     fn init(&mut self) {
         self.terrain_worker = T::new(
             Arc::new(Mutex::new({
-                let cache = self.cache.clone();
+                let map_cache = self.map_cache.clone();
+                let mesh_cache = self.mesh_cache.clone();
                 move || {
-                    let mut cache = cache.lock().unwrap();
-                    if let Some((position, vec)) = cache.mesh_load_request.pop_front() {
+                    let mut map_cache = map_cache.lock().unwrap();
+                    if let Some((position, vec)) =
+                        mesh_cache.lock().unwrap().mesh_load_request.pop_front()
+                    {
                         return Some(TerrainWorkerJob::Mesh {
                             position,
-                            zero: vec[0],
-                            positive_x: vec[1],
-                            negative_x: vec[2],
-                            positive_y: vec[3],
-                            negative_y: vec[4],
-                            positive_z: vec[5],
-                            negative_z: vec[6],
+                            zero: vec[0].clone(),
+                            positive_x: vec[1].clone(),
+                            negative_x: vec[2].clone(),
+                            positive_y: vec[3].clone(),
+                            negative_y: vec[4].clone(),
+                            positive_z: vec[5].clone(),
+                            negative_z: vec[6].clone(),
                         });
                     }
-                    let result = cache
+                    let result = map_cache
                         .coords
                         .iter()
-                        .map(|&(x, y, z)| (x + cache.x, y + cache.y, z + cache.z))
+                        .map(|&(x, y, z)| (x + map_cache.x, y + map_cache.y, z + map_cache.z))
                         .find(|&(x, y, z)| {
-                            cache.get_chunk(x, y, z).is_none()
-                                && !cache.chunk_loading.contains(&(x, y, z))
+                            map_cache.get_chunk(x, y, z).is_none()
+                                && !map_cache.chunk_loading.contains(&(x, y, z))
                         });
                     if let Some(pos) = result {
-                        cache.chunk_loading.insert(pos);
+                        map_cache.chunk_loading.insert(pos);
                         return Some(TerrainWorkerJob::Map(pos));
                     }
                     None
                 }
             })),
             Arc::new(Mutex::new({
-                let cache = self.cache.clone();
+                let map_cache = self.map_cache.clone();
+                let mesh_cache = self.mesh_cache.clone();
                 move |(x, y, z), chunk| {
-                    let mut cache = cache.lock().unwrap();
-                    cache.chunk_loading.remove(&(x, y, z));
-                    cache.set_chunk(x, y, z, Some(chunk));
+                    let mut map_cache = map_cache.lock().unwrap();
+
+                    map_cache.chunk_loading.remove(&(x, y, z));
+                    map_cache.set_chunk(x, y, z, Some(chunk));
                     let directions = [
                         (1, 0, 0),  // x+1
                         (-1, 0, 0), // x-1
@@ -239,13 +287,13 @@ impl<T: TerrainWorker> ChunkCache<T> {
                         (0, 0, -1), // z-1
                     ];
                     for (dx, dy, dz) in directions.iter() {
-                        if let Some(chunk) = cache.get_chunk(x + dx, y + dy, z + dz) {
+                        if let Some(chunk) = map_cache.get_chunk(x + dx, y + dy, z + dz) {
                             let mut chunks7: Vec<Arc<Chunk>> = Vec::new();
 
                             chunks7.push(chunk.clone());
 
                             for (sub_dx, sub_dy, sub_dz) in directions.iter() {
-                                if let Some(sub_chunk) = cache.get_chunk(
+                                if let Some(sub_chunk) = map_cache.get_chunk(
                                     x + dx + sub_dx,
                                     y + dy + sub_dy,
                                     z + dz + sub_dz,
@@ -255,7 +303,8 @@ impl<T: TerrainWorker> ChunkCache<T> {
                             }
 
                             if chunks7.len() == 7 {
-                                cache
+                                let mut mesh_cache = mesh_cache.lock().unwrap();
+                                mesh_cache
                                     .mesh_load_request
                                     .push_back(((x + dx, y + dy, z + dz), chunks7));
                             }
@@ -264,35 +313,40 @@ impl<T: TerrainWorker> ChunkCache<T> {
                 }
             })),
             Arc::new(Mutex::new({
-                let cache = self.cache.clone();
+                let mesh_cache = self.mesh_cache.clone();
                 move |(x, y, z), mesh| {
-                    let mut cache = cache.lock().unwrap();
-                    cache.set_mesh(x, y, z, Some(mesh));
+                    let mut mesh_cache = mesh_cache.lock().unwrap();
+                    mesh_cache.set_mesh(x, y, z, Some(mesh));
                 }
             })),
         );
     }
 
     pub fn set_cache_distance(&mut self, new_cache_distance: usize) {
-        let mut cache = self.cache.lock().unwrap();
+        {
+            let mut map_cache = self.map_cache.lock().unwrap();
+            if map_cache.cache_distance != new_cache_distance {
+                map_cache.cache_distance = new_cache_distance;
+                map_cache.coords = calculate_coords(map_cache.cache_distance as f32);
+                map_cache.reset();
+            }
+        }
 
-        if cache.cache_distance == new_cache_distance {
-            return;
+        {
+            let mut mesh_cache = self.mesh_cache.lock().unwrap();
+            if mesh_cache.cache_distance != new_cache_distance {
+                mesh_cache.cache_distance = new_cache_distance;
+                mesh_cache.coords = calculate_coords(mesh_cache.cache_distance as f32);
+                mesh_cache.reset();
+            }
         }
 
         // TODO: add resize without reset
-
-        cache.cache_distance = new_cache_distance;
-        cache.coords = Self::calculate_coords(cache.cache_distance as f32);
-        cache.reset();
-    }
-
-    pub fn get_available(&self) -> Vec<(I32Position, Arc<(Vec<Vertex>, Vec<u16>)>)> {
-        self.cache.lock().unwrap().get_available()
     }
 
     pub fn set_eye(&mut self, eye: (f32, f32, f32)) {
-        let mut cache = self.cache.lock().unwrap();
+        let mut map_cache = self.map_cache.lock().unwrap();
+        let mut mesh_cache = self.mesh_cache.lock().unwrap();
         fn upper(value: f32, old: bool) -> bool {
             let value = (value.fract() + 1.0).fract();
             if old {
@@ -301,19 +355,19 @@ impl<T: TerrainWorker> ChunkCache<T> {
                 value > 0.75
             }
         }
-        let size = cache.cache_distance * 2 + 2;
-        let old_eye_chunk_x = cache.x;
-        let old_eye_chunk_y = cache.y;
-        let old_eye_chunk_z = cache.z;
-        let old_eye_x_upper = cache.eye_x_upper;
-        let old_eye_y_upper = cache.eye_y_upper;
-        let old_eye_z_upper = cache.eye_z_upper;
+        let size = map_cache.cache_distance * 2 + 2;
+        let old_eye_chunk_x = map_cache.x;
+        let old_eye_chunk_y = map_cache.y;
+        let old_eye_chunk_z = map_cache.z;
+        let old_eye_x_upper = map_cache.eye_x_upper;
+        let old_eye_y_upper = map_cache.eye_y_upper;
+        let old_eye_z_upper = map_cache.eye_z_upper;
         let old_min_x =
-            old_eye_chunk_x - cache.cache_distance as i32 - if old_eye_x_upper { 0 } else { 1 };
+            old_eye_chunk_x - map_cache.cache_distance as i32 - if old_eye_x_upper { 0 } else { 1 };
         let old_min_y =
-            old_eye_chunk_y - cache.cache_distance as i32 - if old_eye_y_upper { 0 } else { 1 };
+            old_eye_chunk_y - map_cache.cache_distance as i32 - if old_eye_y_upper { 0 } else { 1 };
         let old_min_z =
-            old_eye_chunk_z - cache.cache_distance as i32 - if old_eye_z_upper { 0 } else { 1 };
+            old_eye_chunk_z - map_cache.cache_distance as i32 - if old_eye_z_upper { 0 } else { 1 };
         let (new_eye_x, new_eye_y, new_eye_z) = eye;
         let new_eye_chunk_x = (new_eye_x / CHUNK_SIZE as f32).floor() as i32;
         let new_eye_chunk_y = (new_eye_y / CHUNK_SIZE as f32).floor() as i32;
@@ -322,22 +376,29 @@ impl<T: TerrainWorker> ChunkCache<T> {
         let new_eye_y_upper = upper(new_eye_y / CHUNK_SIZE as f32, old_eye_y_upper);
         let new_eye_z_upper = upper(new_eye_z / CHUNK_SIZE as f32, old_eye_z_upper);
         let new_min_x =
-            new_eye_chunk_x - cache.cache_distance as i32 - if new_eye_x_upper { 0 } else { 1 };
+            new_eye_chunk_x - map_cache.cache_distance as i32 - if new_eye_x_upper { 0 } else { 1 };
         let new_min_y =
-            new_eye_chunk_y - cache.cache_distance as i32 - if new_eye_y_upper { 0 } else { 1 };
+            new_eye_chunk_y - map_cache.cache_distance as i32 - if new_eye_y_upper { 0 } else { 1 };
         let new_min_z =
-            new_eye_chunk_z - cache.cache_distance as i32 - if new_eye_z_upper { 0 } else { 1 };
+            new_eye_chunk_z - map_cache.cache_distance as i32 - if new_eye_z_upper { 0 } else { 1 };
         let new_max_x = new_min_x + size as i32 - 1;
         let new_max_y = new_min_y + size as i32 - 1;
         let new_max_z = new_min_z + size as i32 - 1;
 
         self.eye = eye;
-        cache.eye_x_upper = new_eye_x_upper;
-        cache.eye_y_upper = new_eye_y_upper;
-        cache.eye_z_upper = new_eye_z_upper;
-        cache.x = new_eye_chunk_x;
-        cache.y = new_eye_chunk_y;
-        cache.z = new_eye_chunk_z;
+        map_cache.eye_x_upper = new_eye_x_upper;
+        map_cache.eye_y_upper = new_eye_y_upper;
+        map_cache.eye_z_upper = new_eye_z_upper;
+        map_cache.x = new_eye_chunk_x;
+        map_cache.y = new_eye_chunk_y;
+        map_cache.z = new_eye_chunk_z;
+
+        mesh_cache.eye_x_upper = new_eye_x_upper;
+        mesh_cache.eye_y_upper = new_eye_y_upper;
+        mesh_cache.eye_z_upper = new_eye_z_upper;
+        mesh_cache.x = new_eye_chunk_x;
+        mesh_cache.y = new_eye_chunk_y;
+        mesh_cache.z = new_eye_chunk_z;
 
         match new_min_x - old_min_x {
             0 => {}
@@ -345,8 +406,9 @@ impl<T: TerrainWorker> ChunkCache<T> {
                 for z in 0..size {
                     for y in 0..size {
                         let x = new_max_x.rem_euclid(size as i32) as usize;
-                        cache.chunk_cache[z * size * size + y * size + x] = None;
-                        cache.mesh_cache[z * size * size + y * size + x] = None;
+                        map_cache.chunks[z * size * size + y * size + x] = None;
+
+                        mesh_cache.meshes[z * size * size + y * size + x] = None;
                     }
                 }
             }
@@ -354,13 +416,14 @@ impl<T: TerrainWorker> ChunkCache<T> {
                 for z in 0..size {
                     for y in 0..size {
                         let x = new_min_x.rem_euclid(size as i32) as usize;
-                        cache.chunk_cache[z * size * size + y * size + x] = None;
-                        cache.mesh_cache[z * size * size + y * size + x] = None;
+                        map_cache.chunks[z * size * size + y * size + x] = None;
+
+                        mesh_cache.meshes[z * size * size + y * size + x] = None;
                     }
                 }
             }
             _ => {
-                cache.reset();
+                map_cache.reset();
                 return;
             }
         }
@@ -371,8 +434,9 @@ impl<T: TerrainWorker> ChunkCache<T> {
                 for z in 0..size {
                     for x in 0..size {
                         let y = new_max_y.rem_euclid(size as i32) as usize;
-                        cache.chunk_cache[z * size * size + y * size + x] = None;
-                        cache.mesh_cache[z * size * size + y * size + x] = None;
+                        map_cache.chunks[z * size * size + y * size + x] = None;
+
+                        mesh_cache.meshes[z * size * size + y * size + x] = None;
                     }
                 }
             }
@@ -380,13 +444,15 @@ impl<T: TerrainWorker> ChunkCache<T> {
                 for z in 0..size {
                     for x in 0..size {
                         let y = new_min_y.rem_euclid(size as i32) as usize;
-                        cache.chunk_cache[z * size * size + y * size + x] = None;
-                        cache.mesh_cache[z * size * size + y * size + x] = None;
+                        map_cache.chunks[z * size * size + y * size + x] = None;
+
+                        mesh_cache.meshes[z * size * size + y * size + x] = None;
                     }
                 }
             }
             _ => {
-                cache.reset();
+                map_cache.reset();
+                mesh_cache.reset();
                 return;
             }
         }
@@ -397,8 +463,9 @@ impl<T: TerrainWorker> ChunkCache<T> {
                 for x in 0..size {
                     for y in 0..size {
                         let z = new_max_z.rem_euclid(size as i32) as usize;
-                        cache.chunk_cache[z * size * size + y * size + x] = None;
-                        cache.mesh_cache[z * size * size + y * size + x] = None;
+                        map_cache.chunks[z * size * size + y * size + x] = None;
+
+                        mesh_cache.meshes[z * size * size + y * size + x] = None;
                     }
                 }
             }
@@ -406,26 +473,43 @@ impl<T: TerrainWorker> ChunkCache<T> {
                 for x in 0..size {
                     for y in 0..size {
                         let z = new_min_z.rem_euclid(size as i32) as usize;
-                        cache.chunk_cache[z * size * size + y * size + x] = None;
-                        cache.mesh_cache[z * size * size + y * size + x] = None;
+                        map_cache.chunks[z * size * size + y * size + x] = None;
+
+                        mesh_cache.meshes[z * size * size + y * size + x] = None;
                     }
                 }
             }
             _ => {
-                cache.reset();
+                map_cache.reset();
+                mesh_cache.reset();
                 // return;
             }
         }
     }
 
-    fn calculate_coords(distance: f32) -> Vec<I32Position> {
+    fn calculate_coords(distance: f32) -> Vec<(i32, i32, i32)> {
         let mut result = get_coords(distance);
 
-        fn dst((x, y, z): I32Position) -> i32 {
+        fn dst((x, y, z): (i32, i32, i32)) -> i32 {
             x * x + y * y + z * z
         }
         result.sort_unstable_by(|&a, &b| dst(a).cmp(&dst(b)));
 
         result
     }
+
+    pub fn get_available(&self) -> Vec<((i32, i32, i32), Arc<(Vec<Vertex>, Vec<u16>)>)> {
+        self.mesh_cache.lock().unwrap().get_available()
+    }
+}
+
+fn calculate_coords(distance: f32) -> Vec<(i32, i32, i32)> {
+    let mut result = get_coords(distance);
+
+    fn dst((x, y, z): (i32, i32, i32)) -> i32 {
+        x * x + y * y + z * z
+    }
+    result.sort_unstable_by(|&a, &b| dst(a).cmp(&dst(b)));
+
+    result
 }
