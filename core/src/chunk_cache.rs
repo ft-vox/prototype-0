@@ -1,5 +1,5 @@
 use std::{
-    collections::HashSet,
+    collections::{HashSet, VecDeque},
     sync::{Arc, Mutex},
 };
 
@@ -7,6 +7,8 @@ use ft_vox_prototype_0_map_types::{Chunk, CHUNK_SIZE};
 
 use crate::vertex::Vertex;
 use crate::{get_coords, TerrainWorker};
+
+type I32Position = (i32, i32, i32);
 
 pub struct ChunkCache<T: TerrainWorker> {
     cache: Arc<Mutex<Cache>>,
@@ -18,7 +20,7 @@ struct Cache {
     pub chunk_loading: HashSet<(i32, i32, i32)>,
     pub chunk_cache: Vec<Option<Arc<Chunk>>>,
 
-    pub mesh_loading: HashSet<(i32, i32, i32)>,
+    pub mesh_load_request: VecDeque<(I32Position, Vec<Arc<Chunk>>)>,
     pub mesh_cache: Vec<Option<Arc<(Vec<Vertex>, Vec<u16>)>>>,
 
     pub cache_distance: usize,
@@ -145,7 +147,7 @@ impl Cache {
         self.chunk_cache = vec![None; size * size * size];
         self.mesh_cache = vec![None; size * size * size];
         self.chunk_loading.clear();
-        self.mesh_loading.clear();
+        self.mesh_load_request.clear();
     }
 
     fn get_available(&self) -> Vec<((i32, i32, i32), Arc<(Vec<Vertex>, Vec<u16>)>)> {
@@ -166,7 +168,7 @@ impl<T: TerrainWorker> ChunkCache<T> {
             cache: Arc::new(Mutex::new(Cache {
                 chunk_loading: HashSet::new(),
                 chunk_cache: vec![None; size * size * size],
-                mesh_loading: HashSet::new(),
+                mesh_load_request: VecDeque::new(),
                 mesh_cache: vec![None; size * size * size],
                 cache_distance,
                 coords: Self::calculate_coords(cache_distance as f32),
@@ -216,38 +218,44 @@ impl<T: TerrainWorker> ChunkCache<T> {
                     let mut cache = cache.lock().unwrap();
                     cache.chunk_loading.remove(&(x, y, z));
                     cache.set_chunk(x, y, z, Some(chunk));
-                    cache.mesh_loading.insert((x, y, z));
+                    let directions = [
+                        (1, 0, 0),  // x+1
+                        (-1, 0, 0), // x-1
+                        (0, 1, 0),  // y+1
+                        (0, -1, 0), // y-1
+                        (0, 0, 1),  // z+1
+                        (0, 0, -1), // z-1
+                    ];
+                    for (dx, dy, dz) in directions.iter() {
+                        if let Some(chunk) = cache.get_chunk(x + dx, y + dy, z + dz) {
+                            let mut chunks7: Vec<Arc<Chunk>> = Vec::new();
+
+                            chunks7.push(chunk.clone());
+
+                            for (sub_dx, sub_dy, sub_dz) in directions.iter() {
+                                if let Some(sub_chunk) = cache.get_chunk(
+                                    x + dx + sub_dx,
+                                    y + dy + sub_dy,
+                                    z + dz + sub_dz,
+                                ) {
+                                    chunks7.push(sub_chunk.clone());
+                                }
+                            }
+
+                            if chunks7.len() == 7 {
+                                cache
+                                    .mesh_load_request
+                                    .push_back(((x + dx, y + dy, z + dz), chunks7));
+                            }
+                        }
+                    }
                 }
             })),
             Arc::new(Mutex::new({
                 let cache = self.cache.clone();
                 move || {
                     let mut cache = cache.lock().unwrap();
-                    let mut result: Option<((i32, i32, i32), Vec<Arc<Chunk>>)> = None;
-
-                    for &(x, y, z) in &cache.mesh_loading {
-                        let directions = [
-                            (0, 0, 0),
-                            (1, 0, 0),  // x+1
-                            (-1, 0, 0), // x-1
-                            (0, 1, 0),  // y+1
-                            (0, -1, 0), // y-1
-                            (0, 0, 1),  // z+1
-                            (0, 0, -1), // z-1
-                        ];
-                        let mut chunks: Vec<Arc<Chunk>> = Vec::new();
-                        for (dx, dy, dz) in directions.iter() {
-                            if let Some(chunk) = cache.get_chunk(x + dx, y + dy, z + dz) {
-                                chunks.push(chunk.clone());
-                            }
-                        }
-                        if chunks.len() == 7 {
-                            result = Some(((x, y, z), chunks));
-                            cache.mesh_loading.remove(&(x, y, z));
-                            break;
-                        }
-                    }
-                    result
+                    cache.mesh_load_request.pop_front()
                 }
             })),
             Arc::new(Mutex::new({
