@@ -25,15 +25,26 @@ pub const FOG_START: f32 = FOG_END * 0.8;
 
 pub const FOV: f32 = 120.0;
 
+pub enum TerrainWorkerJob {
+    Map((i32, i32, i32)),
+    Mesh {
+        position: (i32, i32, i32),
+        zero: Arc<Chunk>,
+        positive_x: Arc<Chunk>,
+        negative_x: Arc<Chunk>,
+        positive_y: Arc<Chunk>,
+        negative_y: Arc<Chunk>,
+        positive_z: Arc<Chunk>,
+        negative_z: Arc<Chunk>,
+    },
+}
+
 pub trait TerrainWorker {
     fn new(
-        before_chunk_callback: Arc<Mutex<dyn Send + Sync + FnMut() -> Option<(i32, i32, i32)>>>,
-        after_chunk_callback: Arc<Mutex<dyn Send + Sync + FnMut((i32, i32, i32), Arc<Chunk>)>>,
-        before_mesh_callback: Arc<
-            Mutex<dyn Send + Sync + FnMut() -> Option<((i32, i32, i32), Vec<Arc<Chunk>>)>>,
-        >,
-        after_mesh_callback: Arc<
-            Mutex<dyn Send + Sync + FnMut((i32, i32, i32), Arc<(Vec<Vertex>, Vec<u16>)>)>,
+        job_callback: Arc<Mutex<dyn Send + Sync + FnMut() -> Option<TerrainWorkerJob>>>,
+        chunk_callback: Arc<Mutex<dyn Send + Sync + FnMut((i32, i32, i32), Arc<Chunk>)>>,
+        mesh_callback: Arc<
+            Mutex<dyn Send + Sync + FnMut((i32, i32, i32), (Vec<Vertex>, Vec<u16>))>,
         >,
     ) -> Self;
 }

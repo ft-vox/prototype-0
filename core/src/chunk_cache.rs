@@ -5,8 +5,8 @@ use std::{
 
 use ft_vox_prototype_0_map_types::{Chunk, CHUNK_SIZE};
 
-use crate::vertex::Vertex;
 use crate::{get_coords, TerrainWorker};
+use crate::{vertex::Vertex, TerrainWorkerJob};
 
 type I32Position = (i32, i32, i32);
 
@@ -17,14 +17,14 @@ pub struct ChunkCache<T: TerrainWorker> {
 }
 
 struct Cache {
-    pub chunk_loading: HashSet<(i32, i32, i32)>,
+    pub chunk_loading: HashSet<I32Position>,
     pub chunk_cache: Vec<Option<Arc<Chunk>>>,
 
     pub mesh_load_request: VecDeque<(I32Position, Vec<Arc<Chunk>>)>,
-    pub mesh_cache: Vec<Option<Arc<(Vec<Vertex>, Vec<u16>)>>>,
+    pub mesh_cache: Vec<Option<(Vec<Vertex>, Vec<u16>)>>,
 
     pub cache_distance: usize,
-    pub coords: Vec<(i32, i32, i32)>,
+    pub coords: Vec<I32Position>,
     pub x: i32,
     pub y: i32,
     pub z: i32,
@@ -88,7 +88,7 @@ impl Cache {
         self.chunk_cache[z * size * size + y * size + x] = chunk;
     }
 
-    pub fn get_mesh(&self, x: i32, y: i32, z: i32) -> Option<Arc<(Vec<Vertex>, Vec<u16>)>> {
+    pub fn take_mesh(&mut self, x: i32, y: i32, z: i32) -> Option<(Vec<Vertex>, Vec<u16>)> {
         let size = self.cache_distance * 2 + 2;
 
         let min_x = self.x - self.cache_distance as i32 - if self.eye_x_upper { 0 } else { 1 };
@@ -112,10 +112,10 @@ impl Cache {
         }
         let z = z.rem_euclid(size as i32) as usize;
 
-        self.mesh_cache[z * size * size + y * size + x].clone()
+        self.mesh_cache[z * size * size + y * size + x].take()
     }
 
-    pub fn set_mesh(&mut self, x: i32, y: i32, z: i32, mesh: Option<Arc<(Vec<Vertex>, Vec<u16>)>>) {
+    pub fn set_mesh(&mut self, x: i32, y: i32, z: i32, mesh: Option<(Vec<Vertex>, Vec<u16>)>) {
         let size = self.cache_distance * 2 + 2;
 
         let min_x = self.x - self.cache_distance as i32 - if self.eye_x_upper { 0 } else { 1 };
@@ -150,7 +150,7 @@ impl Cache {
         self.mesh_load_request.clear();
     }
 
-    fn get_available(&self) -> Vec<((i32, i32, i32), Arc<(Vec<Vertex>, Vec<u16>)>)> {
+    fn get_available(&self) -> Vec<(I32Position, Arc<(Vec<Vertex>, Vec<u16>)>)> {
         self.coords
             .iter()
             .map(|&(x, y, z)| (x + self.x, y + self.y, z + self.z))
@@ -183,7 +183,6 @@ impl<T: TerrainWorker> ChunkCache<T> {
             terrain_worker: T::new(
                 Arc::new(Mutex::new(|| None)),
                 Arc::new(Mutex::new(|_pos, _chunk| ())),
-                Arc::new(Mutex::new(|| None)),
                 Arc::new(Mutex::new(|_pos, _mesh| ())),
             ),
         };
@@ -198,6 +197,18 @@ impl<T: TerrainWorker> ChunkCache<T> {
                 let cache = self.cache.clone();
                 move || {
                     let mut cache = cache.lock().unwrap();
+                    if let Some((position, vec)) = cache.mesh_load_request.pop_front() {
+                        return Some(TerrainWorkerJob::Mesh {
+                            position,
+                            zero: vec[0],
+                            positive_x: vec[1],
+                            negative_x: vec[2],
+                            positive_y: vec[3],
+                            negative_y: vec[4],
+                            positive_z: vec[5],
+                            negative_z: vec[6],
+                        });
+                    }
                     let result = cache
                         .coords
                         .iter()
@@ -206,10 +217,11 @@ impl<T: TerrainWorker> ChunkCache<T> {
                             cache.get_chunk(x, y, z).is_none()
                                 && !cache.chunk_loading.contains(&(x, y, z))
                         });
-                    if let Some((x, y, z)) = result {
-                        cache.chunk_loading.insert((x, y, z));
+                    if let Some(pos) = result {
+                        cache.chunk_loading.insert(pos);
+                        return Some(TerrainWorkerJob::Map(pos));
                     }
-                    result
+                    None
                 }
             })),
             Arc::new(Mutex::new({
@@ -253,13 +265,6 @@ impl<T: TerrainWorker> ChunkCache<T> {
             })),
             Arc::new(Mutex::new({
                 let cache = self.cache.clone();
-                move || {
-                    let mut cache = cache.lock().unwrap();
-                    cache.mesh_load_request.pop_front()
-                }
-            })),
-            Arc::new(Mutex::new({
-                let cache = self.cache.clone();
                 move |(x, y, z), mesh| {
                     let mut cache = cache.lock().unwrap();
                     cache.set_mesh(x, y, z, Some(mesh));
@@ -282,7 +287,7 @@ impl<T: TerrainWorker> ChunkCache<T> {
         cache.reset();
     }
 
-    pub fn get_available(&self) -> Vec<((i32, i32, i32), Arc<(Vec<Vertex>, Vec<u16>)>)> {
+    pub fn get_available(&self) -> Vec<(I32Position, Arc<(Vec<Vertex>, Vec<u16>)>)> {
         self.cache.lock().unwrap().get_available()
     }
 
@@ -413,10 +418,10 @@ impl<T: TerrainWorker> ChunkCache<T> {
         }
     }
 
-    fn calculate_coords(distance: f32) -> Vec<(i32, i32, i32)> {
+    fn calculate_coords(distance: f32) -> Vec<I32Position> {
         let mut result = get_coords(distance);
 
-        fn dst((x, y, z): (i32, i32, i32)) -> i32 {
+        fn dst((x, y, z): I32Position) -> i32 {
             x * x + y * y + z * z
         }
         result.sort_unstable_by(|&a, &b| dst(a).cmp(&dst(b)));
