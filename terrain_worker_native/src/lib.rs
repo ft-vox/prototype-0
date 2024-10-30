@@ -4,8 +4,8 @@ use std::{
     time::Duration,
 };
 
-use ft_vox_prototype_0_core::vertex::*;
 use ft_vox_prototype_0_core::TerrainWorker;
+use ft_vox_prototype_0_core::{vertex::*, TerrainWorkerJob};
 use ft_vox_prototype_0_map_core::Map;
 use ft_vox_prototype_0_map_types::Chunk;
 
@@ -16,13 +16,10 @@ pub struct NativeTerrainWorker {
 
 impl TerrainWorker for NativeTerrainWorker {
     fn new(
-        before_chunk_callback: Arc<Mutex<dyn Send + Sync + FnMut() -> Option<(i32, i32, i32)>>>,
-        after_chunk_callback: Arc<Mutex<dyn Send + Sync + FnMut((i32, i32, i32), Arc<Chunk>)>>,
-        before_mesh_callback: Arc<
-            Mutex<dyn Send + Sync + FnMut() -> Option<((i32, i32, i32), Vec<Arc<Chunk>>)>>,
-        >,
-        after_mesh_callback: Arc<
-            Mutex<dyn Send + Sync + FnMut((i32, i32, i32), Arc<(Vec<Vertex>, Vec<u16>)>)>,
+        job_callback: Arc<Mutex<dyn Send + Sync + FnMut() -> Option<TerrainWorkerJob>>>,
+        chunk_callback: Arc<Mutex<dyn Send + Sync + FnMut((i32, i32, i32), Arc<Chunk>)>>,
+        mesh_callback: Arc<
+            Mutex<dyn Send + Sync + FnMut((i32, i32, i32), (Vec<Vertex>, Vec<u16>))>,
         >,
     ) -> Self {
         let cpu_count = num_cpus::get_physical();
@@ -32,39 +29,45 @@ impl TerrainWorker for NativeTerrainWorker {
 
         for _ in 0..worker_count {
             handles.push(thread::spawn({
-                let before_chunk_callback = before_chunk_callback.clone();
-                let after_chunk_callback = after_chunk_callback.clone();
-
-                let before_mesh_callback = before_mesh_callback.clone();
-                let after_mesh_callback = after_mesh_callback.clone();
+                let job_callback = job_callback.clone();
+                let chunk_callback = chunk_callback.clone();
+                let mesh_callback = mesh_callback.clone();
                 let running = running.clone();
                 move || {
                     let map = Map::new(42);
                     while *running.lock().unwrap() {
-                        let option = before_mesh_callback.lock().unwrap()();
-                        if let Some(chunks) = option {
-                            let (x, y, z) = chunks.0;
-                            let chunks7 = chunks.1;
-                            let mesh = create_vertices_for_chunk(
-                                &chunks7[0],
-                                x,
-                                y,
-                                z,
-                                &chunks7[1],
-                                &chunks7[2],
-                                &chunks7[3],
-                                &chunks7[4],
-                                &chunks7[5],
-                                &chunks7[6],
-                            );
-                            after_mesh_callback.lock().unwrap()((x, y, z), Arc::new(mesh));
-                        }
-
-                        let option = before_chunk_callback.lock().unwrap()();
-
-                        if let Some((x, y, z)) = option {
-                            let chunk = map.get_chunk(x, y, z);
-                            after_chunk_callback.lock().unwrap()((x, y, z), Arc::new(chunk));
+                        let option = job_callback.lock().unwrap()();
+                        if let Some(job) = option {
+                            match job {
+                                TerrainWorkerJob::Map((x, y, z)) => {
+                                    let chunk = map.get_chunk(x, y, z);
+                                    chunk_callback.lock().unwrap()((x, y, z), Arc::new(chunk));
+                                }
+                                TerrainWorkerJob::Mesh {
+                                    position: (x, y, z),
+                                    zero,
+                                    positive_x,
+                                    negative_x,
+                                    positive_y,
+                                    negative_y,
+                                    positive_z,
+                                    negative_z,
+                                } => {
+                                    let mesh = create_vertices_for_chunk(
+                                        &zero,
+                                        x,
+                                        y,
+                                        z,
+                                        &positive_x,
+                                        &negative_x,
+                                        &positive_y,
+                                        &negative_y,
+                                        &positive_z,
+                                        &negative_z,
+                                    );
+                                    mesh_callback.lock().unwrap()((x, y, z), mesh);
+                                }
+                            }
                         } else {
                             thread::sleep(Duration::from_millis(10));
                         }
