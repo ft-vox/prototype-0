@@ -16,14 +16,14 @@ mod vox_graphics_wrapper;
 use vertex::{create_vertices_for_chunk, Vertex};
 use vox_graphics_wrapper::*;
 
-pub const CACHE_DISTANCE: usize = 22;
+pub const CACHE_DISTANCE: usize = 19;
 pub const RENDER_DISTANCE: f32 = CACHE_DISTANCE as f32;
 
 pub const FOG_COLOR: [f32; 4] = [57.0 / 255.0, 107.0 / 255.0, 251.0 / 255.0, 1.0];
 pub const FOG_END: f32 = (RENDER_DISTANCE - 2.0) * CHUNK_SIZE as f32;
 pub const FOG_START: f32 = FOG_END * 0.8;
 
-pub const FOV: f32 = 80.0;
+pub const FOV: f32 = 120.0;
 
 pub trait TerrainWorker {
     fn new(
@@ -76,15 +76,17 @@ pub struct Vox<T: TerrainWorker> {
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum MoveSpeed {
-    WALK,
-    FLY,
+    Walk,
+    SubjectFly,
+    CreativeFly,
 }
 
 impl MoveSpeed {
     pub const fn speed_per_sec(&self) -> f32 {
         match self {
-            Self::WALK => 4.317,
-            Self::FLY => 10.89,
+            Self::Walk => 4.317,
+            Self::SubjectFly => 20.00,
+            Self::CreativeFly => 10.89,
         }
     }
 }
@@ -222,12 +224,12 @@ impl<T: TerrainWorker> Vox<T> {
         );
 
         let part3 = start.elapsed().as_nanos();
-        println!(
+        /* println!(
             "1: {}    2: {}    3: {}",
             part1 as f32 / 1000000.0,
             part2 as f32 / 1000000.0,
             part3 as f32 / 1000000.0
-        );
+        ); */
     }
 
     fn get_buffers(

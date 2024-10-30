@@ -38,7 +38,7 @@ impl<T: TerrainWorker> Context<T> {
             vox: Vox::init(config, adapter, device, queue),
             window_inner_position: PhysicalPosition::new(0, 0),
             window_inner_size: PhysicalSize::new(0, 0),
-            direction_and_speed: ([0.0, 0.0, 0.0], MoveSpeed::WALK),
+            direction_and_speed: ([0.0, 0.0, 0.0], MoveSpeed::Walk),
             horizontal_rotation: 0.0,
             vertical_rotation: 0.0,
         }
@@ -59,9 +59,9 @@ impl<T: TerrainWorker> Context<T> {
         }
 
         let speed = if input.get_key_pressed("ctrl") {
-            MoveSpeed::FLY
+            MoveSpeed::SubjectFly
         } else {
-            MoveSpeed::WALK
+            MoveSpeed::Walk
         };
 
         let direction = {

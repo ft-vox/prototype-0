@@ -41,25 +41,32 @@ impl TerrainWorker for NativeTerrainWorker {
                 move || {
                     let map = Map::new(42);
                     while *running.lock().unwrap() {
-                        {
-                            let option = before_chunk_callback.lock().unwrap()();
-
-                            if let Some((x, y, z)) = option {
-                                let chunk = map.get_chunk(x, y, z);
-                                after_chunk_callback.lock().unwrap()((x, y, z), Arc::new(chunk));
-                            }
+                        let option = before_mesh_callback.lock().unwrap()();
+                        if let Some(chunks) = option {
+                            let (x, y, z) = chunks.0;
+                            let chunks7 = chunks.1;
+                            let mesh = create_vertices_for_chunk(
+                                &chunks7[0],
+                                x,
+                                y,
+                                z,
+                                &chunks7[1],
+                                &chunks7[2],
+                                &chunks7[3],
+                                &chunks7[4],
+                                &chunks7[5],
+                                &chunks7[6],
+                            );
+                            after_mesh_callback.lock().unwrap()((x, y, z), Arc::new(mesh));
                         }
-                        {
-                            let option = before_mesh_callback.lock().unwrap()();
-                            if let Some(chunks) = option {
-                                let (x, y, z) = chunks.0;
-                                let chunks = chunks.1;
-                                let graphics = create_vertices_for_chunk(
-                                    &chunks[0], x, y, z, &chunks[1], &chunks[2], &chunks[3],
-                                    &chunks[4], &chunks[5], &chunks[6],
-                                );
-                                after_mesh_callback.lock().unwrap()((x, y, z), Arc::new(graphics));
-                            }
+
+                        let option = before_chunk_callback.lock().unwrap()();
+
+                        if let Some((x, y, z)) = option {
+                            let chunk = map.get_chunk(x, y, z);
+                            after_chunk_callback.lock().unwrap()((x, y, z), Arc::new(chunk));
+                        } else {
+                            thread::sleep(Duration::from_millis(10));
                         }
                     }
                 }
