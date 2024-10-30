@@ -8,9 +8,10 @@ use ft_vox_prototype_0_map_types::{Chunk, CHUNK_SIZE};
 use crate::{get_coords, TerrainWorker};
 use crate::{vertex::Vertex, TerrainWorkerJob};
 
-pub struct TerrainManager<W: TerrainWorker, D: Clone + Send + 'static> {
+pub struct TerrainManager<W: TerrainWorker, D: Clone + 'static> {
     map_cache: Arc<Mutex<MapCache>>,
-    mesh_cache: Arc<Mutex<MeshCache<D>>>,
+    mesh_cache: Arc<Mutex<MeshCache>>,
+    buffer_cache: BufferCache<D>,
     eye: (f32, f32, f32),
     terrain_worker: W,
 }
@@ -116,36 +117,22 @@ impl MapCache {
     }
 }
 
-#[derive(Clone)]
-enum MeshCacheItem<T: Clone + Send + 'static> {
-    Raw {
-        vertices: Vec<Vertex>,
-        indices: Vec<u16>,
-    },
-    Processed(T),
+struct MeshCache {
+    pub mesh_load_request: VecDeque<((i32, i32, i32), Vec<Arc<Chunk>>)>,
+    pub meshes: VecDeque<Arc<((i32, i32, i32), (Vec<Vertex>, Vec<u16>))>>,
 }
 
-impl<T: Clone + Send + 'static> MeshCacheItem<T> {
-    fn is_raw(&self) -> bool {
-        matches!(self, MeshCacheItem::Raw { .. })
-    }
-
-    fn is_processed(&self) -> bool {
-        matches!(self, MeshCacheItem::Processed(..))
-    }
-
-    fn as_raw(self) -> Option<(Vec<Vertex>, Vec<u16>)> {
-        if let MeshCacheItem::Raw { vertices, indices } = self {
-            Some((vertices, indices))
-        } else {
-            None
+impl MeshCache {
+    pub fn new() -> Self {
+        MeshCache {
+            mesh_load_request: VecDeque::new(),
+            meshes: VecDeque::new(),
         }
     }
 }
 
-struct MeshCache<T: Clone + Send + 'static> {
-    pub mesh_load_request: VecDeque<((i32, i32, i32), Vec<Arc<Chunk>>)>,
-    pub meshes: Vec<Option<MeshCacheItem<T>>>,
+struct BufferCache<T: Clone + 'static> {
+    pub buffers: Vec<Option<T>>,
 
     pub cache_distance: usize,
     pub coords: Vec<(i32, i32, i32)>,
@@ -157,14 +144,13 @@ struct MeshCache<T: Clone + Send + 'static> {
     pub eye_z_upper: bool,
 }
 
-impl<T: Clone + Send + 'static> MeshCache<T> {
+impl<T: Clone + 'static> BufferCache<T> {
     pub fn new(cache_distance: usize, eye: (f32, f32, f32)) -> Self {
         let size = cache_distance * 2 + 2;
         let (x, y, z) = eye;
 
-        MeshCache {
-            mesh_load_request: VecDeque::new(),
-            meshes: vec![None; size * size * size],
+        BufferCache {
+            buffers: vec![None; size * size * size],
             cache_distance,
             coords: calculate_coords(cache_distance as f32),
             x: (x / CHUNK_SIZE as f32).floor() as i32,
@@ -176,13 +162,7 @@ impl<T: Clone + Send + 'static> MeshCache<T> {
         }
     }
 
-    pub fn get_processed(
-        &mut self,
-        x: i32,
-        y: i32,
-        z: i32,
-        process: &mut dyn FnMut(Vec<Vertex>, Vec<u16>) -> T,
-    ) -> Option<T> {
+    pub fn get(&self, x: i32, y: i32, z: i32) -> Option<T> {
         let size = self.cache_distance * 2 + 2;
 
         let min_x = self.x - self.cache_distance as i32 - if self.eye_x_upper { 0 } else { 1 };
@@ -206,26 +186,10 @@ impl<T: Clone + Send + 'static> MeshCache<T> {
         }
         let z = z.rem_euclid(size as i32) as usize;
 
-        if let Some(item) = &self.meshes[z * size * size + y * size + x] {
-            if let MeshCacheItem::Processed(result) = item {
-                Some(result.clone())
-            } else {
-                let (vertices, indices) = self.meshes[z * size * size + y * size + x]
-                    .take()
-                    .unwrap()
-                    .as_raw()
-                    .unwrap();
-                let result = process(vertices, indices);
-                self.meshes[z * size * size + y * size + x] =
-                    Some(MeshCacheItem::Processed(result.clone()));
-                Some(result)
-            }
-        } else {
-            None
-        }
+        self.buffers[z * size * size + y * size + x].clone()
     }
 
-    pub fn set(&mut self, x: i32, y: i32, z: i32, mesh: Option<(Vec<Vertex>, Vec<u16>)>) {
+    pub fn set(&mut self, x: i32, y: i32, z: i32, buffer: Option<T>) {
         let size = self.cache_distance * 2 + 2;
 
         let min_x = self.x - self.cache_distance as i32 - if self.eye_x_upper { 0 } else { 1 };
@@ -249,40 +213,37 @@ impl<T: Clone + Send + 'static> MeshCache<T> {
         }
         let z = z.rem_euclid(size as i32) as usize;
 
-        self.meshes[z * size * size + y * size + x] =
-            mesh.map(|(vertices, indices)| MeshCacheItem::Raw { vertices, indices });
+        self.buffers[z * size * size + y * size + x] = buffer;
     }
 
     fn reset(&mut self) {
         let size = self.cache_distance * 2 + 2;
-        self.meshes = vec![None; size * size * size];
-        self.mesh_load_request.clear();
+        self.buffers = vec![None; size * size * size];
     }
 
     fn get_available(
         &mut self,
-        process: &mut dyn FnMut(Vec<Vertex>, Vec<u16>) -> T,
+        mesh_cache: Arc<Mutex<MeshCache>>,
+        process: &mut dyn FnMut(&Vec<Vertex>, &Vec<u16>) -> T,
     ) -> Vec<((i32, i32, i32), T)> {
-        let coords = self
-            .coords
+        while let Some(item) = mesh_cache.lock().unwrap().meshes.pop_front() {
+            let ((x, y, z), (vertices, indices)) = &*item;
+            self.set(*x, *y, *z, Some(process(vertices, indices)));
+        }
+        self.coords
             .iter()
             .map(|&(x, y, z)| (x + self.x, y + self.y, z + self.z))
-            .collect::<Vec<_>>();
-        coords
-            .into_iter()
-            .filter_map(|(x, y, z)| {
-                self.get_processed(x, y, z, process)
-                    .map(|mesh| ((x, y, z), mesh))
-            })
+            .filter_map(|(x, y, z)| self.get(x, y, z).map(|mesh| ((x, y, z), mesh)))
             .collect()
     }
 }
 
-impl<W: TerrainWorker, D: Clone + Send + 'static> TerrainManager<W, D> {
+impl<W: TerrainWorker, D: Clone + 'static> TerrainManager<W, D> {
     pub fn new(cache_distance: usize, eye: (f32, f32, f32)) -> Self {
         let mut result = Self {
             map_cache: Arc::new(Mutex::new(MapCache::new(cache_distance, eye))),
-            mesh_cache: Arc::new(Mutex::new(MeshCache::new(cache_distance, eye))),
+            mesh_cache: Arc::new(Mutex::new(MeshCache::new())),
+            buffer_cache: BufferCache::new(cache_distance, eye),
             eye,
             terrain_worker: W::new(
                 Arc::new(Mutex::new(|| None)),
@@ -375,7 +336,7 @@ impl<W: TerrainWorker, D: Clone + Send + 'static> TerrainManager<W, D> {
                 let mesh_cache = self.mesh_cache.clone();
                 move |(x, y, z), mesh| {
                     let mut mesh_cache = mesh_cache.lock().unwrap();
-                    mesh_cache.set(x, y, z, Some(mesh));
+                    mesh_cache.meshes.push_back(Arc::new(((x, y, z), mesh)));
                 }
             })),
         );
@@ -392,11 +353,11 @@ impl<W: TerrainWorker, D: Clone + Send + 'static> TerrainManager<W, D> {
         }
 
         {
-            let mut mesh_cache = self.mesh_cache.lock().unwrap();
-            if mesh_cache.cache_distance != new_cache_distance {
-                mesh_cache.cache_distance = new_cache_distance;
-                mesh_cache.coords = calculate_coords(mesh_cache.cache_distance as f32);
-                mesh_cache.reset();
+            if self.buffer_cache.cache_distance != new_cache_distance {
+                self.buffer_cache.cache_distance = new_cache_distance;
+                self.buffer_cache.coords =
+                    calculate_coords(self.buffer_cache.cache_distance as f32);
+                self.buffer_cache.reset();
             }
         }
 
@@ -452,12 +413,12 @@ impl<W: TerrainWorker, D: Clone + Send + 'static> TerrainManager<W, D> {
         map_cache.y = new_eye_chunk_y;
         map_cache.z = new_eye_chunk_z;
 
-        mesh_cache.eye_x_upper = new_eye_x_upper;
-        mesh_cache.eye_y_upper = new_eye_y_upper;
-        mesh_cache.eye_z_upper = new_eye_z_upper;
-        mesh_cache.x = new_eye_chunk_x;
-        mesh_cache.y = new_eye_chunk_y;
-        mesh_cache.z = new_eye_chunk_z;
+        self.buffer_cache.eye_x_upper = new_eye_x_upper;
+        self.buffer_cache.eye_y_upper = new_eye_y_upper;
+        self.buffer_cache.eye_z_upper = new_eye_z_upper;
+        self.buffer_cache.x = new_eye_chunk_x;
+        self.buffer_cache.y = new_eye_chunk_y;
+        self.buffer_cache.z = new_eye_chunk_z;
 
         match new_min_x - old_min_x {
             0 => {}
@@ -467,7 +428,7 @@ impl<W: TerrainWorker, D: Clone + Send + 'static> TerrainManager<W, D> {
                         let x = new_max_x.rem_euclid(size as i32) as usize;
                         map_cache.chunks[z * size * size + y * size + x] = None;
 
-                        mesh_cache.meshes[z * size * size + y * size + x] = None;
+                        self.buffer_cache.buffers[z * size * size + y * size + x] = None;
                     }
                 }
             }
@@ -477,12 +438,13 @@ impl<W: TerrainWorker, D: Clone + Send + 'static> TerrainManager<W, D> {
                         let x = new_min_x.rem_euclid(size as i32) as usize;
                         map_cache.chunks[z * size * size + y * size + x] = None;
 
-                        mesh_cache.meshes[z * size * size + y * size + x] = None;
+                        self.buffer_cache.buffers[z * size * size + y * size + x] = None;
                     }
                 }
             }
             _ => {
                 map_cache.reset();
+                self.buffer_cache.reset();
                 return;
             }
         }
@@ -495,7 +457,7 @@ impl<W: TerrainWorker, D: Clone + Send + 'static> TerrainManager<W, D> {
                         let y = new_max_y.rem_euclid(size as i32) as usize;
                         map_cache.chunks[z * size * size + y * size + x] = None;
 
-                        mesh_cache.meshes[z * size * size + y * size + x] = None;
+                        self.buffer_cache.buffers[z * size * size + y * size + x] = None;
                     }
                 }
             }
@@ -505,13 +467,13 @@ impl<W: TerrainWorker, D: Clone + Send + 'static> TerrainManager<W, D> {
                         let y = new_min_y.rem_euclid(size as i32) as usize;
                         map_cache.chunks[z * size * size + y * size + x] = None;
 
-                        mesh_cache.meshes[z * size * size + y * size + x] = None;
+                        self.buffer_cache.buffers[z * size * size + y * size + x] = None;
                     }
                 }
             }
             _ => {
                 map_cache.reset();
-                mesh_cache.reset();
+                self.buffer_cache.reset();
                 return;
             }
         }
@@ -524,7 +486,7 @@ impl<W: TerrainWorker, D: Clone + Send + 'static> TerrainManager<W, D> {
                         let z = new_max_z.rem_euclid(size as i32) as usize;
                         map_cache.chunks[z * size * size + y * size + x] = None;
 
-                        mesh_cache.meshes[z * size * size + y * size + x] = None;
+                        self.buffer_cache.buffers[z * size * size + y * size + x] = None;
                     }
                 }
             }
@@ -534,13 +496,13 @@ impl<W: TerrainWorker, D: Clone + Send + 'static> TerrainManager<W, D> {
                         let z = new_min_z.rem_euclid(size as i32) as usize;
                         map_cache.chunks[z * size * size + y * size + x] = None;
 
-                        mesh_cache.meshes[z * size * size + y * size + x] = None;
+                        self.buffer_cache.buffers[z * size * size + y * size + x] = None;
                     }
                 }
             }
             _ => {
                 map_cache.reset();
-                mesh_cache.reset();
+                self.buffer_cache.reset();
                 // return;
             }
         }
@@ -548,9 +510,10 @@ impl<W: TerrainWorker, D: Clone + Send + 'static> TerrainManager<W, D> {
 
     pub fn get_available(
         &mut self,
-        process: &mut dyn FnMut(Vec<Vertex>, Vec<u16>) -> D,
+        process: &mut dyn FnMut(&Vec<Vertex>, &Vec<u16>) -> D,
     ) -> Vec<((i32, i32, i32), D)> {
-        self.mesh_cache.lock().unwrap().get_available(process)
+        self.buffer_cache
+            .get_available(self.mesh_cache.clone(), process)
     }
 }
 
