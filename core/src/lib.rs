@@ -13,7 +13,7 @@ pub mod chunk_cache;
 pub mod vertex;
 mod vox_graphics_wrapper;
 
-use vertex::{create_vertices_for_chunk, Vertex};
+use vertex::Vertex;
 use vox_graphics_wrapper::*;
 
 pub const CACHE_DISTANCE: usize = 19;
@@ -77,7 +77,7 @@ pub struct Vox<T: TerrainWorker> {
     chunks: HashMap<[i32; 3], Arc<Chunk>>,
     wgpu_buffers: HashMap<[i32; 3], Rc<(wgpu::Buffer, wgpu::Buffer, u32)>>,
     buffers: LRUCache<[i32; 3], Rc<(wgpu::Buffer, wgpu::Buffer, u32)>>,
-    chunk_cache: TerrainManager<T>,
+    chunk_cache: TerrainManager<T, Arc<(wgpu::Buffer, wgpu::Buffer, u32)>>,
 }
 
 /// [ Speed in Minecraft ]
@@ -199,30 +199,23 @@ impl<T: TerrainWorker> Vox<T> {
         self.chunk_cache.set_cache_distance(CACHE_DISTANCE);
         self.chunk_cache
             .set_eye((self.eye.x, self.eye.y, self.eye.z));
-        let res = self.chunk_cache.get_available();
+        let res = self.chunk_cache.get_available(&mut |vertices, indices| {
+            Arc::new((
+                device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("Vertex Buffer"),
+                    contents: bytemuck::cast_slice(&vertices),
+                    usage: wgpu::BufferUsages::VERTEX,
+                }),
+                device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("Index Buffer"),
+                    contents: bytemuck::cast_slice(&indices),
+                    usage: wgpu::BufferUsages::INDEX,
+                }),
+                indices.len() as u32,
+            ))
+        });
 
         let part1 = start.elapsed().as_nanos();
-
-        let mut graphics_buffer: Vec<(i32, i32, i32, Rc<(wgpu::Buffer, wgpu::Buffer, u32)>)> =
-            Vec::new();
-        for ((x, y, z), graphics) in res {
-            self.wgpu_buffers.entry([x, y, z]).or_insert_with(|| {
-                let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("Vertex Buffer"),
-                    contents: bytemuck::cast_slice(&graphics.0),
-                    usage: wgpu::BufferUsages::VERTEX,
-                });
-                let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("Index Buffer"),
-                    contents: bytemuck::cast_slice(&graphics.1),
-                    usage: wgpu::BufferUsages::INDEX,
-                });
-                Rc::new((vertex_buf, index_buf, graphics.1.len() as u32))
-            });
-            graphics_buffer.push((x, y, z, self.wgpu_buffers.get(&[x, y, z]).unwrap().clone()));
-        }
-
-        let part2 = start.elapsed().as_nanos();
 
         self.vox_graphics_wrapper.render(
             view,
@@ -231,7 +224,7 @@ impl<T: TerrainWorker> Vox<T> {
             self.eye,
             self.horizontal_rotation,
             self.vertical_rotation,
-            graphics_buffer,
+            res,
         );
 
         let part3 = start.elapsed().as_nanos();
@@ -241,76 +234,5 @@ impl<T: TerrainWorker> Vox<T> {
             part2 as f32 / 1000000.0,
             part3 as f32 / 1000000.0
         ); */
-    }
-
-    fn get_buffers(
-        &mut self,
-        device: &wgpu::Device,
-        x: i32,
-        y: i32,
-        z: i32,
-    ) -> Option<Rc<(wgpu::Buffer, wgpu::Buffer, u32)>> {
-        if let Some(result) = self.buffers.get(&[x, y, z]) {
-            Some(result)
-        } else if let Some(new_value) = self.create_buffers(device, x, y, z) {
-            let result = Rc::new(new_value);
-            self.buffers.put([x, y, z], result.clone());
-            Some(result)
-        } else {
-            None
-        }
-    }
-
-    fn create_buffers(
-        &mut self,
-        device: &wgpu::Device,
-        x: i32,
-        y: i32,
-        z: i32,
-    ) -> Option<(wgpu::Buffer, wgpu::Buffer, u32)> {
-        let chunk = self.chunks.get(&[x, y, z]);
-        let chunk_px = self.chunks.get(&[x + 1, y, z]);
-        let chunk_nx = self.chunks.get(&[x - 1, y, z]);
-        let chunk_py = self.chunks.get(&[x, y + 1, z]);
-        let chunk_ny = self.chunks.get(&[x, y - 1, z]);
-        let chunk_pz = self.chunks.get(&[x, y, z + 1]);
-        let chunk_nz = self.chunks.get(&[x, y, z - 1]);
-
-        if chunk.is_none()
-            || chunk_px.is_none()
-            || chunk_nx.is_none()
-            || chunk_py.is_none()
-            || chunk_ny.is_none()
-            || chunk_pz.is_none()
-            || chunk_nz.is_none()
-        {
-            None
-        } else {
-            let chunk = chunk.unwrap();
-            let chunk_px = chunk_px.unwrap();
-            let chunk_nx = chunk_nx.unwrap();
-            let chunk_py = chunk_py.unwrap();
-            let chunk_ny = chunk_ny.unwrap();
-            let chunk_pz = chunk_pz.unwrap();
-            let chunk_nz = chunk_nz.unwrap();
-
-            let (vertex_data, index_data) = create_vertices_for_chunk(
-                chunk, x, y, z, chunk_px, chunk_nx, chunk_py, chunk_ny, chunk_pz, chunk_nz,
-            );
-
-            let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Vertex Buffer"),
-                contents: bytemuck::cast_slice(&vertex_data),
-                usage: wgpu::BufferUsages::VERTEX,
-            });
-
-            let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Index Buffer"),
-                contents: bytemuck::cast_slice(&index_data),
-                usage: wgpu::BufferUsages::INDEX,
-            });
-
-            Some((vertex_buf, index_buf, index_data.len() as u32))
-        }
     }
 }

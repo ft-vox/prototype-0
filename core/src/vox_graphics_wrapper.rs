@@ -3,7 +3,8 @@ use bytemuck::{Pod, Zeroable};
 use glam::{Mat4, Vec3};
 use image::{GenericImageView, Pixel};
 
-use std::{borrow::Cow, rc::Rc};
+use std::borrow::Cow;
+use std::sync::Arc;
 
 use crate::vertex::Vertex;
 use crate::{FOG_COLOR, FOG_END, FOG_START, FOV};
@@ -419,7 +420,7 @@ impl VoxGraphicsWrapper {
         eye: Vec3,
         horizontal_rotation: f32,
         vertical_rotation: f32,
-        buffer_data: Vec<(i32, i32, i32, Rc<(wgpu::Buffer, wgpu::Buffer, u32)>)>,
+        buffer_data: Vec<((i32, i32, i32), Arc<(wgpu::Buffer, wgpu::Buffer, u32)>)>,
     ) {
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
@@ -489,7 +490,7 @@ impl VoxGraphicsWrapper {
             rpass.set_pipeline(&self.world_pipeline);
             rpass.set_bind_group(0, &self.world_bind_group, &[]);
 
-            for (x, y, z, buffers) in buffer_data {
+            for ((x, y, z), buffers) in buffer_data {
                 let (vertex_buffer, index_buffer, index_count) = &*buffers;
                 if *index_count == 0 {
                     continue;
