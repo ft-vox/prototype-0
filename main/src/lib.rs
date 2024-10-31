@@ -1,5 +1,6 @@
 use std::{cell::RefCell, num::NonZeroU8, rc::Rc, sync::Arc};
 use winit::{
+    dpi::{PhysicalPosition, PhysicalSize},
     event::{Event, KeyEvent, WindowEvent},
     event_loop::{EventLoop, EventLoopWindowTarget},
     keyboard::Key,
@@ -39,8 +40,9 @@ impl EventLoopWrapper {
         let mut builder = winit::window::WindowBuilder::new();
         builder = builder
             .with_title("ft_vox")
-            .with_inner_size(winit::dpi::PhysicalSize::new(1280, 720));
-        //.with_min_inner_size(winit::dpi::LogicalSize::new(320.0, 180.0));
+            .with_position(PhysicalPosition::new(100, 100))
+            .with_inner_size(PhysicalSize::new(1280, 720))
+            .with_min_inner_size(winit::dpi::LogicalSize::new(160.0, 90.0));
         let window = Arc::new(builder.build(&event_loop).unwrap());
 
         let mut outer_canvas = None;
