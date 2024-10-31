@@ -1,10 +1,10 @@
-use chunk_cache::TerrainManager;
 use ft_vox_prototype_0_map_types::{Chunk, CHUNK_SIZE};
 use glam::{Mat3, Vec3};
 use std::sync::{Arc, Mutex};
+use terrain_manager::TerrainManager;
 use wgpu::util::DeviceExt;
 
-pub mod chunk_cache;
+pub mod terrain_manager;
 pub mod vertex;
 mod vox_graphics_wrapper;
 

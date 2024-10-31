@@ -427,7 +427,6 @@ impl<W: TerrainWorker, D: Clone + 'static> TerrainManager<W, D> {
                     for y in 0..size {
                         let x = new_max_x.rem_euclid(size as i32) as usize;
                         map_cache.chunks[z * size * size + y * size + x] = None;
-
                         self.buffer_cache.buffers[z * size * size + y * size + x] = None;
                     }
                 }
@@ -437,7 +436,6 @@ impl<W: TerrainWorker, D: Clone + 'static> TerrainManager<W, D> {
                     for y in 0..size {
                         let x = new_min_x.rem_euclid(size as i32) as usize;
                         map_cache.chunks[z * size * size + y * size + x] = None;
-
                         self.buffer_cache.buffers[z * size * size + y * size + x] = None;
                     }
                 }
@@ -456,7 +454,6 @@ impl<W: TerrainWorker, D: Clone + 'static> TerrainManager<W, D> {
                     for x in 0..size {
                         let y = new_max_y.rem_euclid(size as i32) as usize;
                         map_cache.chunks[z * size * size + y * size + x] = None;
-
                         self.buffer_cache.buffers[z * size * size + y * size + x] = None;
                     }
                 }
@@ -466,7 +463,6 @@ impl<W: TerrainWorker, D: Clone + 'static> TerrainManager<W, D> {
                     for x in 0..size {
                         let y = new_min_y.rem_euclid(size as i32) as usize;
                         map_cache.chunks[z * size * size + y * size + x] = None;
-
                         self.buffer_cache.buffers[z * size * size + y * size + x] = None;
                     }
                 }
@@ -485,7 +481,6 @@ impl<W: TerrainWorker, D: Clone + 'static> TerrainManager<W, D> {
                     for y in 0..size {
                         let z = new_max_z.rem_euclid(size as i32) as usize;
                         map_cache.chunks[z * size * size + y * size + x] = None;
-
                         self.buffer_cache.buffers[z * size * size + y * size + x] = None;
                     }
                 }
@@ -495,7 +490,6 @@ impl<W: TerrainWorker, D: Clone + 'static> TerrainManager<W, D> {
                     for y in 0..size {
                         let z = new_min_z.rem_euclid(size as i32) as usize;
                         map_cache.chunks[z * size * size + y * size + x] = None;
-
                         self.buffer_cache.buffers[z * size * size + y * size + x] = None;
                     }
                 }
