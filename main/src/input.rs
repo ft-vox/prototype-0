@@ -30,6 +30,10 @@ impl EventDrivenInput {
         };
         self.key_pressed.insert(key_to_insert, is_pressed);
     }
+
+    pub fn set_cursor_position(&mut self, position: PhysicalPosition<f64>) {
+        self.local_cursor_position = position;
+    }
 }
 
 /// FrameDrivenInput will update input states every frame.

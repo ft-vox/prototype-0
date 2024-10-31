@@ -4,7 +4,7 @@ use winit::{
     event::{Event, KeyEvent, WindowEvent},
     event_loop::{EventLoop, EventLoopWindowTarget},
     keyboard::Key,
-    window::{Fullscreen, Window},
+    window::Window,
 };
 
 #[cfg(target_arch = "wasm32")]
@@ -130,7 +130,6 @@ pub async fn run<T: TerrainWorker + 'static>() {
     }
 
     let mut event_driven_input = EventDrivenInput::new();
-    let mut frame_driven_input = FrameDrivenInput::new();
 
     let event_loop_function = EventLoop::run;
 
@@ -158,21 +157,12 @@ pub async fn run<T: TerrainWorker + 'static>() {
                             &wgpu_context.adapter,
                             &wgpu_context.device,
                             &wgpu_context.queue,
+                            window_loop.window.clone(),
                         ));
-                    }
-
-                    if let Some(context) = context.borrow_mut().as_mut() {
-                        {
-                            if let Ok(window_position) = window_loop.window.inner_position() {
-                                context.update_window_info(
-                                    window_position,
-                                    window_loop.window.inner_size(),
-                                );
-                                context.set_mouse_center(target);
-                            }
+                        if let Some(context) = context.borrow_mut().as_mut() {
+                            context.update(&event_driven_input);
                         }
                     }
-                    println!("\n[ CONTROL KEYS ]\nmovement: WASD + Shift + Space\nspeeding: CTRL\npause: ESC\nscreen mode: Tab");
                 }
 
                 Event::Suspended => {
@@ -181,13 +171,8 @@ pub async fn run<T: TerrainWorker + 'static>() {
 
                 Event::WindowEvent { event, .. } => match event {
                     WindowEvent::Resized(size) => {
-                        surface.resize(&wgpu_context, size);
                         if let Some(context) = context.borrow_mut().as_mut() {
-                            context.vox.resize(
-                                surface.config(),
-                                &wgpu_context.device,
-                                &wgpu_context.queue,
-                            );
+                            context.resize(size, &mut surface, &wgpu_context);
                         }
                         window_loop.window.request_redraw();
                     }
@@ -219,7 +204,7 @@ pub async fn run<T: TerrainWorker + 'static>() {
                     WindowEvent::CursorMoved {
                         position: local_cursor_position,
                         ..
-                    } => event_driven_input.local_cursor_position = local_cursor_position,
+                    } => event_driven_input.set_cursor_position(local_cursor_position),
 
                     WindowEvent::RedrawRequested => {
                         // On MacOS, currently redraw requested comes in _before_ Init does.
@@ -242,50 +227,10 @@ pub async fn run<T: TerrainWorker + 'static>() {
                             delta_time / 1000.0
                         };
 
-                        frame_driven_input.update(&event_driven_input);
-
                         if let Some(context) = context.borrow_mut().as_mut() {
-                            {
-                                if let Ok(window_position) = window_loop.window.inner_position() {
-                                    context.update_window_info(
-                                        window_position,
-                                        window_loop.window.inner_size(),
-                                    );
-                                }
-                                context.update_eye_movement(&frame_driven_input);
-                                context.update_eye_rotation(&frame_driven_input, target);
-
-                                if context.vox.is_paused() {
-                                    window_loop.window.set_cursor_visible(true);
-                                    window_loop.window.set_title("ft_vox: paused");
-                                } else {
-                                    window_loop.window.set_cursor_visible(false);
-                                    window_loop.window.set_title("ft_vox");
-                                }
-
-                                if frame_driven_input.get_key_down("tab") {
-                                    if window_loop.window.fullscreen().is_some() {
-                                        window_loop.window.set_fullscreen(None);
-                                    } else {
-                                        window_loop
-                                            .window
-                                            .set_fullscreen(Some(Fullscreen::Borderless(None)));
-                                    }
-                                }
-                            }
-
-                            let frame = surface.acquire(&wgpu_context);
-                            let view = frame.texture.create_view(&wgpu::TextureViewDescriptor {
-                                format: Some(surface.config().view_formats[0]),
-                                ..wgpu::TextureViewDescriptor::default()
-                            });
-
-                            context.tick(delta_time, &frame_driven_input);
-                            context
-                                .vox
-                                .render(&view, &wgpu_context.device, &wgpu_context.queue);
-
-                            frame.present();
+                            context.update(&event_driven_input);
+                            context.tick(delta_time);
+                            context.render(&mut surface, &wgpu_context);
 
                             window_loop.window.request_redraw();
                         }
