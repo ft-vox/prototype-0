@@ -280,7 +280,7 @@ pub async fn run<T: TerrainWorker + 'static>() {
                                 ..wgpu::TextureViewDescriptor::default()
                             });
 
-                            context.tick(delta_time);
+                            context.tick(delta_time, &frame_driven_input);
                             context
                                 .vox
                                 .render(&view, &wgpu_context.device, &wgpu_context.queue);

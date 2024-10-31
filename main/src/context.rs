@@ -25,6 +25,9 @@ pub struct Context<T: TerrainWorker> {
     direction_and_speed: ([f32; 3], MoveSpeed), // TODO: separate
     pub horizontal_rotation: f32,
     pub vertical_rotation: f32,
+
+    fly_toggle: bool,
+    fly_toggle_timer: Option<f32>,
 }
 
 impl<T: TerrainWorker> Context<T> {
@@ -41,6 +44,8 @@ impl<T: TerrainWorker> Context<T> {
             direction_and_speed: ([0.0, 0.0, 0.0], MoveSpeed::Walk),
             horizontal_rotation: 0.0,
             vertical_rotation: 0.0,
+            fly_toggle: false,
+            fly_toggle_timer: None,
         }
     }
 
@@ -58,7 +63,7 @@ impl<T: TerrainWorker> Context<T> {
             return;
         }
 
-        let speed = if input.get_key_pressed("ctrl") {
+        let speed = if self.fly_toggle {
             MoveSpeed::FtVoxFly
         } else {
             MoveSpeed::Walk
@@ -141,7 +146,21 @@ impl<T: TerrainWorker> Context<T> {
         }
     }
 
-    pub fn tick(&mut self, delta_time: f32) {
+    pub fn tick(&mut self, delta_time: f32, input: &FrameDrivenInput) {
+        if let Some(ref mut fly_toggle_timer) = self.fly_toggle_timer {
+            if *fly_toggle_timer > 0.3 {
+                self.fly_toggle_timer = None;
+            } else if input.get_key_down("space") {
+                self.fly_toggle_timer = None;
+                self.fly_toggle = !self.fly_toggle;
+            } else {
+                *fly_toggle_timer += delta_time;
+            }
+        }
+        if input.get_key_down("space") {
+            self.fly_toggle_timer = Some(0.0);
+        }
+
         self.vox.tick(
             delta_time,
             self.direction_and_speed.0,
