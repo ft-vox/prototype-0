@@ -13,7 +13,7 @@ use terrain_manager::TerrainManager;
 use vertex::Vertex;
 use vox_graphics_wrapper::VoxGraphicsWrapper;
 
-pub const CACHE_DISTANCE: usize = 19;
+pub const CACHE_DISTANCE: usize = 12;
 pub const RENDER_DISTANCE: f32 = CACHE_DISTANCE as f32;
 
 pub enum TerrainWorkerJob {
