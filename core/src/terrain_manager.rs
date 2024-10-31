@@ -142,6 +142,8 @@ struct BufferCache<T: Clone + 'static> {
     pub eye_x_upper: bool,
     pub eye_y_upper: bool,
     pub eye_z_upper: bool,
+
+    pub farthest_distance_sq: i32,
 }
 
 impl<T: Clone + 'static> BufferCache<T> {
@@ -159,6 +161,7 @@ impl<T: Clone + 'static> BufferCache<T> {
             eye_x_upper: x % CHUNK_SIZE as f32 > CHUNK_SIZE as f32 / 2.0,
             eye_y_upper: y % CHUNK_SIZE as f32 > CHUNK_SIZE as f32 / 2.0,
             eye_z_upper: z % CHUNK_SIZE as f32 > CHUNK_SIZE as f32 / 2.0,
+            farthest_distance_sq: 0,
         }
     }
 
@@ -226,9 +229,16 @@ impl<T: Clone + 'static> BufferCache<T> {
         mesh_cache: Arc<Mutex<MeshCache>>,
         process: &mut dyn FnMut(&Vec<Vertex>, &Vec<u16>) -> T,
     ) -> Vec<((i32, i32, i32), T)> {
+        fn dst((x, y, z): (i32, i32, i32)) -> i32 {
+            x * x + y * y + z * z
+        }
         while let Some(item) = mesh_cache.lock().unwrap().meshes.pop_front() {
             let ((x, y, z), (vertices, indices)) = &*item;
             self.set(*x, *y, *z, Some(process(vertices, indices)));
+            self.farthest_distance_sq = std::cmp::max(
+                self.farthest_distance_sq,
+                dst((x - self.x, y - self.y, z - self.z)),
+            );
         }
         self.coords
             .iter()
@@ -508,6 +518,12 @@ impl<W: TerrainWorker, D: Clone + 'static> TerrainManager<W, D> {
     ) -> Vec<((i32, i32, i32), D)> {
         self.buffer_cache
             .get_available(self.mesh_cache.clone(), process)
+    }
+
+    pub fn get_farthest_distance(&self) -> f32 {
+        (self.buffer_cache.farthest_distance_sq as f32)
+            .sqrt()
+            .floor()
     }
 }
 

@@ -1,24 +1,20 @@
-use ft_vox_prototype_0_map_types::{Chunk, CHUNK_SIZE};
-use glam::{Mat3, Vec3};
 use std::sync::{Arc, Mutex};
-use terrain_manager::TerrainManager;
+
+use glam::{Mat3, Vec3};
 use wgpu::util::DeviceExt;
+
+use ft_vox_prototype_0_map_types::Chunk;
 
 pub mod terrain_manager;
 pub mod vertex;
 mod vox_graphics_wrapper;
 
+use terrain_manager::TerrainManager;
 use vertex::Vertex;
-use vox_graphics_wrapper::*;
+use vox_graphics_wrapper::VoxGraphicsWrapper;
 
 pub const CACHE_DISTANCE: usize = 19;
 pub const RENDER_DISTANCE: f32 = CACHE_DISTANCE as f32;
-
-pub const FOG_COLOR: [f32; 4] = [57.0 / 255.0, 107.0 / 255.0, 251.0 / 255.0, 1.0];
-pub const FOG_END: f32 = (RENDER_DISTANCE - 2.0) * CHUNK_SIZE as f32;
-pub const FOG_START: f32 = FOG_END * 0.8;
-
-pub const FOV: f32 = 120.0;
 
 pub enum TerrainWorkerJob {
     Map((i32, i32, i32)),
@@ -65,31 +61,33 @@ pub fn get_coords(distance: f32) -> Vec<(i32, i32, i32)> {
 
 pub struct Vox<T: TerrainWorker> {
     vox_graphics_wrapper: VoxGraphicsWrapper,
-    eye: glam::Vec3,
+    eye: Vec3,
     horizontal_rotation: f32,
     vertical_rotation: f32,
+    eye_dir: Vec3,
     is_paused: bool,
-    chunk_cache: TerrainManager<T, Arc<(wgpu::Buffer, wgpu::Buffer, u32)>>,
+    terrain_manager: TerrainManager<T, Arc<(wgpu::Buffer, wgpu::Buffer, u32)>>,
+    target_fog_distance: f32,
+    current_fog_distance: f32,
 }
-
-/// [ Speed in Minecraft ]
-/// Walking speed: 4.317 blocks/second
-/// Sprinting speed (Survival): 5.612 blocks/second
-/// Flying speed (Creative): 10.89 blocks/second
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum MoveSpeed {
     Walk,
-    SubjectFly,
+    Sprint,
     CreativeFly,
+    FtVoxFly,
+    FtMinecraftFly,
 }
 
 impl MoveSpeed {
     pub const fn speed_per_sec(&self) -> f32 {
         match self {
             Self::Walk => 4.317,
-            Self::SubjectFly => 20.00,
+            Self::Sprint => 5.612,
             Self::CreativeFly => 10.89,
+            Self::FtVoxFly => 20.00,
+            Self::FtMinecraftFly => 40.00,
         }
     }
 }
@@ -112,8 +110,12 @@ impl<T: TerrainWorker> Vox<T> {
             eye: glam::Vec3::new(eye_x, eye_y, eye_z),
             horizontal_rotation: 0.0,
             vertical_rotation: 0.0,
+            eye_dir: Vec3::new(0.0, 0.0, 0.0),
             is_paused: false,
-            chunk_cache: TerrainManager::new(CACHE_DISTANCE, (eye_x, eye_y, eye_z)),
+            terrain_manager: TerrainManager::new(CACHE_DISTANCE, (eye_x, eye_y, eye_z)),
+
+            target_fog_distance: 0.0,
+            current_fog_distance: 0.0,
         }
     }
 
@@ -146,6 +148,13 @@ impl<T: TerrainWorker> Vox<T> {
             return;
         }
 
+        // eye_dir
+        {
+            self.eye_dir = (glam::Mat3::from_rotation_z(self.horizontal_rotation)
+                * glam::Mat3::from_rotation_x(self.vertical_rotation))
+                * glam::Vec3::Y;
+        }
+
         // rotate
         {
             self.horizontal_rotation += delta_horizontal_rotation;
@@ -175,36 +184,53 @@ impl<T: TerrainWorker> Vox<T> {
             };
             self.eye += move_direction * move_speed.speed_per_sec() * delta_time;
         }
+
+        // smooth fog distance
+        {
+            self.target_fog_distance = self.terrain_manager.get_farthest_distance().max(6.0);
+
+            let step = 3.5 * delta_time;
+            if self.target_fog_distance != self.current_fog_distance {
+                let direction = (self.target_fog_distance - self.current_fog_distance).signum();
+                self.current_fog_distance += step * direction;
+                if (self.current_fog_distance - self.target_fog_distance) * direction > 0.0 {
+                    self.current_fog_distance = self.target_fog_distance;
+                }
+            }
+        }
     }
 
     pub fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
-        self.chunk_cache.set_cache_distance(CACHE_DISTANCE);
-        self.chunk_cache
+        self.terrain_manager.set_cache_distance(CACHE_DISTANCE);
+        self.terrain_manager
             .set_eye((self.eye.x, self.eye.y, self.eye.z));
-        let res = self.chunk_cache.get_available(&mut |vertices, indices| {
-            Arc::new((
-                device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("Vertex Buffer"),
-                    contents: bytemuck::cast_slice(&vertices),
-                    usage: wgpu::BufferUsages::VERTEX,
-                }),
-                device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("Index Buffer"),
-                    contents: bytemuck::cast_slice(&indices),
-                    usage: wgpu::BufferUsages::INDEX,
-                }),
-                indices.len() as u32,
-            ))
-        });
+
+        let wgpu_buffers = self
+            .terrain_manager
+            .get_available(&mut |vertices, indices| {
+                Arc::new((
+                    device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("Vertex Buffer"),
+                        contents: bytemuck::cast_slice(vertices),
+                        usage: wgpu::BufferUsages::VERTEX,
+                    }),
+                    device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("Index Buffer"),
+                        contents: bytemuck::cast_slice(indices),
+                        usage: wgpu::BufferUsages::INDEX,
+                    }),
+                    indices.len() as u32,
+                ))
+            });
 
         self.vox_graphics_wrapper.render(
             view,
             device,
             queue,
             self.eye,
-            self.horizontal_rotation,
-            self.vertical_rotation,
-            res,
+            self.eye_dir,
+            self.current_fog_distance,
+            wgpu_buffers,
         );
     }
 }

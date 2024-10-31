@@ -59,7 +59,7 @@ impl<T: TerrainWorker> Context<T> {
         }
 
         let speed = if input.get_key_pressed("ctrl") {
-            MoveSpeed::SubjectFly
+            MoveSpeed::FtVoxFly
         } else {
             MoveSpeed::Walk
         };

@@ -1,13 +1,16 @@
-use bytemuck::{Pod, Zeroable};
+use std::{borrow::Cow, sync::Arc};
 
+use bytemuck::{Pod, Zeroable};
 use glam::{Mat4, Vec3};
 use image::{GenericImageView, Pixel};
 
-use std::borrow::Cow;
-use std::sync::Arc;
+use ft_vox_prototype_0_map_types::CHUNK_SIZE;
 
 use crate::vertex::Vertex;
-use crate::{FOG_COLOR, FOG_END, FOG_START, FOV};
+use crate::RENDER_DISTANCE;
+
+pub const FOG_COLOR: [f32; 4] = [57.0 / 255.0, 107.0 / 255.0, 251.0 / 255.0, 1.0];
+pub const FOV: f32 = 80.0;
 
 #[repr(C)]
 #[derive(Copy, Clone, Pod, Zeroable)]
@@ -375,10 +378,20 @@ impl VoxGraphicsWrapper {
         if aspect_ratio > 1.0 {
             let fov_x_radians = FOV.to_radians();
             let fov_y_radians = 2.0 * (0.5 * fov_x_radians).tan().atan() / aspect_ratio;
-            glam::Mat4::perspective_rh(fov_y_radians, aspect_ratio, 0.25, 368.0)
+            glam::Mat4::perspective_rh(
+                fov_y_radians,
+                aspect_ratio,
+                0.25,
+                RENDER_DISTANCE * CHUNK_SIZE as f32,
+            )
         } else {
             let fov_y_radians = FOV.to_radians();
-            glam::Mat4::perspective_rh(fov_y_radians, aspect_ratio, 0.25, 368.0)
+            glam::Mat4::perspective_rh(
+                fov_y_radians,
+                aspect_ratio,
+                0.25,
+                RENDER_DISTANCE * CHUNK_SIZE as f32,
+            )
         }
     }
 
@@ -418,21 +431,19 @@ impl VoxGraphicsWrapper {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         eye: Vec3,
-        horizontal_rotation: f32,
-        vertical_rotation: f32,
+        eye_dir: Vec3,
+        fog_distance: f32,
         buffer_data: Vec<((i32, i32, i32), Arc<(wgpu::Buffer, wgpu::Buffer, u32)>)>,
     ) {
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
-        let dir = (glam::Mat3::from_rotation_z(horizontal_rotation)
-            * glam::Mat3::from_rotation_x(vertical_rotation))
-            * glam::Vec3::Y;
-
-        let world_view_matrix = glam::Mat4::look_to_rh(eye, dir, glam::Vec3::Z);
+        let world_view_matrix = glam::Mat4::look_to_rh(eye, eye_dir, glam::Vec3::Z);
         let world_view_projection_matrix = self.projection_matrix * world_view_matrix;
         let frustum_planes = extract_frustum_planes(&world_view_projection_matrix);
 
+        let fog_end = (fog_distance - 1.0) * CHUNK_SIZE as f32;
+        let fog_start = fog_end * 0.8;
         queue.write_buffer(
             &self.world_uniform_buffer,
             0,
@@ -440,12 +451,12 @@ impl VoxGraphicsWrapper {
                 vp_matrix: *world_view_projection_matrix.as_ref(),
                 view_position: [eye.x, eye.y, eye.z, 0.0],
                 fog_color: FOG_COLOR,
-                fog_start: FOG_START,
-                fog_end: FOG_END,
+                fog_start,
+                fog_end,
             }]),
         );
 
-        let sky_view_matrix = glam::Mat4::look_to_rh(Vec3::ZERO, dir, glam::Vec3::Z);
+        let sky_view_matrix = glam::Mat4::look_to_rh(Vec3::ZERO, eye_dir, glam::Vec3::Z);
         let sky_view_projection_matrix = self.projection_matrix * sky_view_matrix;
         queue.write_buffer(
             &self.sky_uniform_buffer,
