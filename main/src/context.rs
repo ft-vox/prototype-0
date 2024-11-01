@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use winit::event_loop::EventLoopWindowTarget;
+
 #[cfg(target_os = "macos")]
 use core_graphics::{
     display::CGDisplay,
@@ -241,7 +243,7 @@ impl<T: TerrainWorker> Context<T> {
         }
     }
 
-    pub fn set_mouse_center(&mut self) {
+    pub fn set_mouse_center(&mut self, target: &EventLoopWindowTarget<()>) {
         self.update_window_info();
         #[cfg(not(target_arch = "wasm32"))]
         {
@@ -258,7 +260,7 @@ impl<T: TerrainWorker> Context<T> {
 
             #[cfg(target_os = "macos")]
             {
-                let display_size_os = self.window.primary_monitor().unwrap().size();
+                let display_size_os = target.primary_monitor().unwrap().size();
                 let display_size_cg = CGDisplay::main().bounds().size;
                 let scaling_factor = display_size_cg.width / display_size_os.width as f64;
                 let scaled_x = center_x as f64 * scaling_factor;
