@@ -13,7 +13,5 @@ members = [
     "terrain_worker_web",
     "util_lru_cache_arc",
     "util_lru_cache_rc",
-    "wasm_terrain_worker_main",
-    "wasm_terrain_worker_sub",
 ]
 default-members = ["exe"]
