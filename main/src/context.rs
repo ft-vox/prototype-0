@@ -240,4 +240,39 @@ impl<T: TerrainWorker> Context<T> {
             }
         }
     }
+
+    pub fn set_mouse_center(&mut self) {
+        self.update_window_info();
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let window_position = self.window_inner_position;
+            let window_size = self.window_inner_size;
+
+            let center_x: i32 = window_position.x + (window_size.width / 2) as i32;
+            let center_y: i32 = window_position.y + (window_size.height / 2) as i32;
+
+            #[cfg(target_os = "windows")]
+            unsafe {
+                SetCursorPos(center_x, center_y);
+            }
+
+            #[cfg(target_os = "macos")]
+            {
+                let display_size_os = self.window.primary_monitor().unwrap().size();
+                let display_size_cg = CGDisplay::main().bounds().size;
+                let scaling_factor = display_size_cg.width / display_size_os.width as f64;
+                let scaled_x = center_x as f64 * scaling_factor;
+                let scaled_y = center_y as f64 * scaling_factor;
+                let source = CGEventSource::new(CGEventSourceStateID::HIDSystemState).unwrap();
+                let event = CGEvent::new_mouse_event(
+                    source,
+                    CGEventType::MouseMoved,
+                    CGPoint::new(scaled_x, scaled_y),
+                    CGMouseButton::Left,
+                )
+                .unwrap();
+                event.post(core_graphics::event::CGEventTapLocation::HID);
+            }
+        }
+    }
 }

@@ -160,7 +160,7 @@ pub async fn run<T: TerrainWorker + 'static>() {
                             window_loop.window.clone(),
                         ));
                         if let Some(context) = context.borrow_mut().as_mut() {
-                            context.update(&event_driven_input);
+                            context.set_mouse_center();
                         }
                     }
                 }
