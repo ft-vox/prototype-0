@@ -1,8 +1,4 @@
-use std::{
-    cell::RefCell,
-    rc::Rc,
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 
 use ft_vox_prototype_0_core::{
     vertex::{create_vertices_for_chunk, Vertex},

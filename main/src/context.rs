@@ -33,8 +33,8 @@ pub struct Context<T: TerrainWorker> {
     window_inner_position: PhysicalPosition<i32>,
     window_inner_size: PhysicalSize<u32>,
     direction_and_speed: ([f32; 3], MoveSpeed), // TODO: separate
-    horizontal_rotation: f32,
-    vertical_rotation: f32,
+    pub horizontal_rotation: f32,
+    pub vertical_rotation: f32,
 
     fly_toggle: bool,
     fly_toggle_timer: Option<f32>,
