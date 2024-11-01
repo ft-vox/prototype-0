@@ -9,7 +9,7 @@ use ft_vox_prototype_0_map_types::CHUNK_SIZE;
 use crate::vertex::Vertex;
 use crate::RENDER_DISTANCE;
 
-pub const FOG_COLOR: [f32; 4] = [57.0 / 255.0, 107.0 / 255.0, 251.0 / 255.0, 1.0];
+pub const FOG_COLOR_SRGB: [f32; 4] = [130.0 / 255.0, 173.0 / 255.0, 253.0 / 255.0, 1.0];
 pub const FOV: f32 = 80.0;
 
 #[repr(C)]
@@ -450,7 +450,7 @@ impl VoxGraphicsWrapper {
             bytemuck::cast_slice(&[WorldUniforms {
                 vp_matrix: *world_view_projection_matrix.as_ref(),
                 view_position: [eye.x, eye.y, eye.z, 0.0],
-                fog_color: FOG_COLOR,
+                fog_color: remove_srgb_correction(FOG_COLOR_SRGB),
                 fog_start,
                 fog_end,
             }]),
@@ -706,4 +706,21 @@ fn is_sphere_in_frustum_planes(
         }
     }
     true
+}
+
+fn remove_srgb_correction(color: [f32; 4]) -> [f32; 4] {
+    let remove_srgb = |v: f32| {
+        if v <= 0.04045 {
+            v / 12.92
+        } else {
+            ((v + 0.055) / 1.055).powf(2.4)
+        }
+    };
+
+    [
+        remove_srgb(color[0]),
+        remove_srgb(color[1]),
+        remove_srgb(color[2]),
+        color[3],
+    ]
 }
