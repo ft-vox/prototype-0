@@ -5,15 +5,15 @@ use std::{
 
 use ft_vox_prototype_0_map_types::{Chunk, CHUNK_SIZE};
 
-use crate::{get_coords, TerrainWorker};
-use crate::{vertex::Vertex, TerrainWorkerJob};
+use crate::{get_coords, terrain_worker::TerrainWorker};
+use crate::{terrain_worker::TerrainWorkerJob, vertex::Vertex};
 
-pub struct TerrainManager<W: TerrainWorker, D: Clone + 'static> {
+pub struct TerrainManager<T: Clone + 'static> {
     map_cache: Arc<Mutex<MapCache>>,
     mesh_cache: Arc<Mutex<MeshCache>>,
-    buffer_cache: BufferCache<D>,
+    buffer_cache: BufferCache<T>,
     eye: (f32, f32, f32),
-    terrain_worker: W,
+    terrain_worker: TerrainWorker,
 }
 
 struct MapCache {
@@ -106,14 +106,6 @@ impl MapCache {
         let size = self.cache_distance * 2 + 2;
         self.chunks = vec![None; size * size * size];
         self.chunk_loading.clear();
-    }
-
-    fn get_available(&self) -> Vec<((i32, i32, i32), Arc<Chunk>)> {
-        self.coords
-            .iter()
-            .map(|&(x, y, z)| (x + self.x, y + self.y, z + self.z))
-            .filter_map(|(x, y, z)| self.get(x, y, z).map(|chunk| ((x, y, z), chunk)))
-            .collect()
     }
 }
 
@@ -248,14 +240,14 @@ impl<T: Clone + 'static> BufferCache<T> {
     }
 }
 
-impl<W: TerrainWorker, D: Clone + 'static> TerrainManager<W, D> {
+impl<T: Clone + 'static> TerrainManager<T> {
     pub fn new(cache_distance: usize, eye: (f32, f32, f32)) -> Self {
         let mut result = Self {
             map_cache: Arc::new(Mutex::new(MapCache::new(cache_distance, eye))),
             mesh_cache: Arc::new(Mutex::new(MeshCache::new())),
             buffer_cache: BufferCache::new(cache_distance, eye),
             eye,
-            terrain_worker: W::new(
+            terrain_worker: TerrainWorker::new(
                 Arc::new(Mutex::new(|| None)),
                 Arc::new(Mutex::new(|_pos, _chunk| ())),
                 Arc::new(Mutex::new(|_pos, _mesh| ())),
@@ -267,7 +259,7 @@ impl<W: TerrainWorker, D: Clone + 'static> TerrainManager<W, D> {
     }
 
     fn init(&mut self) {
-        self.terrain_worker = W::new(
+        self.terrain_worker = TerrainWorker::new(
             Arc::new(Mutex::new({
                 let map_cache = self.map_cache.clone();
                 let mesh_cache = self.mesh_cache.clone();
@@ -376,7 +368,6 @@ impl<W: TerrainWorker, D: Clone + 'static> TerrainManager<W, D> {
 
     pub fn set_eye(&mut self, eye: (f32, f32, f32)) {
         let mut map_cache = self.map_cache.lock().unwrap();
-        let mut mesh_cache = self.mesh_cache.lock().unwrap();
         fn upper(value: f32, old: bool) -> bool {
             let value = (value.fract() + 1.0).fract();
             if old {
@@ -514,8 +505,8 @@ impl<W: TerrainWorker, D: Clone + 'static> TerrainManager<W, D> {
 
     pub fn get_available(
         &mut self,
-        process: &mut dyn FnMut(&Vec<Vertex>, &Vec<u16>) -> D,
-    ) -> Vec<((i32, i32, i32), D)> {
+        process: &mut dyn FnMut(&Vec<Vertex>, &Vec<u16>) -> T,
+    ) -> Vec<((i32, i32, i32), T)> {
         self.buffer_cache
             .get_available(self.mesh_cache.clone(), process)
     }

@@ -1,44 +1,18 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use glam::{Mat3, Vec3};
 use wgpu::util::DeviceExt;
 
-use ft_vox_prototype_0_map_types::Chunk;
-
 pub mod terrain_manager;
+mod terrain_worker;
 pub mod vertex;
 mod vox_graphics_wrapper;
 
 use terrain_manager::TerrainManager;
-use vertex::Vertex;
 use vox_graphics_wrapper::VoxGraphicsWrapper;
 
 pub const CACHE_DISTANCE: usize = 12;
 pub const RENDER_DISTANCE: f32 = CACHE_DISTANCE as f32;
-
-pub enum TerrainWorkerJob {
-    Map((i32, i32, i32)),
-    Mesh {
-        position: (i32, i32, i32),
-        zero: Arc<Chunk>,
-        positive_x: Arc<Chunk>,
-        negative_x: Arc<Chunk>,
-        positive_y: Arc<Chunk>,
-        negative_y: Arc<Chunk>,
-        positive_z: Arc<Chunk>,
-        negative_z: Arc<Chunk>,
-    },
-}
-
-pub trait TerrainWorker {
-    fn new(
-        job_callback: Arc<Mutex<dyn Send + Sync + FnMut() -> Option<TerrainWorkerJob>>>,
-        chunk_callback: Arc<Mutex<dyn Send + Sync + FnMut((i32, i32, i32), Arc<Chunk>)>>,
-        mesh_callback: Arc<
-            Mutex<dyn Send + Sync + FnMut((i32, i32, i32), (Vec<Vertex>, Vec<u16>))>,
-        >,
-    ) -> Self;
-}
 
 pub fn get_coords(distance: f32) -> Vec<(i32, i32, i32)> {
     let mut coords = Vec::new();
@@ -59,14 +33,14 @@ pub fn get_coords(distance: f32) -> Vec<(i32, i32, i32)> {
     coords
 }
 
-pub struct Vox<T: TerrainWorker> {
+pub struct Vox {
     vox_graphics_wrapper: VoxGraphicsWrapper,
     eye: Vec3,
     horizontal_rotation: f32,
     vertical_rotation: f32,
     eye_dir: Vec3,
     is_paused: bool,
-    terrain_manager: TerrainManager<T, Arc<(wgpu::Buffer, wgpu::Buffer, u32)>>,
+    terrain_manager: TerrainManager<Arc<(wgpu::Buffer, wgpu::Buffer, u32)>>,
     target_fog_distance: f32,
     current_fog_distance: f32,
 }
@@ -92,7 +66,7 @@ impl MoveSpeed {
     }
 }
 
-impl<T: TerrainWorker> Vox<T> {
+impl Vox {
     pub fn init(
         config: &wgpu::SurfaceConfiguration,
         _adapter: &wgpu::Adapter,

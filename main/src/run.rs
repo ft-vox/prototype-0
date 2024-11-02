@@ -1,4 +1,4 @@
-use std::{cell::RefCell, num::NonZeroU8, rc::Rc, sync::Arc};
+use std::{cell::RefCell, rc::Rc, sync::Arc};
 use winit::{
     dpi::{PhysicalPosition, PhysicalSize},
     event::{Event, KeyEvent, WindowEvent},
@@ -7,17 +7,10 @@ use winit::{
     window::Window,
 };
 
-mod context;
-mod input;
-mod surface_wrapper;
-mod wgpu_context;
-
-use context::Context;
-use input::*;
-use surface_wrapper::SurfaceWrapper;
-use wgpu_context::WGPUContext;
-
-use ft_vox_prototype_0_core::TerrainWorker;
+use crate::context::Context;
+use crate::input::*;
+use crate::surface_wrapper::SurfaceWrapper;
+use crate::wgpu_context::WGPUContext;
 
 use std::time::Instant;
 
@@ -41,13 +34,13 @@ impl EventLoopWrapper {
     }
 }
 
-pub async fn run<T: TerrainWorker + 'static>() {
+pub async fn run() {
     env_logger::init();
 
     let window_loop = EventLoopWrapper::new();
     let mut surface = SurfaceWrapper::new();
     let wgpu_context = WGPUContext::init_async(&mut surface, window_loop.window.clone()).await;
-    let context: Rc<RefCell<Option<Context<T>>>> = Rc::new(RefCell::new(None));
+    let context: Rc<RefCell<Option<Context>>> = Rc::new(RefCell::new(None));
 
     let mut event_driven_input = EventDrivenInput::new();
 
@@ -72,9 +65,6 @@ pub async fn run<T: TerrainWorker + 'static>() {
                             &wgpu_context.queue,
                             window_loop.window.clone(),
                         ));
-                        if let Some(context) = context.borrow_mut().as_mut() {
-                            //context.set_mouse_center(target);
-                        }
                     }
                 }
 

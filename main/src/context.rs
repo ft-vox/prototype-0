@@ -1,14 +1,11 @@
 use std::sync::Arc;
 
-use winit::event_loop::EventLoopWindowTarget;
-
 use winit::{
     dpi::{PhysicalPosition, PhysicalSize},
     window::{Fullscreen, Window},
 };
 
 use ft_vox_prototype_0_core::MoveSpeed;
-use ft_vox_prototype_0_core::TerrainWorker;
 use ft_vox_prototype_0_core::Vox;
 
 use crate::surface_wrapper::SurfaceWrapper;
@@ -17,8 +14,8 @@ use crate::{
     wgpu_context::WGPUContext,
 };
 
-pub struct Context<T: TerrainWorker> {
-    vox: Vox<T>,
+pub struct Context {
+    vox: Vox,
     window: Arc<Window>,
     input: FrameDrivenInput,
     window_inner_position: PhysicalPosition<i32>,
@@ -34,7 +31,7 @@ pub struct Context<T: TerrainWorker> {
     adhoc_winit_fault_cursor_position_y: f64,
 }
 
-impl<T: TerrainWorker> Context<T> {
+impl Context {
     pub fn init(
         config: &wgpu::SurfaceConfiguration,
         adapter: &wgpu::Adapter,
@@ -203,12 +200,13 @@ impl<T: TerrainWorker> Context<T> {
         self.vertical_rotation -= delta_y as f32 * SENSITIVE;
 
         self.window
-            .set_cursor_position(PhysicalPosition::new(center_x, center_y));
+            .set_cursor_position(PhysicalPosition::new(center_x, center_y))
+            .unwrap();
         self.update_window_info();
     }
 
     fn update_mouse_lock(&mut self, delta_time: f32) {
-        let fps = (1.0 / delta_time).round() as f32;
+        let fps = (1.0 / delta_time).round() as i32;
         if self.vox.is_paused() {
             self.window.set_cursor_visible(true);
             self.window.set_title("ft_vox: paused");

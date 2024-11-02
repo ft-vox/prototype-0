@@ -4,18 +4,31 @@ use std::{
     time::Duration,
 };
 
-use ft_vox_prototype_0_core::TerrainWorker;
-use ft_vox_prototype_0_core::{vertex::*, TerrainWorkerJob};
+use crate::vertex::*;
 use ft_vox_prototype_0_map_core::Map;
 use ft_vox_prototype_0_map_types::Chunk;
 
-pub struct NativeTerrainWorker {
+pub enum TerrainWorkerJob {
+    Map((i32, i32, i32)),
+    Mesh {
+        position: (i32, i32, i32),
+        zero: Arc<Chunk>,
+        positive_x: Arc<Chunk>,
+        negative_x: Arc<Chunk>,
+        positive_y: Arc<Chunk>,
+        negative_y: Arc<Chunk>,
+        positive_z: Arc<Chunk>,
+        negative_z: Arc<Chunk>,
+    },
+}
+
+pub struct TerrainWorker {
     handles: Vec<JoinHandle<()>>,
     running: Arc<Mutex<bool>>,
 }
 
-impl TerrainWorker for NativeTerrainWorker {
-    fn new(
+impl TerrainWorker {
+    pub fn new(
         job_callback: Arc<Mutex<dyn Send + Sync + FnMut() -> Option<TerrainWorkerJob>>>,
         chunk_callback: Arc<Mutex<dyn Send + Sync + FnMut((i32, i32, i32), Arc<Chunk>)>>,
         mesh_callback: Arc<
@@ -80,7 +93,7 @@ impl TerrainWorker for NativeTerrainWorker {
     }
 }
 
-impl Drop for NativeTerrainWorker {
+impl Drop for TerrainWorker {
     fn drop(&mut self) {
         *self.running.lock().unwrap() = false;
         for handle in self.handles.drain(..) {

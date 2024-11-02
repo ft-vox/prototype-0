@@ -30,7 +30,7 @@ impl SurfaceWrapper {
     ///
     /// We cannot unconditionally create a surface here, as Android requires
     /// us to wait until we receive the `Resumed` event to do so.
-    pub fn pre_adapter(&mut self, instance: &Instance, window: Arc<Window>) {
+    pub fn pre_adapter(&mut self, _instance: &Instance, _window: Arc<Window>) {
         // if cfg!(target_arch = "wasm32") {
         //     self.surface = Some(instance.create_surface(window).unwrap());
         // }
@@ -38,10 +38,7 @@ impl SurfaceWrapper {
 
     /// Check if the event is the start condition for the surface.
     pub fn start_condition(e: &Event<()>) -> bool {
-        match e {
-            Event::NewEvents(StartCause::Init) => true,
-            _ => false,
-        }
+        matches!(e, Event::NewEvents(StartCause::Init))
     }
 
     /// Called when an event which matches [`Self::start_condition`] is received.

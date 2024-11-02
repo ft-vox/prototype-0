@@ -1,9 +1,0 @@
-[package]
-name = "ft-vox-prototype-0-exe"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-futures = "0.3.30"
-ft-vox-prototype-0-main = { path = "../main" }
-ft-vox-prototype-0-terrain-worker-native = { path = "../terrain_worker_native" }
