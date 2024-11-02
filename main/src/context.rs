@@ -75,11 +75,12 @@ impl<T: TerrainWorker> Context<T> {
         self.update_window_info();
         self.update_eye_movement();
         self.update_eye_rotation();
-        self.update_mouse_lock();
+
         self.update_screen_mode();
     }
 
     pub fn tick(&mut self, delta_time: f32) {
+        self.update_mouse_lock(delta_time);
         if let Some(ref mut fly_toggle_timer) = self.fly_toggle_timer {
             if *fly_toggle_timer > 0.3 {
                 self.fly_toggle_timer = None;
@@ -209,13 +210,14 @@ impl<T: TerrainWorker> Context<T> {
         }
     }
 
-    fn update_mouse_lock(&mut self) {
+    fn update_mouse_lock(&mut self, delta_time: f32) {
+        let fps = (1.0 / delta_time).round() as f32;
         if self.vox.is_paused() {
             self.window.set_cursor_visible(true);
             self.window.set_title("ft_vox: paused");
         } else {
             self.window.set_cursor_visible(false);
-            self.window.set_title("ft_vox");
+            self.window.set_title(&format!("ft_vox: {} fps", fps));
         }
     }
 
