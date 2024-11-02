@@ -14,12 +14,6 @@ wgpu = "22.0"
 winit = { version = "0.29.10", features = ["rwh_05"] }
 ft-vox-prototype-0-core = { version = "0.1.0", path = "../core" }
 
-[target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3", features = ["winuser"] }
-
-[target.'cfg(target_os = "macos")'.dependencies]
-core-graphics = "0.24.0"
-
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 ft-vox-prototype-0-terrain-worker-web = { path = "../terrain_worker_web" }
 console_error_panic_hook = "0.1.6"

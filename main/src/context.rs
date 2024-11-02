@@ -2,15 +2,6 @@ use std::sync::Arc;
 
 use winit::event_loop::EventLoopWindowTarget;
 
-#[cfg(target_os = "macos")]
-use core_graphics::{
-    display::CGDisplay,
-    event::{CGEvent, CGEventType, CGMouseButton},
-    event_source::{CGEventSource, CGEventSourceStateID},
-    geometry::CGPoint,
-};
-#[cfg(target_os = "windows")]
-use winapi::um::winuser::SetCursorPos;
 use winit::{
     dpi::{PhysicalPosition, PhysicalSize},
     window::{Fullscreen, Window},
@@ -38,6 +29,9 @@ pub struct Context<T: TerrainWorker> {
 
     fly_toggle: bool,
     fly_toggle_timer: Option<f32>,
+
+    adhoc_winit_fault_cursor_position_x: f64,
+    adhoc_winit_fault_cursor_position_y: f64,
 }
 
 impl<T: TerrainWorker> Context<T> {
@@ -60,6 +54,8 @@ impl<T: TerrainWorker> Context<T> {
             vertical_rotation: 0.0,
             fly_toggle: false,
             fly_toggle_timer: None,
+            adhoc_winit_fault_cursor_position_x: 0.0,
+            adhoc_winit_fault_cursor_position_y: 0.0,
         }
     }
 
@@ -185,40 +181,31 @@ impl<T: TerrainWorker> Context<T> {
         {
             const SENSITIVE: f32 = 0.0015;
 
-            let window_position = self.window_inner_position;
             let window_size = self.window_inner_size;
-            let delta_x =
-                self.input.local_cursor_position.x as f32 - (window_size.width / 2) as f32;
-            let delta_y =
-                self.input.local_cursor_position.y as f32 - (window_size.height / 2) as f32;
-            self.horizontal_rotation -= delta_x * SENSITIVE;
-            self.vertical_rotation -= delta_y * SENSITIVE;
+            let center_x = window_size.width / 2;
+            let center_y = window_size.height / 2;
 
-            let center_x: i32 = window_position.x + (window_size.width / 2) as i32;
-            let center_y: i32 = window_position.y + (window_size.height / 2) as i32;
-
-            #[cfg(target_os = "windows")]
-            unsafe {
-                SetCursorPos(center_x, center_y);
-            }
-
-            #[cfg(target_os = "macos")]
+            let (x, y) = if self.input.local_cursor_position.x
+                == self.adhoc_winit_fault_cursor_position_x
+                && self.input.local_cursor_position.y == self.adhoc_winit_fault_cursor_position_y
             {
-                let display_size_os = self.window.primary_monitor().unwrap().size();
-                let display_size_cg = CGDisplay::main().bounds().size;
-                let scaling_factor = display_size_cg.width / display_size_os.width as f64;
-                let scaled_x = center_x as f64 * scaling_factor;
-                let scaled_y = center_y as f64 * scaling_factor;
-                let source = CGEventSource::new(CGEventSourceStateID::HIDSystemState).unwrap();
-                let event = CGEvent::new_mouse_event(
-                    source,
-                    CGEventType::MouseMoved,
-                    CGPoint::new(scaled_x, scaled_y),
-                    CGMouseButton::Left,
+                (center_x as f64, center_y as f64)
+            } else {
+                (
+                    self.input.local_cursor_position.x,
+                    self.input.local_cursor_position.y,
                 )
-                .unwrap();
-                event.post(core_graphics::event::CGEventTapLocation::HID);
-            }
+            };
+            self.adhoc_winit_fault_cursor_position_x = self.input.local_cursor_position.x;
+            self.adhoc_winit_fault_cursor_position_y = self.input.local_cursor_position.y;
+            let delta_x = x - center_x as f64;
+            let delta_y = y - center_y as f64;
+            self.horizontal_rotation -= delta_x as f32 * SENSITIVE;
+            self.vertical_rotation -= delta_y as f32 * SENSITIVE;
+
+            self.window
+                .set_cursor_position(PhysicalPosition::new(center_x, center_y));
+            self.update_window_info();
         }
     }
 
@@ -252,29 +239,6 @@ impl<T: TerrainWorker> Context<T> {
 
             let center_x: i32 = window_position.x + (window_size.width / 2) as i32;
             let center_y: i32 = window_position.y + (window_size.height / 2) as i32;
-
-            #[cfg(target_os = "windows")]
-            unsafe {
-                SetCursorPos(center_x, center_y);
-            }
-
-            #[cfg(target_os = "macos")]
-            {
-                let display_size_os = target.primary_monitor().unwrap().size();
-                let display_size_cg = CGDisplay::main().bounds().size;
-                let scaling_factor = display_size_cg.width / display_size_os.width as f64;
-                let scaled_x = center_x as f64 * scaling_factor;
-                let scaled_y = center_y as f64 * scaling_factor;
-                let source = CGEventSource::new(CGEventSourceStateID::HIDSystemState).unwrap();
-                let event = CGEvent::new_mouse_event(
-                    source,
-                    CGEventType::MouseMoved,
-                    CGPoint::new(scaled_x, scaled_y),
-                    CGMouseButton::Left,
-                )
-                .unwrap();
-                event.post(core_graphics::event::CGEventTapLocation::HID);
-            }
         }
     }
 }
