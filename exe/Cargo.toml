@@ -6,6 +6,4 @@ edition = "2021"
 [dependencies]
 futures = "0.3.30"
 ft-vox-prototype-0-main = { path = "../main" }
-
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 ft-vox-prototype-0-terrain-worker-native = { path = "../terrain_worker_native" }

@@ -178,36 +178,33 @@ impl<T: TerrainWorker> Context<T> {
             return;
         }
 
-        #[cfg(not(target_arch = "wasm32"))]
+        const SENSITIVE: f32 = 0.0015;
+
+        let window_size = self.window_inner_size;
+        let center_x = window_size.width / 2;
+        let center_y = window_size.height / 2;
+
+        let (x, y) = if self.input.local_cursor_position.x
+            == self.adhoc_winit_fault_cursor_position_x
+            && self.input.local_cursor_position.y == self.adhoc_winit_fault_cursor_position_y
         {
-            const SENSITIVE: f32 = 0.0015;
+            (center_x as f64, center_y as f64)
+        } else {
+            (
+                self.input.local_cursor_position.x,
+                self.input.local_cursor_position.y,
+            )
+        };
+        self.adhoc_winit_fault_cursor_position_x = self.input.local_cursor_position.x;
+        self.adhoc_winit_fault_cursor_position_y = self.input.local_cursor_position.y;
+        let delta_x = x - center_x as f64;
+        let delta_y = y - center_y as f64;
+        self.horizontal_rotation -= delta_x as f32 * SENSITIVE;
+        self.vertical_rotation -= delta_y as f32 * SENSITIVE;
 
-            let window_size = self.window_inner_size;
-            let center_x = window_size.width / 2;
-            let center_y = window_size.height / 2;
-
-            let (x, y) = if self.input.local_cursor_position.x
-                == self.adhoc_winit_fault_cursor_position_x
-                && self.input.local_cursor_position.y == self.adhoc_winit_fault_cursor_position_y
-            {
-                (center_x as f64, center_y as f64)
-            } else {
-                (
-                    self.input.local_cursor_position.x,
-                    self.input.local_cursor_position.y,
-                )
-            };
-            self.adhoc_winit_fault_cursor_position_x = self.input.local_cursor_position.x;
-            self.adhoc_winit_fault_cursor_position_y = self.input.local_cursor_position.y;
-            let delta_x = x - center_x as f64;
-            let delta_y = y - center_y as f64;
-            self.horizontal_rotation -= delta_x as f32 * SENSITIVE;
-            self.vertical_rotation -= delta_y as f32 * SENSITIVE;
-
-            self.window
-                .set_cursor_position(PhysicalPosition::new(center_x, center_y));
-            self.update_window_info();
-        }
+        self.window
+            .set_cursor_position(PhysicalPosition::new(center_x, center_y));
+        self.update_window_info();
     }
 
     fn update_mouse_lock(&mut self, delta_time: f32) {
@@ -229,18 +226,6 @@ impl<T: TerrainWorker> Context<T> {
                 self.window
                     .set_fullscreen(Some(Fullscreen::Borderless(None)));
             }
-        }
-    }
-
-    pub fn set_mouse_center(&mut self, target: &EventLoopWindowTarget<()>) {
-        self.update_window_info();
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            let window_position = self.window_inner_position;
-            let window_size = self.window_inner_size;
-
-            let center_x: i32 = window_position.x + (window_size.width / 2) as i32;
-            let center_y: i32 = window_position.y + (window_size.height / 2) as i32;
         }
     }
 }

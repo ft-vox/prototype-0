@@ -10,7 +10,6 @@ crate-type = ["rlib"]
 bytemuck = { version = "1.14.3", features = ["derive"] }
 ft-vox-prototype-0-map-core = { version = "0.1.0", path = "../map_core" }
 ft-vox-prototype-0-map-types = { version = "0.1.0", path = "../map_types" }
-ft-vox-prototype-0-util-lru-cache-rc = { version = "0.1.0", path = "../util_lru_cache_rc" }
 glam = "0.25.0"
 wgpu = "22.0"
 image = "0.25.2"

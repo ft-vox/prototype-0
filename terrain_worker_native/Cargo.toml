@@ -10,6 +10,4 @@ crate-type = ["rlib"]
 ft-vox-prototype-0-core = { version = "0.1.0", path = "../core" }
 ft-vox-prototype-0-map-types = { version = "0.1.0", path = "../map_types" }
 ft-vox-prototype-0-map-core = { version = "0.1.0", path = "../map_core" }
-ft-vox-prototype-0-util-lru-cache-rc = { version = "0.1.0", path = "../util_lru_cache_rc" }
-ft-vox-prototype-0-util-lru-cache-arc = { version = "0.1.0", path = "../util_lru_cache_arc" }
 num_cpus = "1.16.0"

@@ -31,18 +31,15 @@ impl SurfaceWrapper {
     /// We cannot unconditionally create a surface here, as Android requires
     /// us to wait until we receive the `Resumed` event to do so.
     pub fn pre_adapter(&mut self, instance: &Instance, window: Arc<Window>) {
-        if cfg!(target_arch = "wasm32") {
-            self.surface = Some(instance.create_surface(window).unwrap());
-        }
+        // if cfg!(target_arch = "wasm32") {
+        //     self.surface = Some(instance.create_surface(window).unwrap());
+        // }
     }
 
     /// Check if the event is the start condition for the surface.
     pub fn start_condition(e: &Event<()>) -> bool {
         match e {
-            // On all other platforms, we can create the surface immediately.
-            Event::NewEvents(StartCause::Init) => !cfg!(target_os = "android"),
-            // On android we need to wait for a resumed event to create the surface.
-            Event::Resumed => cfg!(target_os = "android"),
+            Event::NewEvents(StartCause::Init) => true,
             _ => false,
         }
     }
@@ -61,9 +58,9 @@ impl SurfaceWrapper {
         log::info!("Surface resume {window_size:?}");
 
         // We didn't create the surface in pre_adapter, so we need to do so now.
-        if !cfg!(target_arch = "wasm32") {
-            self.surface = Some(context.instance.create_surface(window).unwrap());
-        }
+        // if !cfg!(target_arch = "wasm32") {
+        self.surface = Some(context.instance.create_surface(window).unwrap());
+        // }
 
         // From here on, self.surface should be Some.
 
@@ -95,12 +92,6 @@ impl SurfaceWrapper {
         let config = self.config.as_mut().unwrap();
         config.width = size.width;
         config.height = size.height;
-        #[cfg(target_arch = "wasm32")]
-        {
-            let device_pixel_ratio = web_sys::window().unwrap().device_pixel_ratio();
-            config.width = (config.width as f64 / device_pixel_ratio) as u32;
-            config.height = (config.height as f64 / device_pixel_ratio) as u32;
-        }
         config.width = config.width.max(1);
         config.height = config.height.max(1);
         let surface = self.surface.as_ref().unwrap();
@@ -136,7 +127,7 @@ impl SurfaceWrapper {
     ///
     /// A suspend event is always followed by at least one resume event.
     pub fn suspend(&mut self) {
-        if cfg!(target_os = "android") {
+        if false {
             self.surface = None;
         }
     }
