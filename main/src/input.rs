@@ -83,7 +83,7 @@ impl FrameDrivenInput {
         *self.key_down.get(&str_to_key(str)).unwrap_or(&false)
     }
 
-    pub fn get_key_up(&self, str: &str) -> bool {
+    pub fn _get_key_up(&self, str: &str) -> bool {
         *self.key_up.get(&str_to_key(str)).unwrap_or(&false)
     }
 }

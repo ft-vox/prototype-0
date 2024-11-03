@@ -11,7 +11,7 @@ mod vox_graphics_wrapper;
 use terrain_manager::TerrainManager;
 use vox_graphics_wrapper::VoxGraphicsWrapper;
 
-pub const CACHE_DISTANCE: usize = 12;
+pub const CACHE_DISTANCE: usize = 22;
 pub const RENDER_DISTANCE: f32 = CACHE_DISTANCE as f32;
 
 pub fn get_coords(distance: f32) -> Vec<(i32, i32, i32)> {

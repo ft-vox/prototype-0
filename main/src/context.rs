@@ -175,7 +175,7 @@ impl Context {
             return;
         }
 
-        const SENSITIVE: f32 = 0.0015;
+        const SENSITIVE: f32 = 0.001;
 
         let window_size = self.window_inner_size;
         let center_x = window_size.width / 2;
