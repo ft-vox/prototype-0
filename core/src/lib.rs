@@ -3,16 +3,18 @@ use std::sync::Arc;
 use glam::{Mat3, Vec3};
 use wgpu::util::DeviceExt;
 
+mod graphics;
 pub mod terrain_manager;
 mod terrain_worker;
 pub mod vertex;
-mod vox_graphics_wrapper;
 
+use graphics::VoxGraphicsWrapper;
 use terrain_manager::TerrainManager;
-use vox_graphics_wrapper::VoxGraphicsWrapper;
 
 pub const CACHE_DISTANCE: usize = 22;
 pub const RENDER_DISTANCE: f32 = CACHE_DISTANCE as f32;
+pub const FOG_COLOR_SRGB: [f32; 4] = [130.0 / 255.0, 173.0 / 255.0, 253.0 / 255.0, 1.0];
+pub const FOV: f32 = 80.0;
 
 pub fn get_coords(distance: f32) -> Vec<(i32, i32, i32)> {
     let mut coords = Vec::new();
@@ -197,12 +199,11 @@ impl Vox {
                 ))
             });
 
+        self.vox_graphics_wrapper.update(self.eye, self.eye_dir); // TODO: impl Vox.tick(), Vox.update()
         self.vox_graphics_wrapper.render(
             view,
             device,
             queue,
-            self.eye,
-            self.eye_dir,
             self.current_fog_distance,
             wgpu_buffers,
         );
