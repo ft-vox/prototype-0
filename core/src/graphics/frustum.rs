@@ -13,7 +13,6 @@ struct Plane {
 impl Plane {
     fn normalize(&mut self) {
         let length = self.normal.length();
-        // length가 0일 때에는 어떻게 되나요?
         self.normal /= length;
         self.distance /= length;
     }
