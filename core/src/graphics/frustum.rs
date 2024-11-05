@@ -13,6 +13,7 @@ struct Plane {
 impl Plane {
     fn normalize(&mut self) {
         let length = self.normal.length();
+        // length가 0일 때에는 어떻게 되나요?
         self.normal /= length;
         self.distance /= length;
     }
@@ -28,8 +29,8 @@ impl Frustum {
         }
     }
 
-    pub fn update(&mut self, view_projectioon: &Mat4) {
-        let matrix_array = view_projectioon.to_cols_array_2d();
+    pub fn update(&mut self, view_projection: &Mat4) {
+        let matrix_array = view_projection.to_cols_array_2d();
         self.planes[0].normal = vec3(
             matrix_array[0][3] + matrix_array[0][0],
             matrix_array[1][3] + matrix_array[1][0],
@@ -42,7 +43,7 @@ impl Frustum {
             matrix_array[1][3] - matrix_array[1][0],
             matrix_array[2][3] - matrix_array[2][0],
         );
-        self.planes[1].distance = matrix_array[3][3] + matrix_array[3][0];
+        self.planes[1].distance = matrix_array[3][3] - matrix_array[3][0];
 
         self.planes[2].normal = vec3(
             matrix_array[0][3] + matrix_array[0][1],
@@ -51,7 +52,7 @@ impl Frustum {
         );
         self.planes[2].distance = matrix_array[3][3] + matrix_array[3][1];
 
-        self.planes[3].normal = vec3(
+        (&mut self.planes)[3].normal = vec3(
             matrix_array[0][3] - matrix_array[0][1],
             matrix_array[1][3] - matrix_array[1][1],
             matrix_array[2][3] - matrix_array[2][1],
