@@ -4,13 +4,14 @@ use glam::Vec3;
 
 use ft_vox_prototype_0_map_types::CHUNK_SIZE;
 
-use crate::graphics::{SkyRenderer, WorldRenderer};
+use crate::graphics::{SkyRenderer, UIRenderer, WorldRenderer};
 use crate::FOV;
 use crate::RENDER_DISTANCE;
 
 pub struct VoxGraphicsWrapper {
     world_renderer: WorldRenderer,
     sky_renderer: SkyRenderer,
+    ui_renderer: UIRenderer,
 }
 
 impl VoxGraphicsWrapper {
@@ -32,9 +33,12 @@ impl VoxGraphicsWrapper {
 
         let sky_renderer = SkyRenderer::init(config, _adapter, device, queue, FOV, 0.25, 1000.0);
 
+        let ui_renderer = UIRenderer::init(config, device, queue);
+
         VoxGraphicsWrapper {
             world_renderer,
             sky_renderer,
+            ui_renderer,
         }
     }
 
@@ -61,12 +65,13 @@ impl VoxGraphicsWrapper {
         fog_distance: f32,
         buffer_data: Vec<((i32, i32, i32), Arc<(wgpu::Buffer, wgpu::Buffer, u32)>)>,
     ) {
-        let mut encoder: wgpu::CommandEncoder =
+        let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
         self.sky_renderer.render(queue, view, &mut encoder);
         self.world_renderer
             .render(queue, view, &mut encoder, buffer_data, fog_distance);
+        self.ui_renderer.render(view, &mut encoder, queue);
 
         queue.submit(Some(encoder.finish()));
     }

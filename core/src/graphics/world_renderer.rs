@@ -2,7 +2,7 @@ use std::{borrow::Cow, sync::Arc};
 
 use bytemuck::{Pod, Zeroable};
 use glam::{Mat4, Vec3};
-use image::{GenericImageView, Pixel};
+use image::GenericImageView;
 
 use ft_vox_prototype_0_map_types::CHUNK_SIZE;
 
@@ -359,16 +359,8 @@ fn load_texture_from_terrain_png() -> (Vec<u8>, u32, u32) {
     .expect("Failed to open image");
 
     let (width, height) = img.dimensions();
-
-    let mut texels = Vec::with_capacity((width * height * 4) as usize);
-    for y in 0..height {
-        for x in 0..width {
-            let pixel = img.get_pixel(x, y);
-            let channels = pixel.channels();
-            texels.extend_from_slice(channels);
-        }
-    }
-    (texels, width, height)
+    let rgba = img.to_rgba8();
+    (rgba.into_raw(), width, height)
 }
 
 fn generate_projection_matrix(aspect_ratio: f32, fov: f32, near: f32, far: f32) -> glam::Mat4 {
