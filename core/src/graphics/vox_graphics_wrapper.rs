@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use glam::Vec3;
+use glam::{vec2, Vec3};
 
 use ft_vox_prototype_0_map_types::CHUNK_SIZE;
 
@@ -72,7 +72,26 @@ impl VoxGraphicsWrapper {
         self.sky_renderer.render(queue, view, &mut encoder);
         self.world_renderer
             .render(queue, view, &mut encoder, buffer_data, fog_distance);
-        self.ui_renderer.render(view, &mut encoder, queue);
+
+        let ui_item_bar = self.ui_renderer.create_ui_mesh(
+            device,
+            vec2(1600.0 / 2.0 - (182.0 * 4.0) / 2.0, 900.0 - (22.0 * 4.0)),
+            vec2(182.0 * 4.0, 22.0 * 4.0),
+            vec2(0.0, 0.0),
+            vec2(182.0, 22.0),
+        );
+
+        let ui_active_item_highlight = self.ui_renderer.create_ui_mesh(
+            device,
+            vec2(1600.0 / 2.0 - (24.0 * 4.0) / 2.0, 900.0 - (23.0 * 4.0)),
+            vec2(24.0 * 4.0, 24.0 * 4.0),
+            vec2(0.0, 22.0),
+            vec2(24.0, 24.0),
+        );
+
+        let ui_elements = vec![ui_item_bar, ui_active_item_highlight];
+        self.ui_renderer
+            .render(view, &mut encoder, queue, &ui_elements);
 
         queue.submit(Some(encoder.finish()));
     }

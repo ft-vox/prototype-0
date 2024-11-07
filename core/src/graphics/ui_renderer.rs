@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 use bytemuck::{Pod, Zeroable};
-use glam::{Mat4, Vec3};
+use glam::{Mat4, Vec2, Vec3};
 use image::GenericImageView;
 use wgpu::util::DeviceExt;
 
@@ -10,7 +10,8 @@ pub struct UIRenderer {
     uniform_buffer: wgpu::Buffer,
     pipeline: wgpu::RenderPipeline,
     transform: Mat4,
-    mesh_test: UIMeshWGPU,
+    ui_area_logical_size: Vec2,
+    ui_texture_sheet_size: Vec2,
 }
 
 #[repr(C)]
@@ -38,58 +39,6 @@ pub struct UIMeshWGPU {
     pub vertex_buffer: wgpu::Buffer,
     pub index_buffer: wgpu::Buffer,
     pub index_count: u32,
-}
-
-fn create_sample_ui_mesh() -> UIMesh {
-    let mut mesh = UIMesh {
-        vertices: Vec::new(),
-        indices: Vec::new(),
-        index_count: 0,
-    };
-    mesh.vertices = vec![
-        UIVertex {
-            position: [-1.0, -1.0],
-            tex_coord: [0.0, 0.0],
-        },
-        UIVertex {
-            position: [1.0, -1.0],
-            tex_coord: [1.0, 0.0],
-        },
-        UIVertex {
-            position: [-1.0, 1.0],
-            tex_coord: [0.0, 1.0],
-        },
-        UIVertex {
-            position: [1.0, 1.0],
-            tex_coord: [1.0, 1.0],
-        },
-    ];
-
-    mesh.indices = vec![0, 1, 2, 1, 3, 2];
-    mesh.index_count = 6;
-    mesh
-}
-
-fn create_ui_mesh_wgpu(device: &wgpu::Device) -> UIMeshWGPU {
-    let mesh = create_sample_ui_mesh();
-
-    let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("UI Vertex Buffer"),
-        contents: bytemuck::cast_slice(&mesh.vertices),
-        usage: wgpu::BufferUsages::VERTEX,
-    });
-
-    let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("UI Index Buffer"),
-        contents: bytemuck::cast_slice(&mesh.indices),
-        usage: wgpu::BufferUsages::INDEX,
-    });
-
-    UIMeshWGPU {
-        vertex_buffer,
-        index_buffer,
-        index_count: mesh.index_count,
-    }
 }
 
 impl UIRenderer {
@@ -144,9 +93,9 @@ impl UIRenderer {
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
             address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Linear,
-            min_filter: wgpu::FilterMode::Linear,
-            mipmap_filter: wgpu::FilterMode::Linear,
+            mag_filter: wgpu::FilterMode::Nearest,
+            min_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::FilterMode::Nearest,
             ..Default::default()
         });
 
@@ -213,7 +162,22 @@ impl UIRenderer {
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: "vs_ui",
-                buffers: &[],
+                buffers: &[wgpu::VertexBufferLayout {
+                    array_stride: std::mem::size_of::<UIVertex>() as wgpu::BufferAddress,
+                    step_mode: wgpu::VertexStepMode::Vertex,
+                    attributes: &[
+                        wgpu::VertexAttribute {
+                            format: wgpu::VertexFormat::Float32x2,
+                            offset: 0,
+                            shader_location: 0,
+                        },
+                        wgpu::VertexAttribute {
+                            format: wgpu::VertexFormat::Float32x2,
+                            offset: 8,
+                            shader_location: 1,
+                        },
+                    ],
+                }],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
             fragment: Some(wgpu::FragmentState {
@@ -249,7 +213,8 @@ impl UIRenderer {
             uniform_buffer,
             pipeline,
             transform: Self::calculate_transform_matrix(config.width as f32, config.height as f32),
-            mesh_test: create_ui_mesh_wgpu(device),
+            ui_area_logical_size: Vec2::new(1600.0, 900.0),
+            ui_texture_sheet_size: Vec2::new(width as f32, height as f32),
         }
     }
     fn calculate_transform_matrix(screen_width: f32, screen_height: f32) -> Mat4 {
@@ -275,9 +240,10 @@ impl UIRenderer {
         view: &wgpu::TextureView,
         encoder: &mut wgpu::CommandEncoder,
         queue: &wgpu::Queue,
+        ui_elements: &Vec<UIMeshWGPU>,
     ) {
-        let mut uniforms = UIUniforms {
-            transform: self.transform.to_cols_array(), //Mat4::IDENTITY.to_cols_array(),
+        let uniforms = UIUniforms {
+            transform: self.transform.to_cols_array(),
             opacity: 1.0,
             _padding: [0.0; 3],
         };
@@ -301,13 +267,103 @@ impl UIRenderer {
 
         render_pass.set_pipeline(&self.pipeline);
         render_pass.set_bind_group(0, &self.bind_group, &[]);
-        render_pass.draw(0..6, 0..1);
+
+        for ui_element in ui_elements {
+            render_pass.set_vertex_buffer(0, ui_element.vertex_buffer.slice(..));
+            render_pass
+                .set_index_buffer(ui_element.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+            render_pass.draw_indexed(0..ui_element.index_count, 0, 0..1);
+        }
+    }
+
+    fn create_ui_mesh_wgpu(device: &wgpu::Device, mesh: &UIMesh) -> UIMeshWGPU {
+        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("UI Vertex Buffer"),
+            contents: bytemuck::cast_slice(&mesh.vertices),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+
+        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("UI Index Buffer"),
+            contents: bytemuck::cast_slice(&mesh.indices),
+            usage: wgpu::BufferUsages::INDEX,
+        });
+
+        UIMeshWGPU {
+            vertex_buffer,
+            index_buffer,
+            index_count: mesh.index_count,
+        }
+    }
+
+    // TODO: Separate to UI FRAMEWORK
+    pub fn create_ui_mesh(
+        &mut self,
+        device: &wgpu::Device,
+        position: Vec2,
+        size: Vec2,
+        texture_position: Vec2,
+        texture_size: Vec2,
+    ) -> UIMeshWGPU {
+        let mut mesh = UIMesh {
+            vertices: Vec::new(),
+            indices: Vec::new(),
+            index_count: 0,
+        };
+
+        fn map_position(position: Vec2, logical_size: Vec2) -> Vec2 {
+            Vec2::new(
+                (position.x / logical_size.x) * 2.0 - 1.0,
+                (1.0 - (position.y / logical_size.y)) * 2.0 - 1.0,
+            )
+        }
+        let mapped_position = map_position(position, self.ui_area_logical_size);
+        let mapped_size = size / self.ui_area_logical_size * 2.0;
+        let mapped_texture_position = texture_position / self.ui_texture_sheet_size;
+        let mapped_texture_size = texture_size / self.ui_texture_sheet_size;
+
+        mesh.vertices = vec![
+            UIVertex {
+                position: [mapped_position.x, mapped_position.y],
+                tex_coord: [mapped_texture_position.x, mapped_texture_position.y],
+            },
+            UIVertex {
+                position: [mapped_position.x + mapped_size.x, mapped_position.y],
+                tex_coord: [
+                    mapped_texture_position.x + mapped_texture_size.x,
+                    mapped_texture_position.y,
+                ],
+            },
+            UIVertex {
+                position: [mapped_position.x, mapped_position.y - mapped_size.y],
+                tex_coord: [
+                    mapped_texture_position.x,
+                    mapped_texture_position.y + mapped_texture_size.y,
+                ],
+            },
+            UIVertex {
+                position: [
+                    mapped_position.x + mapped_size.x,
+                    mapped_position.y - mapped_size.y,
+                ],
+                tex_coord: [
+                    mapped_texture_position.x + mapped_texture_size.x,
+                    mapped_texture_position.y + mapped_texture_size.y,
+                ],
+            },
+        ];
+
+        mesh.indices = vec![0, 1, 2, 1, 3, 2];
+        mesh.index_count = 6;
+        Self::create_ui_mesh_wgpu(device, &mesh)
     }
 }
 
+// TODO: add Texture atlas system or Texture array system
+
 fn load_texture_from_ui_png() -> (Vec<u8>, u32, u32) {
     let img = image::load_from_memory_with_format(
-        include_bytes!("../../assets/terrain.png"),
+        include_bytes!("../../assets/ui-sheet.png"),
         image::ImageFormat::Png,
     )
     .expect("Failed to load UI texture");

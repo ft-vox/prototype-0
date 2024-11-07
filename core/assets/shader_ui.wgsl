@@ -1,3 +1,8 @@
+struct VertexInput {
+    @location(0) position: vec2<f32>,
+    @location(1) tex_coord: vec2<f32>,
+};
+
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
     @location(0) tex_coord: vec2<f32>,
@@ -18,28 +23,10 @@ var ui_texture: texture_2d<f32>;
 var ui_sampler: sampler;
 
 @vertex
-fn vs_ui(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
-    var tex_coords = array<vec2<f32>, 6>(
-        vec2<f32>(0.0, 1.0),
-        vec2<f32>(0.0, 0.0),
-        vec2<f32>(1.0, 0.0),
-        vec2<f32>(0.0, 1.0),
-        vec2<f32>(1.0, 0.0),
-        vec2<f32>(1.0, 1.0)
-    );
-
-    var positions = array<vec2<f32>, 6>(
-        vec2<f32>(-1.0, -1.0),
-        vec2<f32>(-1.0,  1.0),
-        vec2<f32>( 1.0,  1.0),
-        vec2<f32>(-1.0, -1.0),
-        vec2<f32>( 1.0,  1.0),
-        vec2<f32>( 1.0, -1.0)
-    );
-
+fn vs_ui(input: VertexInput) -> VertexOutput {
     var output: VertexOutput;
-    output.position = uniforms.transform * vec4<f32>(positions[vertex_index], 0.0, 1.0);
-    output.tex_coord = tex_coords[vertex_index];
+    output.position = uniforms.transform * vec4<f32>(input.position, 0.0, 1.0);
+    output.tex_coord = input.tex_coord;
     return output;
 }
 
