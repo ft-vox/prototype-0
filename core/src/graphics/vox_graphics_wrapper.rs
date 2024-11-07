@@ -50,6 +50,7 @@ impl VoxGraphicsWrapper {
     ) {
         self.sky_renderer.resize(config);
         self.world_renderer.resize(config, device);
+        self.ui_renderer.resize(config);
     }
 
     pub fn update(&mut self, eye: Vec3, eye_dir: Vec3) {

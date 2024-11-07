@@ -1,21 +1,95 @@
 use std::borrow::Cow;
 
 use bytemuck::{Pod, Zeroable};
-use glam::Mat4;
+use glam::{Mat4, Vec3};
 use image::GenericImageView;
-
-#[repr(C)]
-#[derive(Copy, Clone, Pod, Zeroable)]
-pub struct UIUniforms {
-    transform: [f32; 16],
-    opacity: f32,
-    _padding: [f32; 3],
-}
+use wgpu::util::DeviceExt;
 
 pub struct UIRenderer {
     bind_group: wgpu::BindGroup,
     uniform_buffer: wgpu::Buffer,
     pipeline: wgpu::RenderPipeline,
+    transform: Mat4,
+    mesh_test: UIMeshWGPU,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Pod, Zeroable)]
+struct UIUniforms {
+    transform: [f32; 16],
+    opacity: f32,
+    _padding: [f32; 3],
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Pod, Zeroable)]
+pub struct UIVertex {
+    position: [f32; 2],  // -1.0 ~ 1.0
+    tex_coord: [f32; 2], // 0.0 ~ 1.0
+}
+
+pub struct UIMesh {
+    pub vertices: Vec<UIVertex>,
+    pub indices: Vec<u16>,
+    pub index_count: u32,
+}
+
+pub struct UIMeshWGPU {
+    pub vertex_buffer: wgpu::Buffer,
+    pub index_buffer: wgpu::Buffer,
+    pub index_count: u32,
+}
+
+fn create_sample_ui_mesh() -> UIMesh {
+    let mut mesh = UIMesh {
+        vertices: Vec::new(),
+        indices: Vec::new(),
+        index_count: 0,
+    };
+    mesh.vertices = vec![
+        UIVertex {
+            position: [-1.0, -1.0],
+            tex_coord: [0.0, 0.0],
+        },
+        UIVertex {
+            position: [1.0, -1.0],
+            tex_coord: [1.0, 0.0],
+        },
+        UIVertex {
+            position: [-1.0, 1.0],
+            tex_coord: [0.0, 1.0],
+        },
+        UIVertex {
+            position: [1.0, 1.0],
+            tex_coord: [1.0, 1.0],
+        },
+    ];
+
+    mesh.indices = vec![0, 1, 2, 1, 3, 2];
+    mesh.index_count = 6;
+    mesh
+}
+
+fn create_ui_mesh_wgpu(device: &wgpu::Device) -> UIMeshWGPU {
+    let mesh = create_sample_ui_mesh();
+
+    let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("UI Vertex Buffer"),
+        contents: bytemuck::cast_slice(&mesh.vertices),
+        usage: wgpu::BufferUsages::VERTEX,
+    });
+
+    let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("UI Index Buffer"),
+        contents: bytemuck::cast_slice(&mesh.indices),
+        usage: wgpu::BufferUsages::INDEX,
+    });
+
+    UIMeshWGPU {
+        vertex_buffer,
+        index_buffer,
+        index_count: mesh.index_count,
+    }
 }
 
 impl UIRenderer {
@@ -174,7 +248,26 @@ impl UIRenderer {
             bind_group,
             uniform_buffer,
             pipeline,
+            transform: Self::calculate_transform_matrix(config.width as f32, config.height as f32),
+            mesh_test: create_ui_mesh_wgpu(device),
         }
+    }
+    fn calculate_transform_matrix(screen_width: f32, screen_height: f32) -> Mat4 {
+        let target_aspect_ratio = 16.0 / 9.0;
+        let screen_aspect_ratio = screen_width / screen_height;
+        let (scale_x, scale_y) = if screen_aspect_ratio > target_aspect_ratio {
+            let scale = screen_height / (screen_width / target_aspect_ratio);
+            (scale, 1.0)
+        } else {
+            let scale = screen_width / (screen_height * target_aspect_ratio);
+            (1.0, scale)
+        };
+        Mat4::from_scale(Vec3::new(scale_x, scale_y, 1.0))
+    }
+
+    pub fn resize(&mut self, config: &wgpu::SurfaceConfiguration) {
+        self.transform =
+            Self::calculate_transform_matrix(config.width as f32, config.height as f32);
     }
 
     pub fn render(
@@ -183,11 +276,12 @@ impl UIRenderer {
         encoder: &mut wgpu::CommandEncoder,
         queue: &wgpu::Queue,
     ) {
-        let uniforms = UIUniforms {
-            transform: Mat4::IDENTITY.to_cols_array(),
-            opacity: 0.5,
+        let mut uniforms = UIUniforms {
+            transform: self.transform.to_cols_array(), //Mat4::IDENTITY.to_cols_array(),
+            opacity: 1.0,
             _padding: [0.0; 3],
         };
+
         queue.write_buffer(&self.uniform_buffer, 0, bytemuck::cast_slice(&[uniforms]));
 
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -213,7 +307,7 @@ impl UIRenderer {
 
 fn load_texture_from_ui_png() -> (Vec<u8>, u32, u32) {
     let img = image::load_from_memory_with_format(
-        include_bytes!("../../assets/ui.png"),
+        include_bytes!("../../assets/terrain.png"),
         image::ImageFormat::Png,
     )
     .expect("Failed to load UI texture");
