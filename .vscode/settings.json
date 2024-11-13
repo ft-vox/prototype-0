@@ -7,13 +7,15 @@
         "editor.formatOnSave": true,
         "editor.defaultFormatter": "tamasfe.even-better-toml",
     },
-    "[typescript][typescriptreact]": {
+    "[c]": {
         "editor.formatOnSave": true,
-        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd",
     },
-    "editor.codeActionsOnSave": {
-        "source.organizeImports": "explicit",
+    "files.associations": {
+        "lib/c/**/*.h": "c",
     },
     "rust-analyzer.checkOnSave": true,
     "rust-analyzer.check.command": "clippy",
+    "C_Cpp.intelliSenseEngine": "disabled",
+    "clangd.detectExtensionConflicts": false,
 }

@@ -2,7 +2,7 @@
     "recommendations": [
         "rust-lang.rust-analyzer",
         "tamasfe.even-better-toml",
-        "esbenp.prettier-vscode",
+        "llvm-vs-code-extensions.vscode-clangd",
         "EditorConfig.EditorConfig",
     ],
 }

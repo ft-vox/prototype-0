@@ -1,0 +1,8 @@
+[package]
+name = "mod_loader"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+library_wrapper = { version = "0.1.0", path = "../library_wrapper" }
+tmap_wrapper = { version = "0.1.0", path = "../tmap_wrapper" }

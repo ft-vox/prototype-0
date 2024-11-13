@@ -1,5 +1,5 @@
 [package]
-name = "ft-vox-prototype-0-module-loader"
+name = "tmap_wrapper"
 version = "0.1.0"
 edition = "2021"
 
