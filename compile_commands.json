@@ -1,4 +1,0 @@
-[
-{"directory":"/Users/user/workspace/ft-vox/prototype-0/lib/c/TMap","arguments":["clang","-Iinclude","-x","c","-std=c99","-Wall","-Wextra","-Werror","-pedantic","-c","file.c","-o","file.o"],"file":"file.c" },
-{"directory":"/Users/user/workspace/ft-vox/prototype-0/lib/c/library","arguments":["clang","-Iinclude","-x","c","-std=c99","-Wall","-Wextra","-Werror","-pedantic","-c","file.c","-o","file.o"],"file":"file.c" },
-]
