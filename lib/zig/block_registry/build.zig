@@ -37,5 +37,5 @@ pub fn common_build(b: *std.Build, lib_name: []const u8, source: []const u8) !vo
 }
 
 pub fn build(b: *std.Build) !void {
-    try common_build(b, "store", "src/root.zig");
+    try common_build(b, "block_registry", "src/root.zig");
 }
