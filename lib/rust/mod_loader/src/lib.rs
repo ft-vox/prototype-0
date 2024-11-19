@@ -1,7 +1,13 @@
-use std::{ffi::CStr, os::raw::c_char};
+use std::{
+    collections::{BTreeSet, HashSet},
+    ffi::CStr,
+};
 
 use library_wrapper::Library;
+use mod_bindings::MapDependency;
 use tmap_wrapper::TMap;
+
+mod mod_bindings;
 
 struct Mod {
     library_handle: Library,
@@ -10,20 +16,60 @@ struct Mod {
     minor_version: u16,
 }
 
-impl Mod {
-    pub unsafe fn open(mod_name: &str) -> Mod {
-        let library_handle = Library::open(mod_name).expect("mod not found.");
-        let c_name = library_handle.get::<c_char>("name").unwrap();
-        let c_major_version = library_handle.get::<u16>("major_version").unwrap();
-        let c_minor_version = library_handle.get::<u16>("minor_version").unwrap();
+struct ModBuilder {
+    result: Mod,
+    compatible_engine_major_version: u16,
+    compatible_engine_minor_version: u16,
+    dependency: *const MapDependency,
+}
 
-        Mod {
-            library_handle,
-            name: CStr::from_ptr(c_name).to_str().unwrap().to_owned(),
-            major_version: *c_major_version,
-            minor_version: *c_minor_version,
+impl ModBuilder {
+    pub unsafe fn open(mod_name: &str) -> ModBuilder {
+        let library_handle = Library::open(mod_name).expect("mod not found.");
+        let c_mod = *library_handle.get::<mod_bindings::Mod>("mod").unwrap();
+
+        ModBuilder {
+            result: Mod {
+                library_handle,
+                name: CStr::from_ptr(c_mod.metadata.id)
+                    .to_str()
+                    .unwrap()
+                    .to_owned(),
+                major_version: c_mod.metadata.mod_major_version,
+                minor_version: c_mod.metadata.mod_minor_version,
+            },
+            compatible_engine_major_version: c_mod.metadata.compatible_engine_major_version,
+            compatible_engine_minor_version: c_mod.metadata.compatible_engine_minor_version,
+            dependency: c_mod.metadata.dependency,
         }
     }
+}
+
+struct ModsBuilder {
+    mod_id_set: HashSet<String>,
+    map: Option<TMap>,
+}
+
+impl ModsBuilder {
+    /**
+    # Safety
+
+    It must be dropped before library handle drops.
+     */
+    unsafe fn new() -> ModsBuilder {
+        ModsBuilder {
+            mod_id_set: HashSet::new(),
+            map: Some(TMap::new()),
+        }
+    }
+}
+
+pub enum ModsConstructionError {
+    DuplicateIds(Vec<String>),
+    UnresolvedDependencies {
+        unresolved_dependencies: Vec<String>,
+        modules_failed_to_load: Vec<String>,
+    },
 }
 
 pub struct Mods {
@@ -32,10 +78,26 @@ pub struct Mods {
 }
 
 impl Mods {
-    pub fn new() -> Mods {
-        Mods {
-            map: TMap::new(),
-            library_handles: Vec::new(),
+    pub fn new(
+        names: &[String],
+        engine_major_version: u16,
+        engine_minor_version: u16,
+    ) -> Result<Mods, ModsConstructionError> {
+        let library_handles = Vec::new();
+        let unresolved_dependencies = BTreeSet::new();
+        let unresolved_mods;
+        {
+            let mut builder = unsafe { ModsBuilder::new() };
+            // ... add mods to builder
+            if unresolved_dependencies.len() == 0 {
+                return Ok(Mods {
+                    map: builder.map.take().unwrap(),
+                    library_handles,
+                });
+            }
         }
+        Err(ModsConstructionError::UnresolvedDependencies(
+            unresolved_dependencies.into_iter().collect(),
+        ))
     }
 }
