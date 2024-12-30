@@ -3,17 +3,15 @@
 set -e
 
 do_work() {
-    DIR="$1"
-
-    for DIR in "$DIR"/*; do
+    echo '['
+    for DIR in lib/c/*; do
         if [ -d "$DIR" ]; then
             if [ -f "$DIR/print_compile_commands.sh" ]; then
                 (cd "$DIR" && sh print_compile_commands.sh)
-            else
-                do_work "$DIR"
             fi
         fi
     done
+    echo ']'
 }
 
-(echo '[' && do_work lib && echo ']') > compile_commands.json
+do_work > compile_commands.json
