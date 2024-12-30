@@ -12,7 +12,7 @@
         "editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd",
     },
     "files.associations": {
-        "lib/c/**/*.h": "c",
+        "**/*.h": "c",
     },
     "rust-analyzer.checkOnSave": true,
     "rust-analyzer.check.command": "clippy",
