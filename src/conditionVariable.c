@@ -35,22 +35,14 @@ static err_t v_wait(ConditionVariableHandle self, MutexHandle mutex) {
   ConditionVariableHandleActual *actual = (ConditionVariableHandleActual *)self;
 #ifdef _WIN32
   CRITICAL_SECTION *actual_mutex = &((MutexHandleActual *)mutex)->handle;
-  EnterCriticalSection(actual_mutex);
   if (!SleepConditionVariableCS(&actual->cond, actual_mutex, INFINITE)) {
-    LeaveCriticalSection(actual_mutex);
     return true;
   }
-  LeaveCriticalSection(actual_mutex);
 #else
   pthread_mutex_t *actual_mutex = &((MutexHandleActual *)mutex)->handle;
-  if (pthread_mutex_lock(actual_mutex) != 0) {
-    return true;
-  }
   if (pthread_cond_wait(&actual->cond, actual_mutex) != 0) {
-    pthread_mutex_unlock(actual_mutex);
     return true;
   }
-  pthread_mutex_unlock(actual_mutex);
 #endif
   return false;
 }

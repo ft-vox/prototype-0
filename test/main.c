@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -105,7 +106,9 @@ void test_condition_variable_signal_and_broadcast(void) {
   assert(thread2->v->join(thread2) == false);
 
   test_mutex->v->destroy(test_mutex);
+  test_mutex = NULL;
   test_cv->v->destroy(test_cv);
+  test_cv = NULL;
 }
 
 static err_t exit_routine(void *arg) {
