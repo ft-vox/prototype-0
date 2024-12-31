@@ -5,6 +5,8 @@
 
 #include "../src/internal.h"
 
+#include "cross_platform_sleep.h"
+
 static err_t mock_thread_routine(void *context) {
   int *data = (int *)context;
   (*data)++;
@@ -18,8 +20,6 @@ void test_thread_creation_and_join(void) {
 
   assert(thread->v->join(thread) == false);
   assert(context == 1);
-
-  // TODO: where is thread->v->destroy?
 }
 
 static MutexHandle test_mutex = NULL;
@@ -47,34 +47,65 @@ void test_mutex_locking_and_multiple_locks(void) {
   ThreadHandle thread = threadNew(&lock_handle2, try_lock_routine);
   assert(thread != NULL);
 
-  for (int i = 0; i < 2147483647; i++) {
-    continue;
-  }
+  cross_platform_sleep(100);
 
   assert(lock_handle1->unlock(lock_handle1) == false);
 
   assert(thread->v->join(thread) == false);
 
   test_mutex->v->destroy(test_mutex);
+  test_mutex = NULL;
+}
+
+static ConditionVariableHandle test_cv = NULL;
+static bool condition_met = false;
+
+static err_t wait_routine(void *arg) {
+  (void)arg;
+
+  MutexLockHandle lock_handle = NULL;
+  assert(test_mutex->v->lock(test_mutex, &lock_handle) == false);
+
+  assert(test_cv->v->wait(test_cv, test_mutex) == false);
+
+  assert(condition_met == true);
+
+  assert(lock_handle->unlock(lock_handle) == false);
+  return false;
 }
 
 void test_condition_variable_signal_and_broadcast(void) {
-  MutexHandle mutex = mutexNew();
-  assert(mutex != NULL);
+  test_mutex = mutexNew();
+  assert(test_mutex != NULL);
 
-  ConditionVariableHandle cv = conditionVariableNew();
-  assert(cv != NULL);
+  test_cv = conditionVariableNew();
+  assert(test_cv != NULL);
+
+  ThreadHandle thread1 = threadNew(NULL, wait_routine);
+  assert(thread1 != NULL);
+
+  ThreadHandle thread2 = threadNew(NULL, wait_routine);
+  assert(thread2 != NULL);
+
+  cross_platform_sleep(100);
 
   MutexLockHandle lock_handle = NULL;
-  assert(mutex->v->lock(mutex, &lock_handle) == false);
-
-  assert(cv->v->signal(cv) == false);
-
-  assert(cv->v->broadcast(cv) == false);
-
+  assert(test_mutex->v->lock(test_mutex, &lock_handle) == false);
+  condition_met = true;
+  assert(test_cv->v->signal(test_cv) == false);
   assert(lock_handle->unlock(lock_handle) == false);
-  mutex->v->destroy(mutex);
-  cv->v->destroy(cv);
+
+  cross_platform_sleep(100);
+
+  assert(test_mutex->v->lock(test_mutex, &lock_handle) == false);
+  assert(test_cv->v->broadcast(test_cv) == false);
+  assert(lock_handle->unlock(lock_handle) == false);
+
+  assert(thread1->v->join(thread1) == false);
+  assert(thread2->v->join(thread2) == false);
+
+  test_mutex->v->destroy(test_mutex);
+  test_cv->v->destroy(test_cv);
 }
 
 static err_t exit_routine(void *arg) {
