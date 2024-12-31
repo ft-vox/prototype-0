@@ -50,3 +50,18 @@ export(EXPORT TCoreTargets
   FILE "${CMAKE_CURRENT_BINARY_DIR}/TCoreTargets.cmake"
   NAMESPACE TStdOsThread::
 )
+
+option(BUILD_TESTS "Build tests" OFF)
+
+if(BUILD_TESTS)
+  add_executable(Test
+    test/main.c
+  )
+
+  target_link_libraries(Test TStdOsThread)
+  target_include_directories(Test PRIVATE external_headers)
+
+  enable_testing()
+
+  add_test(NAME Test COMMAND Test)
+endif()
