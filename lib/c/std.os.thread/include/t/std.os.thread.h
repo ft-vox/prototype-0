@@ -1,14 +1,15 @@
 #pragma once
 
-#include "t.h"
+#ifndef ERR_T_DEFINED
+#define ERR_T_DEFINED
+typedef bool err_t;
+#endif
 
 #if _WIN32
 #define DLLEXPORT __declspec(dllexport)
 #else
 #define DLLEXPORT
 #endif
-
-DLLEXPORT err_t plugin(T context, TMap_search search);
 
 typedef struct ThreadHandle *ThreadHandle;
 typedef struct MutexHandle *MutexHandle;
@@ -49,9 +50,3 @@ struct ConditionVariableHandle {
   ConditionVariableHandleV v;
   unsigned char opaque[];
 };
-
-#define KEY_STD_OS_THREAD_THREAD_NEW "std.os.thread.thread_new"
-#define KEY_STD_OS_THREAD_THREAD_EXIT "std.os.thread.thread_exit"
-#define KEY_STD_OS_THREAD_MUTEX_NEW "std.os.thread.mutex_new"
-#define KEY_STD_OS_THREAD_CONDITION_VARIABLE_NEW                               \
-  "std.os.thread.condition_variable_new"
