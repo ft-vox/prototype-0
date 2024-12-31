@@ -8,13 +8,6 @@
 #include <pthread.h>
 #endif
 
-ThreadHandle threadNew(void *context, err_t (*routine)(void *context));
-void threadExit(void);
-
-MutexHandle mutexNew(void);
-
-ConditionVariableHandle conditionVariableNew(void);
-
 typedef struct ContextWrapper {
   void *actual_context;
   err_t (*actual_routine)(void *context);

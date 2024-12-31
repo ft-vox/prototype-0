@@ -13,7 +13,7 @@ static void destroy(ConditionVariableHandle self);
 static const struct ConditionVariableHandleV v = {v_wait, v_signal, broadcast,
                                                   destroy};
 
-ConditionVariableHandle conditionVariableNew(void) {
+DLLEXPORT ConditionVariableHandle t_std_os_thread_conditionVariableNew(void) {
   struct ConditionVariableHandleActual *const result =
       malloc(sizeof(ConditionVariableHandleActual));
   if (!result) {

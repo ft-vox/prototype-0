@@ -12,7 +12,7 @@ static void destroy(MutexHandle self);
 
 static const struct MutexHandleV v = {try_lock, lock, destroy};
 
-MutexHandle mutexNew(void) {
+DLLEXPORT MutexHandle t_std_os_thread_mutexNew(void) {
   struct MutexHandleActual *const result = malloc(sizeof(MutexHandleActual));
   if (!result) {
     return NULL;

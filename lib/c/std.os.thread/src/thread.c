@@ -24,7 +24,8 @@ static void *routine_wrapper(void *context) {
 
 static const struct ThreadHandleV v = {join, detach};
 
-ThreadHandle threadNew(void *context, err_t (*routine)(void *context)) {
+DLLEXPORT ThreadHandle
+t_std_os_thread_threadNew(void *context, err_t (*routine)(void *context)) {
   struct ThreadHandleActual *const result = malloc(sizeof(ThreadHandleActual));
   if (!result) {
     return NULL;
@@ -49,7 +50,7 @@ ThreadHandle threadNew(void *context, err_t (*routine)(void *context)) {
   return (ThreadHandle)result;
 }
 
-void threadExit(void) {
+DLLEXPORT void t_std_os_thread_threadExit(void) {
 #ifdef _WIN32
   ExitThread(0);
 #else

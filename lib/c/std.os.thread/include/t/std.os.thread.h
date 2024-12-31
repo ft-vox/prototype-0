@@ -52,3 +52,11 @@ struct ConditionVariableHandle {
   ConditionVariableHandleV v;
   unsigned char opaque[];
 };
+
+DLLEXPORT ThreadHandle
+t_std_os_thread_threadNew(void *context, err_t (*routine)(void *context));
+DLLEXPORT void t_std_os_thread_threadExit(void);
+
+DLLEXPORT MutexHandle t_std_os_thread_mutexNew(void);
+
+DLLEXPORT ConditionVariableHandle t_std_os_thread_conditionVariableNew(void);
