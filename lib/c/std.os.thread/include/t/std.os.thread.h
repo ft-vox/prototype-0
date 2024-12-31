@@ -1,5 +1,7 @@
 #pragma once
 
+#include <stdbool.h>
+
 #ifndef ERR_T_DEFINED
 #define ERR_T_DEFINED
 typedef bool err_t;
