@@ -1,5 +1,6 @@
 #include "vox/event_loop.h"
 
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -120,5 +121,25 @@ vox_event_loop_err_t vox_event_loop_run_block(vox_event_loop_t *self,
       }
     }
   }
+  return false;
+}
+
+vox_event_loop_err_t
+vox_event_loop_block_while_no_task(vox_event_loop_t *self,
+                                   unsigned int timeout_millis,
+                                   bool *out_timeout_occurred) {
+  MutexLockHandle lock_handle = NULL;
+  if (self->mutex->v->lock(self->mutex, &lock_handle)) {
+    return true;
+  }
+
+  if (self->condition_variable->v->wait_with_timeout(
+          self->condition_variable, self->mutex, timeout_millis,
+          out_timeout_occurred)) {
+    lock_handle->unlock(lock_handle);
+    return true;
+  }
+
+  lock_handle->unlock(lock_handle);
   return false;
 }

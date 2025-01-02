@@ -2,7 +2,6 @@
 
 #include <stdbool.h>
 #include <stddef.h>
-#include <stdint.h>
 
 typedef bool vox_event_loop_err_t;
 
@@ -35,3 +34,7 @@ vox_event_loop_err_t vox_event_loop_add_task(vox_event_loop_t *self,
 vox_event_loop_err_t vox_event_loop_run_block(vox_event_loop_t *self,
                                               bool (*until)(void *context),
                                               void *context);
+vox_event_loop_err_t
+vox_event_loop_block_while_no_task(vox_event_loop_t *self,
+                                   unsigned int timeout_millis,
+                                   bool *out_timeout_occurred);
