@@ -10,8 +10,7 @@ typedef struct vox_event_loop_file_handle vox_event_loop_file_handle_t;
 vox_event_loop_async_task_t *
 vox_event_loop_async_task_file_open(bool create, const char *path,
                                     vox_event_loop_file_handle_t **out);
-vox_event_loop_async_task_t *
-vox_event_loop_async_task_file_close(vox_event_loop_file_handle_t *handle);
+void vox_event_loop_async_task_file_close(vox_event_loop_file_handle_t *handle);
 vox_event_loop_async_task_t *vox_event_loop_async_task_file_seek_absolute(
     vox_event_loop_file_handle_t *handle, int64_t position, bool *out_succeed);
 vox_event_loop_async_task_t *

@@ -31,7 +31,7 @@ static vox_event_loop_err_t file_open_routine(void *context) {
       sizeof(vox_event_loop_file_handle_t));
   if (result) {
     if (!task->create) {
-      result->fp = fopen(task->path, "rb");
+      result->fp = fopen(task->path, "rb+");
       if (!result->fp) {
         free(result);
         result = NULL;
@@ -41,7 +41,7 @@ static vox_event_loop_err_t file_open_routine(void *context) {
       }
     }
     if (result) {
-      result->fp = fopen(task->path, "wb");
+      result->fp = fopen(task->path, "wb+");
       if (!result->fp) {
         free(result);
         result = NULL;
@@ -52,7 +52,7 @@ static vox_event_loop_err_t file_open_routine(void *context) {
   vox_event_loop_t *const loop = task->loop;
   vox_event_loop_task_t *const task_then = task->task_then;
   free(task);
-  return vox_event_loop_add_task(loop, task_then);
+  return task_then && vox_event_loop_add_task(loop, task_then);
 }
 
 static vox_event_loop_err_t
@@ -80,43 +80,10 @@ vox_event_loop_async_task_file_open(bool create, const char *path,
   return (vox_event_loop_async_task_t *)(void *)result;
 }
 
-typedef struct file_close_task {
-  start_and_then_t start_and_then;
-  vox_event_loop_file_handle_t *handle;
-  vox_event_loop_t *loop;
-  vox_event_loop_task_t *task_then;
-} file_close_task_t;
-
-static vox_event_loop_err_t file_close_routine(void *context) {
-  file_close_task_t *const task = context;
-  fclose(task->handle->fp);
-  free(task->handle);
-  vox_event_loop_t *const loop = task->loop;
-  vox_event_loop_task_t *const task_then = task->task_then;
-  free(task);
-  return vox_event_loop_add_task(loop, task_then);
-}
-
-static vox_event_loop_err_t
-file_close_task(vox_event_loop_async_task_t *task_to_start,
-                vox_event_loop_t *loop, vox_event_loop_task_t *task_then) {
-  ((file_close_task_t *)task_to_start)->loop = loop;
-  ((file_close_task_t *)task_to_start)->task_then = task_then;
-  ThreadHandle thread =
-      t_std_os_thread_threadNew(task_to_start, file_close_routine);
-  if (!thread) {
-    return true;
-  }
-  return thread->v->detach(thread);
-}
-
-vox_event_loop_async_task_t *
-vox_event_loop_async_task_file_close(vox_event_loop_file_handle_t *handle) {
-  file_close_task_t *const result =
-      (file_close_task_t *)malloc(sizeof(file_close_task_t));
-  result->start_and_then = file_close_task;
-  result->handle = handle;
-  return (vox_event_loop_async_task_t *)(void *)result;
+void vox_event_loop_async_task_file_close(
+    vox_event_loop_file_handle_t *handle) {
+  fclose(handle->fp);
+  free(handle);
 }
 
 typedef struct file_write_task {
@@ -139,7 +106,7 @@ static vox_event_loop_err_t file_write_routine(void *context) {
   vox_event_loop_t *const loop = task->loop;
   vox_event_loop_task_t *const task_then = task->task_then;
   free(task);
-  return vox_event_loop_add_task(loop, task_then);
+  return task_then && vox_event_loop_add_task(loop, task_then);
 }
 
 static vox_event_loop_err_t
@@ -188,7 +155,7 @@ static vox_event_loop_err_t file_read_routine(void *context) {
   vox_event_loop_t *const loop = task->loop;
   vox_event_loop_task_t *const task_then = task->task_then;
   free(task);
-  return vox_event_loop_add_task(loop, task_then);
+  return task_then && vox_event_loop_add_task(loop, task_then);
 }
 
 static vox_event_loop_err_t
@@ -240,7 +207,7 @@ static vox_event_loop_err_t file_seek_routine(void *context) {
   vox_event_loop_t *const loop = task->loop;
   vox_event_loop_task_t *const task_then = task->task_then;
   free(task);
-  return vox_event_loop_add_task(loop, task_then);
+  return task_then && vox_event_loop_add_task(loop, task_then);
 }
 
 static vox_event_loop_err_t

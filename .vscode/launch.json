@@ -1,0 +1,13 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug vox_event_loop Test",
+            "program": "lib/c/vox_event_loop/builddir_self/Test",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+        },
+    ],
+}

@@ -12,8 +12,8 @@ typedef struct vox_event_loop_task vox_event_loop_task_t;
 typedef struct vox_event_loop_async_task vox_event_loop_async_task_t;
 
 typedef struct {
-  vox_event_loop_task_t *next;
   vox_event_loop_async_task_t *task;
+  vox_event_loop_task_t *next; // if task is NULL, discard (not dispose) next
 } vox_event_loop_await_t;
 
 typedef struct {

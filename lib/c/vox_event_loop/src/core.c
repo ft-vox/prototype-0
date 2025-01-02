@@ -83,7 +83,7 @@ vox_event_loop_err_t vox_event_loop_run_block(vox_event_loop_t *self,
                                               void *context) {
   vox_event_loop_t *loop = (vox_event_loop_t *)self;
 
-  while (!until(context)) {
+  while (until(context)) {
     MutexLockHandle lock_handle = NULL;
     if (loop->mutex->v->lock(loop->mutex, &lock_handle)) {
       return true;
