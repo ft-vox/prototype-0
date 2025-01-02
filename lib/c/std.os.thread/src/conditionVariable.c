@@ -62,7 +62,9 @@ static err_t v_wait_with_timeout(ConditionVariableHandle self,
   if (result == 0) {
     DWORD error = GetLastError();
     if (error == ERROR_TIMEOUT) {
-      *out_timeout_occurred = true;
+      if (out_timeout_occurred) {
+        *out_timeout_occurred = true;
+      }
       return false;
     }
     return true;
@@ -81,14 +83,18 @@ static err_t v_wait_with_timeout(ConditionVariableHandle self,
 
   int result = pthread_cond_timedwait(&actual->cond, actual_mutex, &ts);
   if (result == ETIMEDOUT) {
-    *out_timeout_occurred = true;
+    if (out_timeout_occurred) {
+      *out_timeout_occurred = true;
+    }
     return false;
   }
   if (result != 0) {
     return true;
   }
 #endif
-  *out_timeout_occurred = false;
+  if (out_timeout_occurred) {
+    *out_timeout_occurred = false;
+  }
   return false;
 }
 

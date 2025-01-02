@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 3.10)
 project(TStdOsThread)
 
 set(TSTDOSTHREAD_VERSION 1.0)
