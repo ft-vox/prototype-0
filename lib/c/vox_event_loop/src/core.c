@@ -133,6 +133,11 @@ vox_event_loop_block_while_no_task(vox_event_loop_t *self,
     return true;
   }
 
+  if (self->queue.head && self->queue.head->offset != self->queue.head->size) {
+    lock_handle->unlock(lock_handle);
+    return false;
+  }
+
   if (self->condition_variable->v->wait_with_timeout(
           self->condition_variable, self->mutex, timeout_millis,
           out_timeout_occurred)) {

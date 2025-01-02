@@ -32,10 +32,10 @@ int main(void) {
   assert(!vox_event_loop_add_task(loop, task));
 
   while (!end) {
+    assert(!vox_event_loop_block_while_no_task(loop, 500, NULL));
     puts("running");
     assert(!vox_event_loop_run_block(loop, always_true, NULL));
     puts("no tasks to run");
-    assert(!vox_event_loop_block_while_no_task(loop, 500, NULL));
   }
   assert(cross_platform_instant_elapsed(start) < 500);
   puts("done");

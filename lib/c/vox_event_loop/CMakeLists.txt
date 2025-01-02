@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 3.10)
 project(VoxEventLoop)
 
 set(VOXEVENTLOOP_VERSION 1.0)
@@ -55,7 +55,7 @@ if(BUILD_TESTS)
 
   target_link_libraries(Test VoxEventLoop t_std.os.thread)
   target_link_directories(Test PRIVATE dependencies/lib)
-  target_include_directories(Test PRIVATE external_headers dependencies/include)
+  target_include_directories(Test PRIVATE dependencies/include)
 
   enable_testing()
 

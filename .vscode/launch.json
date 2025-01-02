@@ -2,6 +2,14 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Debug vox_event_loop Test (Windows)",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/lib/c/vox_event_loop/builddir_self/Debug/Test.exe",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+        },
+        {
             "type": "lldb",
             "request": "launch",
             "name": "Debug vox_event_loop Test",
