@@ -5,7 +5,12 @@ set(TSTDOSTHREAD_VERSION 1.0)
 
 include_directories(include)
 
-add_library(TStdOsThread SHARED src/plugin.c src/thread.c src/mutex.c src/conditionVariable.c)
+add_library(TStdOsThread SHARED
+  src/plugin.c
+  src/thread.c
+  src/mutex.c
+  src/conditionVariable.c
+)
 
 target_include_directories(TStdOsThread
   PUBLIC
@@ -31,9 +36,11 @@ option(BUILD_TESTS "Build tests" OFF)
 if(BUILD_TESTS)
   add_executable(Test
     test/main.c
+    src/thread.c
+    src/mutex.c
+    src/conditionVariable.c
   )
 
-  target_link_libraries(Test TStdOsThread)
   target_include_directories(Test PRIVATE external_headers)
 
   enable_testing()

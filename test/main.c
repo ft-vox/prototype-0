@@ -14,7 +14,7 @@ static err_t mock_thread_routine(void *context) {
   return false;
 }
 
-void test_thread_creation_and_join(void) {
+static void test_thread_creation_and_join(void) {
   int context = 0;
   ThreadHandle thread = threadNew(&context, mock_thread_routine);
   assert(thread != NULL);
@@ -35,7 +35,7 @@ static err_t try_lock_routine(void *arg) {
   return false;
 }
 
-void test_mutex_locking_and_multiple_locks(void) {
+static void test_mutex_locking_and_multiple_locks(void) {
   test_mutex = mutexNew();
   assert(test_mutex != NULL);
 
@@ -75,7 +75,7 @@ static err_t wait_routine(void *arg) {
   return false;
 }
 
-void test_condition_variable_signal_and_broadcast(void) {
+static void test_condition_variable_signal_and_broadcast(void) {
   test_mutex = mutexNew();
   assert(test_mutex != NULL);
 
@@ -182,13 +182,19 @@ static err_t exit_routine(void *arg) {
   return true;
 }
 
-void test_thread_exit(void) {
+static void test_thread_exit(void) {
   ThreadHandle thread = threadNew(NULL, exit_routine);
   assert(thread != NULL);
 
   assert(thread->v->join(thread) == false);
 
   puts("Thread exit test completed successfully");
+}
+
+static void test_detach_thread_right_after_create(void) {
+  ThreadHandle thread = threadNew(NULL, exit_routine);
+  assert(thread != NULL);
+  assert(thread->v->detach(thread) == false);
 }
 
 int main(void) {
@@ -209,6 +215,9 @@ int main(void) {
   test_thread_exit();
   puts("test_thread_exit passed");
 
-  puts("All tests passed!");
+  test_detach_thread_right_after_create();
+  printf("test_detach_thread_right_after_create passed\n");
+
+  printf("All tests passed!\n");
   return 0;
 }
