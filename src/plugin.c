@@ -1,3 +1,4 @@
+#define T_STD_OS_THREAD_EXPORTS
 #include "t/std.os.thread.h"
 
 #include <stddef.h>
@@ -5,7 +6,7 @@
 #include "internal.h"
 #include "t.h"
 
-DLLEXPORT err_t plugin(T context, TMap_search search) {
+T_STD_OS_THREAD_API err_t plugin(T context, TMap_search search) {
   TMap_insert insert =
       (TMap_insert)search(context->map, KEY_BUILTIN_TMAP_INSERT);
   return insert(context->map, KEY_STD_OS_THREAD_THREAD_NEW, (void *)threadNew,

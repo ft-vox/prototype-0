@@ -5,12 +5,16 @@
 #include <stdbool.h>
 
 #if _WIN32
-#define DLLEXPORT __declspec(dllexport)
+#ifdef T_STD_OS_THREAD_EXPORTS
+#define T_STD_OS_THREAD_API __declspec(dllexport)
 #else
-#define DLLEXPORT
+#define T_STD_OS_THREAD_API __declspec(dllimport)
+#endif
+#else
+#define T_STD_OS_THREAD_API
 #endif
 
-DLLEXPORT err_t plugin(T context, TMap_search search);
+T_STD_OS_THREAD_API err_t plugin(T context, TMap_search search);
 
 typedef struct ThreadHandle *ThreadHandle;
 typedef struct MutexHandle *MutexHandle;
