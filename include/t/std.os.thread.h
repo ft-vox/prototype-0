@@ -2,6 +2,8 @@
 
 #include "t.h"
 
+#include <stdbool.h>
+
 #if _WIN32
 #define DLLEXPORT __declspec(dllexport)
 #else
@@ -41,6 +43,9 @@ struct MutexHandle {
 
 typedef const struct ConditionVariableHandleV {
   err_t (*wait)(ConditionVariableHandle self, MutexHandle mutex);
+  err_t (*wait_with_timeout)(ConditionVariableHandle self, MutexHandle mutex,
+                             unsigned int timeout_millis,
+                             bool *out_timeout_occurred);
   err_t (*signal)(ConditionVariableHandle self);
   err_t (*broadcast)(ConditionVariableHandle self);
   void (*destroy)(ConditionVariableHandle self);

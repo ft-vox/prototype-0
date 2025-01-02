@@ -1,17 +1,21 @@
 #include "t/std.os.thread.h"
 
+#include <errno.h>
 #include <stdbool.h>
 #include <stdlib.h>
 
 #include "internal.h"
 
 static err_t v_wait(ConditionVariableHandle self, MutexHandle mutex);
+static err_t v_wait_with_timeout(ConditionVariableHandle self,
+                                 MutexHandle mutex, unsigned int timeout_millis,
+                                 bool *out_timeout_occurred);
 static err_t v_signal(ConditionVariableHandle self);
 static err_t broadcast(ConditionVariableHandle self);
 static void destroy(ConditionVariableHandle self);
 
-static const struct ConditionVariableHandleV v = {v_wait, v_signal, broadcast,
-                                                  destroy};
+static const struct ConditionVariableHandleV v = {v_wait, v_wait_with_timeout,
+                                                  v_signal, broadcast, destroy};
 
 ConditionVariableHandle conditionVariableNew(void) {
   struct ConditionVariableHandleActual *const result =
@@ -44,6 +48,47 @@ static err_t v_wait(ConditionVariableHandle self, MutexHandle mutex) {
     return true;
   }
 #endif
+  return false;
+}
+
+static err_t v_wait_with_timeout(ConditionVariableHandle self,
+                                 MutexHandle mutex, unsigned int timeout_millis,
+                                 bool *out_timeout_occurred) {
+  ConditionVariableHandleActual *actual = (ConditionVariableHandleActual *)self;
+#ifdef _WIN32
+  CRITICAL_SECTION *actual_mutex = &((MutexHandleActual *)mutex)->handle;
+  DWORD result =
+      SleepConditionVariableCS(&actual->cond, actual_mutex, timeout_millis);
+  if (result == 0) {
+    DWORD error = GetLastError();
+    if (error == ERROR_TIMEOUT) {
+      *out_timeout_occurred = true;
+      return false;
+    }
+    return true;
+  }
+#else
+  pthread_mutex_t *actual_mutex = &((MutexHandleActual *)mutex)->handle;
+  struct timespec ts;
+  clock_gettime(CLOCK_REALTIME, &ts);
+
+  ts.tv_sec += timeout_millis / 1000;
+  ts.tv_nsec += (timeout_millis % 1000) * 1000000;
+  if (ts.tv_nsec >= 1000000000) {
+    ts.tv_sec += 1;
+    ts.tv_nsec -= 1000000000;
+  }
+
+  int result = pthread_cond_timedwait(&actual->cond, actual_mutex, &ts);
+  if (result == ETIMEDOUT) {
+    *out_timeout_occurred = true;
+    return false;
+  }
+  if (result != 0) {
+    return true;
+  }
+#endif
+  *out_timeout_occurred = false;
   return false;
 }
 
