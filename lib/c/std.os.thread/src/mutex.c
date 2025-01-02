@@ -1,3 +1,4 @@
+#define T_STD_OS_THREAD_EXPORTS
 #include "t/std.os.thread.h"
 
 #include <stdbool.h>
@@ -12,7 +13,7 @@ static void destroy(MutexHandle self);
 
 static const struct MutexHandleV v = {try_lock, lock, destroy};
 
-DLLEXPORT MutexHandle t_std_os_thread_mutexNew(void) {
+T_STD_OS_THREAD_API MutexHandle t_std_os_thread_mutexNew(void) {
   struct MutexHandleActual *const result = malloc(sizeof(MutexHandleActual));
   if (!result) {
     return NULL;

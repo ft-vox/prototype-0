@@ -1,3 +1,4 @@
+#define T_STD_OS_THREAD_EXPORTS
 #include "t/std.os.thread.h"
 
 #include <errno.h>
@@ -17,7 +18,8 @@ static void destroy(ConditionVariableHandle self);
 static const struct ConditionVariableHandleV v = {v_wait, v_wait_with_timeout,
                                                   v_signal, broadcast, destroy};
 
-DLLEXPORT ConditionVariableHandle t_std_os_thread_conditionVariableNew(void) {
+T_STD_OS_THREAD_API ConditionVariableHandle
+t_std_os_thread_conditionVariableNew(void) {
   struct ConditionVariableHandleActual *const result =
       malloc(sizeof(ConditionVariableHandleActual));
   if (!result) {

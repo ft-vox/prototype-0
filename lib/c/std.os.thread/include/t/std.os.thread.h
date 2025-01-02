@@ -10,9 +10,13 @@ typedef bool err_t;
 #include <stdbool.h>
 
 #if _WIN32
-#define DLLEXPORT __declspec(dllexport)
+#ifdef T_STD_OS_THREAD_EXPORTS
+#define T_STD_OS_THREAD_API __declspec(dllexport)
 #else
-#define DLLEXPORT
+#define T_STD_OS_THREAD_API __declspec(dllimport)
+#endif
+#else
+#define T_STD_OS_THREAD_API
 #endif
 
 typedef struct ThreadHandle *ThreadHandle;
@@ -58,10 +62,11 @@ struct ConditionVariableHandle {
   unsigned char opaque[];
 };
 
-DLLEXPORT ThreadHandle
+T_STD_OS_THREAD_API ThreadHandle
 t_std_os_thread_threadNew(void *context, err_t (*routine)(void *context));
-DLLEXPORT void t_std_os_thread_threadExit(void);
+T_STD_OS_THREAD_API void t_std_os_thread_threadExit(void);
 
-DLLEXPORT MutexHandle t_std_os_thread_mutexNew(void);
+T_STD_OS_THREAD_API MutexHandle t_std_os_thread_mutexNew(void);
 
-DLLEXPORT ConditionVariableHandle t_std_os_thread_conditionVariableNew(void);
+T_STD_OS_THREAD_API ConditionVariableHandle
+t_std_os_thread_conditionVariableNew(void);

@@ -21,6 +21,8 @@ typedef struct ThreadHandleActual {
   pthread_t handle;
 #endif
   ContextWrapper contextWrapper;
+  MutexHandle rcMutex;
+  unsigned int rc;
 } ThreadHandleActual;
 
 typedef struct MutexHandleActual {
