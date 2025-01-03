@@ -1,6 +1,10 @@
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#else
 #include <stdbool.h>
+#endif
 
 #ifndef ERR_T_DEFINED
 #define ERR_T_DEFINED
@@ -70,3 +74,7 @@ T_STD_OS_THREAD_API MutexHandle t_std_os_thread_mutexNew(void);
 
 T_STD_OS_THREAD_API ConditionVariableHandle
 t_std_os_thread_conditionVariableNew(void);
+
+#ifdef __cplusplus
+}
+#endif
