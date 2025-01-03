@@ -1,6 +1,12 @@
 #pragma once
 
-typedef _Bool err_t;
+#ifdef __cplusplus
+extern "C" {
+#else
+#include <stdbool.h>
+#endif
+
+typedef bool err_t;
 
 // write once, read only map
 typedef struct TMap *TMap;
@@ -34,3 +40,7 @@ typedef void (*tDestroy)(T self);
 #define KEY_BUILTIN_TMAP_INSERT "builtin.TMap.insert"
 #define KEY_BUILTIN_TMAP_SEARCH "builtin.TMap.search"
 #define KEY_BUILTIN_TMAP_DELETE "builtin.TMap.delete"
+
+#ifdef __cplusplus
+}
+#endif

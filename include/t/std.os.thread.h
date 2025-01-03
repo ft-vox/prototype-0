@@ -2,7 +2,11 @@
 
 #include "t.h"
 
+#ifdef __cplusplus
+extern "C" {
+#else
 #include <stdbool.h>
+#endif
 
 #if _WIN32
 #ifdef T_STD_OS_THREAD_EXPORTS
@@ -64,3 +68,7 @@ struct ConditionVariableHandle {
 #define KEY_STD_OS_THREAD_MUTEX_NEW "std.os.thread.mutex_new"
 #define KEY_STD_OS_THREAD_CONDITION_VARIABLE_NEW                               \
   "std.os.thread.condition_variable_new"
+
+#ifdef __cplusplus
+}
+#endif
