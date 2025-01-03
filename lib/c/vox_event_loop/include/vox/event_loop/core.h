@@ -3,6 +3,14 @@
 #include <stdbool.h>
 #include <stddef.h>
 
+#ifdef __cplusplus
+extern "C" {
+#include <cstddef>
+#else
+#include <stdbool.h>
+#include <stddef.h>
+#endif
+
 typedef bool vox_event_loop_err_t;
 
 typedef struct vox_event_loop vox_event_loop_t;
@@ -38,3 +46,7 @@ vox_event_loop_err_t
 vox_event_loop_block_while_no_task(vox_event_loop_t *self,
                                    unsigned int timeout_millis,
                                    bool *out_timeout_occurred);
+
+#ifdef __cplusplus
+}
+#endif

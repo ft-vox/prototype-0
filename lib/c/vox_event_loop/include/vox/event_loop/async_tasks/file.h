@@ -1,7 +1,12 @@
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#include <cstdint>
+#else
 #include <stdbool.h>
 #include <stdint.h>
+#endif
 
 #include "../core.h"
 
@@ -20,3 +25,7 @@ vox_event_loop_async_task_file_write(vox_event_loop_file_handle_t *handle,
 vox_event_loop_async_task_t *vox_event_loop_async_task_file_read(
     vox_event_loop_file_handle_t *handle, size_t length, char *buffer,
     size_t *out_buffer_length, bool *out_succeed);
+
+#ifdef __cplusplus
+}
+#endif

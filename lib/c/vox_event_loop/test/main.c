@@ -6,7 +6,6 @@
 #include <stdio.h>
 
 #include "cross_platform_time.h"
-#include "vox/event_loop/core.h"
 
 static bool always_true(void *unused) {
   (void)unused;
