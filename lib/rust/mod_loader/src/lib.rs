@@ -1,23 +1,25 @@
 use std::{
-    collections::{BTreeSet, HashSet},
+    collections::{BTreeSet, HashMap, HashSet},
     ffi::CStr,
 };
 
 use library_wrapper::Library;
-use mod_bindings::MapDependency;
-use tmap_wrapper::TMap;
+use mod_bindings::{MapDependency, ModApplyFunction, ModValidateFunction, TMap_search};
+use tmap_wrapper::{TMap, TMap_get};
 
 mod mod_bindings;
 
 struct Mod {
     library_handle: Library,
-    name: String,
+    id: String,
     major_version: u16,
     minor_version: u16,
 }
 
 struct ModBuilder {
     result: Mod,
+    apply: ModApplyFunction,
+    validate: ModValidateFunction,
     compatible_engine_major_version: u16,
     compatible_engine_minor_version: u16,
     dependency: *const MapDependency,
@@ -31,13 +33,15 @@ impl ModBuilder {
         ModBuilder {
             result: Mod {
                 library_handle,
-                name: CStr::from_ptr(c_mod.metadata.id)
+                id: CStr::from_ptr(c_mod.metadata.id)
                     .to_str()
                     .unwrap()
                     .to_owned(),
                 major_version: c_mod.metadata.mod_major_version,
                 minor_version: c_mod.metadata.mod_minor_version,
             },
+            apply: c_mod.apply,
+            validate: c_mod.validate,
             compatible_engine_major_version: c_mod.metadata.compatible_engine_major_version,
             compatible_engine_minor_version: c_mod.metadata.compatible_engine_minor_version,
             dependency: c_mod.metadata.dependency,
@@ -45,27 +49,16 @@ impl ModBuilder {
     }
 }
 
-struct ModsBuilder {
-    mod_id_set: HashSet<String>,
-    map: Option<TMap>,
-}
-
-impl ModsBuilder {
-    /**
-    # Safety
-
-    It must be dropped before library handle drops.
-     */
-    unsafe fn new() -> ModsBuilder {
-        ModsBuilder {
-            mod_id_set: HashSet::new(),
-            map: Some(TMap::new()),
-        }
-    }
+pub struct ModInfo {
+    name: String,
+    id: String,
 }
 
 pub enum ModsConstructionError {
-    DuplicateIds(Vec<String>),
+    VersionIncompatible(Vec<ModInfo>),
+    DuplicateIds(Vec<ModInfo>),
+    FailedToLoad(ModInfo),
+    ConditionNotMet(Vec<ModInfo>),
     UnresolvedDependencies {
         unresolved_dependencies: Vec<String>,
         modules_failed_to_load: Vec<String>,
@@ -73,8 +66,8 @@ pub enum ModsConstructionError {
 }
 
 pub struct Mods {
-    map: TMap, // must be dropped before library_handles drops, so it must be earlier field
-    library_handles: Vec<Mod>, // for more details, see https://stackoverflow.com/a/41056727
+    map: TMap,      // must be dropped before library_handles drops, so it must be earlier field
+    mods: Vec<Mod>, // for more details, see https://stackoverflow.com/a/41056727
 }
 
 impl Mods {
@@ -83,21 +76,98 @@ impl Mods {
         engine_major_version: u16,
         engine_minor_version: u16,
     ) -> Result<Mods, ModsConstructionError> {
-        let library_handles = Vec::new();
-        let unresolved_dependencies = BTreeSet::new();
-        let unresolved_mods;
-        {
-            let mut builder = unsafe { ModsBuilder::new() };
-            // ... add mods to builder
-            if unresolved_dependencies.len() == 0 {
-                return Ok(Mods {
-                    map: builder.map.take().unwrap(),
-                    library_handles,
-                });
+        let mut version_incompatible = Vec::new();
+        let mod_builders: Vec<_> = names
+            .iter()
+            .flat_map(|name| {
+                let mod_builder = unsafe { ModBuilder::open(name) };
+                if mod_builder.compatible_engine_major_version != engine_major_version
+                    || mod_builder.compatible_engine_minor_version > engine_minor_version
+                {
+                    version_incompatible.push(ModInfo {
+                        name: name.clone(),
+                        id: mod_builder.result.id,
+                    });
+                    None
+                } else {
+                    Some(mod_builder)
+                }
+            })
+            .collect();
+        if mod_builders.len() != names.len() {
+            return Err(ModsConstructionError::VersionIncompatible(
+                version_incompatible,
+            ));
+        }
+
+        let mut ids = HashMap::new();
+        for mod_builder in mod_builders.iter() {
+            let count = ids.entry(mod_builder.result.id.as_str()).or_insert(0);
+            *count += 1usize;
+        }
+        if ids.len() != names.len() {
+            return Err(ModsConstructionError::DuplicateIds(
+                mod_builders
+                    .iter()
+                    .enumerate()
+                    .flat_map(|(index, mod_builder)| {
+                        if *ids.get(mod_builder.result.id.as_str()).unwrap() > 1 {
+                            Some(ModInfo {
+                                name: names[index].clone(),
+                                id: mod_builder.result.id.clone(),
+                            })
+                        } else {
+                            None
+                        }
+                    })
+                    .collect(),
+            ));
+        }
+
+        let mut result = TMap::new();
+        for (index, mod_builder) in mod_builders.iter().enumerate() {
+            if unsafe {
+                mod_builder.apply.unwrap()(
+                    std::mem::transmute(result.raw()),
+                    Some(std::mem::transmute(TMap_get)),
+                )
+            } {
+                return Err(ModsConstructionError::FailedToLoad(ModInfo {
+                    name: names[index].clone(),
+                    id: mod_builder.result.id.clone(),
+                }));
             }
         }
-        Err(ModsConstructionError::UnresolvedDependencies(
-            unresolved_dependencies.into_iter().collect(),
-        ))
+
+        let failed_to_load: Vec<_> = mod_builders
+            .iter()
+            .enumerate()
+            .flat_map(|(index, mod_builder)| {
+                if unsafe {
+                    mod_builder.validate.unwrap()(
+                        std::mem::transmute(result.raw()),
+                        Some(std::mem::transmute(TMap_get)),
+                    )
+                } {
+                    Some(ModInfo {
+                        name: names[index].clone(),
+                        id: mod_builder.result.id.clone(),
+                    })
+                } else {
+                    None
+                }
+            })
+            .collect();
+        if failed_to_load.len() != 0 {
+            return Err(ModsConstructionError::ConditionNotMet(failed_to_load));
+        }
+
+        return Ok(Mods {
+            map: result,
+            mods: mod_builders
+                .into_iter()
+                .map(|mod_builder| mod_builder.result)
+                .collect(),
+        });
     }
 }

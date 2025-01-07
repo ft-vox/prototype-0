@@ -95,3 +95,8 @@ impl Drop for TMap {
         unsafe { TMap_delete(self.raw) };
     }
 }
+
+pub const TMap_get: unsafe extern "C" fn(
+    map: TMap_ptr,
+    key: *const ::std::os::raw::c_char,
+) -> *mut ::std::os::raw::c_void = tmap_bindings::TMap_search;

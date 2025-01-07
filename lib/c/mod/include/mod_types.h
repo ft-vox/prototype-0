@@ -49,8 +49,8 @@ typedef struct ModMetadata {
   MapDependency *dependency;
 } ModMetadata;
 
-typedef err_t (*ModApplyFunction)(TMap *map, TMap_search search);
-typedef err_t (*ModValidateFunction)(TMap *map, TMap_search search);
+typedef err_t (*ModApplyFunction)(TMap map, TMap_search search);
+typedef err_t (*ModValidateFunction)(TMap map, TMap_search search);
 
 typedef struct Mod {
   ModMetadata metadata;
