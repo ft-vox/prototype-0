@@ -1,10 +1,7 @@
-use std::{
-    collections::{BTreeSet, HashMap, HashSet},
-    ffi::CStr,
-};
+use std::{collections::HashMap, ffi::CStr};
 
 use library_wrapper::Library;
-use mod_bindings::{MapDependency, ModApplyFunction, ModValidateFunction, TMap_search};
+use mod_bindings::{ModApplyFunction, ModValidateFunction};
 use tmap_wrapper::{TMap, TMap_get};
 
 mod mod_bindings;
@@ -22,7 +19,6 @@ struct ModBuilder {
     validate: ModValidateFunction,
     compatible_engine_major_version: u16,
     compatible_engine_minor_version: u16,
-    dependency: *const MapDependency,
 }
 
 impl ModBuilder {
@@ -44,7 +40,6 @@ impl ModBuilder {
             validate: c_mod.validate,
             compatible_engine_major_version: c_mod.metadata.compatible_engine_major_version,
             compatible_engine_minor_version: c_mod.metadata.compatible_engine_minor_version,
-            dependency: c_mod.metadata.dependency,
         }
     }
 }
@@ -66,7 +61,7 @@ pub enum ModsConstructionError {
 }
 
 pub struct Mods {
-    map: TMap,      // must be dropped before library_handles drops, so it must be earlier field
+    pub map: TMap, // must be dropped before library_handles drops, so it must be earlier field
     mods: Vec<Mod>, // for more details, see https://stackoverflow.com/a/41056727
 }
 
