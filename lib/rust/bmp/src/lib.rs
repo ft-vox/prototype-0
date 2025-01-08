@@ -2,28 +2,28 @@ use std::error::Error;
 use std::result::Result;
 
 #[derive(Debug, PartialEq)]
-pub struct MinirtBmpPixel {
+pub struct BmpPixel {
     pub r: u8,
     pub g: u8,
     pub b: u8,
 }
 
 #[derive(Debug, PartialEq)]
-pub struct MinirtBmp {
+pub struct Bmp {
     width: usize,
     height: usize,
-    extra: Vec<MinirtBmpPixel>,
+    extra: Vec<BmpPixel>,
 }
 
-impl MinirtBmp {
-    pub fn new(width: usize, height: usize, fill: fn(usize, usize) -> MinirtBmpPixel) -> MinirtBmp {
+impl Bmp {
+    pub fn new(width: usize, height: usize, fill: fn(usize, usize) -> BmpPixel) -> Bmp {
         let mut extra = Vec::with_capacity(width * height);
         for y in 0..height {
             for x in 0..width {
                 extra.push(fill(x, y));
             }
         }
-        MinirtBmp {
+        Bmp {
             width,
             height,
             extra,
@@ -69,7 +69,7 @@ impl MinirtBmp {
         Ok(result)
     }
 
-    pub fn deserialize(buffer: &[u8]) -> Result<MinirtBmp, Box<dyn Error>> {
+    pub fn deserialize(buffer: &[u8]) -> Result<Bmp, Box<dyn Error>> {
         if buffer.len() <= 54 || &buffer[0..2] != b"BM" {
             return Err("Invalid BMP file format".into());
         }
@@ -90,11 +90,11 @@ impl MinirtBmp {
                 let r = buffer[54 + y * row_size + x * 3 + 2];
                 let g = buffer[54 + y * row_size + x * 3 + 1];
                 let b = buffer[54 + y * row_size + x * 3];
-                extra.push(MinirtBmpPixel { r, g, b });
+                extra.push(BmpPixel { r, g, b });
             }
         }
 
-        Ok(MinirtBmp {
+        Ok(Bmp {
             width,
             height,
             extra,
