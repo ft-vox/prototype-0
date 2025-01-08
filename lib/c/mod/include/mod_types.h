@@ -46,7 +46,6 @@ typedef struct ModMetadata {
   uint16_t mod_minor_version;
   uint16_t compatible_engine_major_version;
   uint16_t compatible_engine_minor_version;
-  MapDependency *dependency;
 } ModMetadata;
 
 typedef err_t (*ModApplyFunction)(TMap map, TMap_search search);
