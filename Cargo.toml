@@ -1,19 +1,4 @@
 [workspace]
 resolver = "2"
-members = [
-    "core",
-    "main",
-    "map_core",
-    "map_types",
-    "noise",
-    "noise_test",
-    "lib/rust/bmp",
-    "lib/rust/json",
-    "lib/rust/json_minifier_cli",
-    "lib/rust/library_wrapper",
-    "lib/rust/mod_loader",
-    "lib/rust/pack",
-    "lib/rust/pack_cli",
-    "lib/rust/tmap_wrapper",
-]
+members = ["core", "main", "map_core", "map_types", "noise", "noise_test"]
 default-members = ["main"]
