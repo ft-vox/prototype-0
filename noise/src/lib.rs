@@ -28,8 +28,8 @@ impl Noise {
         let mut permutation = [0u8; PERMUTATION_SIZE * 2];
         let mut p: [u8; PERMUTATION_SIZE] = [0; PERMUTATION_SIZE];
 
-        for i in 0..PERMUTATION_SIZE {
-            p[i] = i as u8;
+        for (i, v) in p.iter_mut().enumerate() {
+            *v = i as u8
         }
 
         let mut seed = seed;

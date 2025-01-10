@@ -39,9 +39,9 @@ fn main() {
     }
 
     let file = File::create(output_path).expect("Unable to create PNG file");
-    let ref mut w = BufWriter::new(file);
+    let mut w = BufWriter::new(file);
 
-    let mut encoder = Encoder::new(w, image_size as u32, image_size as u32);
+    let mut encoder = Encoder::new(&mut w, image_size as u32, image_size as u32);
     encoder.set_color(png::ColorType::Grayscale);
     encoder.set_depth(png::BitDepth::Eight);
     let mut writer = encoder.write_header().expect("Unable to write PNG header");
