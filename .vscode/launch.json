@@ -2,20 +2,22 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug vox_event_loop Test (Windows)",
+            "name": "Debug main (Windows)",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/lib/c/vox_event_loop/builddir_self/Debug/Test.exe",
+            "program": "${workspaceFolder}/target/debug/ft-vox-prototype-0-main.exe",
             "args": [],
             "cwd": "${workspaceFolder}",
+            "preLaunchTask": "rust: cargo build",
         },
         {
+            "name": "Debug main Test",
             "type": "lldb",
             "request": "launch",
-            "name": "Debug vox_event_loop Test",
-            "program": "lib/c/vox_event_loop/builddir_self/Test",
+            "program": "target/debug/ft-vox-prototype-0-main",
             "args": [],
             "cwd": "${workspaceFolder}",
+            "preLaunchTask": "rust: cargo build",
         },
     ],
 }
