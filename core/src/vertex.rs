@@ -1,5 +1,5 @@
 use bytemuck::{Pod, Zeroable};
-use ft_vox_prototype_0_map_types::{Chunk, Cube, CHUNK_SIZE};
+use ft_vox_prototype_0_map_types::{Chunk, Cube, CHUNK_SIZE, MAP_HEIGHT};
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -19,27 +19,23 @@ pub fn create_vertices_for_chunk(
     chunk: &Chunk,
     chunk_x: i32,
     chunk_y: i32,
-    chunk_z: i32,
     chunk_px: &Chunk,
     chunk_nx: &Chunk,
     chunk_py: &Chunk,
     chunk_ny: &Chunk,
-    chunk_pz: &Chunk,
-    chunk_nz: &Chunk,
 ) -> (Vec<Vertex>, Vec<u16>) {
     let x_offset = chunk_x * CHUNK_SIZE as i32;
     let y_offset = chunk_y * CHUNK_SIZE as i32;
-    let z_offset = chunk_z * CHUNK_SIZE as i32;
 
     let mut vertex_data = Vec::<Vertex>::new();
     let mut index_data = Vec::<u16>::new();
-    for z in 0..CHUNK_SIZE {
+    for z in 0..MAP_HEIGHT {
         for y in 0..CHUNK_SIZE {
             for x in 0..CHUNK_SIZE {
                 if chunk.cubes[z * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE + x].is_solid() {
                     let actual_x = x_offset + x as i32;
                     let actual_y = y_offset + y as i32;
-                    let actual_z = z_offset + z as i32;
+                    let actual_z = z as i32;
                     let (mut tmp_vertex_data, mut tmp_index_data) = create_vertices(
                         chunk.cubes[z * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE + x],
                         actual_x as f32,
@@ -74,15 +70,13 @@ pub fn create_vertices_for_chunk(
                                 .is_solid()
                         },
                         if z == CHUNK_SIZE - 1 {
-                            chunk_pz.cubes[y * CHUNK_SIZE + x].is_solid()
+                            false
                         } else {
                             chunk.cubes[(z + 1) * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE + x]
                                 .is_solid()
                         },
                         if z == 0 {
-                            chunk_nz.cubes
-                                [(CHUNK_SIZE - 1) * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE + x]
-                                .is_solid()
+                            false
                         } else {
                             chunk.cubes[(z - 1) * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE + x]
                                 .is_solid()

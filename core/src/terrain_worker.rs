@@ -9,16 +9,14 @@ use ft_vox_prototype_0_map_core::Map;
 use ft_vox_prototype_0_map_types::Chunk;
 
 pub enum TerrainWorkerJob {
-    Map((i32, i32, i32)),
+    Map((i32, i32)),
     Mesh {
-        position: (i32, i32, i32),
+        position: (i32, i32),
         zero: Arc<Chunk>,
         positive_x: Arc<Chunk>,
         negative_x: Arc<Chunk>,
         positive_y: Arc<Chunk>,
         negative_y: Arc<Chunk>,
-        positive_z: Arc<Chunk>,
-        negative_z: Arc<Chunk>,
     },
 }
 
@@ -30,10 +28,8 @@ pub struct TerrainWorker {
 impl TerrainWorker {
     pub fn new(
         job_callback: Arc<Mutex<dyn Send + Sync + FnMut() -> Option<TerrainWorkerJob>>>,
-        chunk_callback: Arc<Mutex<dyn Send + Sync + FnMut((i32, i32, i32), Arc<Chunk>)>>,
-        mesh_callback: Arc<
-            Mutex<dyn Send + Sync + FnMut((i32, i32, i32), (Vec<Vertex>, Vec<u16>))>,
-        >,
+        chunk_callback: Arc<Mutex<dyn Send + Sync + FnMut((i32, i32), Arc<Chunk>)>>,
+        mesh_callback: Arc<Mutex<dyn Send + Sync + FnMut((i32, i32), (Vec<Vertex>, Vec<u16>))>>,
     ) -> Self {
         let cpu_count = num_cpus::get_physical();
         let worker_count = (cpu_count - 1).max(1);
@@ -52,33 +48,28 @@ impl TerrainWorker {
                         let option = job_callback.lock().unwrap()();
                         if let Some(job) = option {
                             match job {
-                                TerrainWorkerJob::Map((x, y, z)) => {
-                                    let chunk = map.get_chunk(x, y, z);
-                                    chunk_callback.lock().unwrap()((x, y, z), Arc::new(chunk));
+                                TerrainWorkerJob::Map((x, y)) => {
+                                    let chunk = map.get_chunk(x, y);
+                                    chunk_callback.lock().unwrap()((x, y), Arc::new(chunk));
                                 }
                                 TerrainWorkerJob::Mesh {
-                                    position: (x, y, z),
+                                    position: (x, y),
                                     zero,
                                     positive_x,
                                     negative_x,
                                     positive_y,
                                     negative_y,
-                                    positive_z,
-                                    negative_z,
                                 } => {
                                     let mesh = create_vertices_for_chunk(
                                         &zero,
                                         x,
                                         y,
-                                        z,
                                         &positive_x,
                                         &negative_x,
                                         &positive_y,
                                         &negative_y,
-                                        &positive_z,
-                                        &negative_z,
                                     );
-                                    mesh_callback.lock().unwrap()((x, y, z), mesh);
+                                    mesh_callback.lock().unwrap()((x, y), mesh);
                                 }
                             }
                         } else {

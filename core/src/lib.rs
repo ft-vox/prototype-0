@@ -16,18 +16,16 @@ pub const RENDER_DISTANCE: f32 = CACHE_DISTANCE as f32;
 pub const FOG_COLOR_SRGB: [f32; 4] = [130.0 / 255.0, 173.0 / 255.0, 253.0 / 255.0, 1.0];
 pub const FOV: f32 = 80.0;
 
-pub fn get_coords(distance: f32) -> Vec<(i32, i32, i32)> {
+pub fn get_coords(distance: f32) -> Vec<(i32, i32)> {
     let mut coords = Vec::new();
     let max_coord = distance.floor() as i32;
     let distance_squared = distance * distance;
 
     for x in -max_coord..=max_coord {
         for y in -max_coord..=max_coord {
-            for z in -max_coord..=max_coord {
-                let dist_sq = (x * x + y * y + z * z) as f32;
-                if dist_sq <= distance_squared {
-                    coords.push((x, y, z));
-                }
+            let dist_sq = (x * x + y * y) as f32;
+            if dist_sq <= distance_squared {
+                coords.push((x, y));
             }
         }
     }
@@ -88,7 +86,7 @@ impl Vox {
             vertical_rotation: 0.0,
             eye_dir: Vec3::new(0.0, 0.0, 0.0),
             is_paused: false,
-            terrain_manager: TerrainManager::new(CACHE_DISTANCE, (eye_x, eye_y, eye_z)),
+            terrain_manager: TerrainManager::new(CACHE_DISTANCE, (eye_x, eye_y)),
 
             target_fog_distance: 0.0,
             current_fog_distance: 0.0,
@@ -178,8 +176,7 @@ impl Vox {
 
     pub fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
         self.terrain_manager.set_cache_distance(CACHE_DISTANCE);
-        self.terrain_manager
-            .set_eye((self.eye.x, self.eye.y, self.eye.z));
+        self.terrain_manager.set_eye((self.eye.x, self.eye.y));
 
         let wgpu_buffers = self
             .terrain_manager

@@ -64,7 +64,7 @@ impl VoxGraphicsWrapper {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         fog_distance: f32,
-        buffer_data: Vec<((i32, i32, i32), Arc<(wgpu::Buffer, wgpu::Buffer, u32)>)>,
+        buffer_data: Vec<((i32, i32), Arc<(wgpu::Buffer, wgpu::Buffer, u32)>)>,
     ) {
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });

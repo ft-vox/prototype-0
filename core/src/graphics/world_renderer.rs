@@ -281,7 +281,7 @@ impl WorldRenderer {
         queue: &wgpu::Queue,
         view: &wgpu::TextureView,
         encoder: &mut wgpu::CommandEncoder,
-        buffer_data: Vec<((i32, i32, i32), Arc<(wgpu::Buffer, wgpu::Buffer, u32)>)>,
+        buffer_data: Vec<((i32, i32), Arc<(wgpu::Buffer, wgpu::Buffer, u32)>)>,
         fog_distance: f32,
     ) {
         {
@@ -327,21 +327,22 @@ impl WorldRenderer {
             rpass.set_pipeline(&self.pipeline);
             rpass.set_bind_group(0, &self.bind_group, &[]);
 
-            for ((x, y, z), buffers) in buffer_data {
+            for ((x, y), buffers) in buffer_data {
                 let (vertex_buffer, index_buffer, index_count) = &*buffers;
                 if *index_count == 0 {
                     continue;
                 }
-                if !self.frustum.is_sphere_in_frustum_planes(
-                    Vec3::new(
-                        x as f32 * 16.0 + 8.0,
-                        y as f32 * 16.0 + 8.0,
-                        z as f32 * 16.0 + 8.0,
-                    ),
-                    13.8564, // sqrt(8^2 + 8^2 + 8^2)
-                ) {
-                    continue;
-                }
+                // // TODO: fix frustum culling
+                // if !self.frustum.is_sphere_in_frustum_planes(
+                //     Vec3::new(
+                //         x as f32 * 16.0 + 8.0,
+                //         y as f32 * 16.0 + 8.0,
+                //         z as f32 * 16.0 + 8.0,
+                //     ),
+                //     13.8564, // sqrt(8^2 + 8^2 + 8^2)
+                // ) {
+                //     continue;
+                // }
 
                 rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
                 rpass.set_vertex_buffer(0, vertex_buffer.slice(..));

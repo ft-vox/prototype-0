@@ -1,4 +1,5 @@
 pub const CHUNK_SIZE: usize = 16;
+pub const MAP_HEIGHT: usize = 128;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Cube {
@@ -15,7 +16,7 @@ pub enum Solid {
 
 #[derive(Clone)]
 pub struct Chunk {
-    pub cubes: [Cube; CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE],
+    pub cubes: [Cube; MAP_HEIGHT * CHUNK_SIZE * CHUNK_SIZE],
 }
 
 impl Cube {
@@ -111,8 +112,8 @@ impl Chunk {
     }
 
     pub fn from_u8_vec(from: &[u8]) -> Self {
-        let mut cubes = [Cube::Empty; CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE];
-        for i in 0..CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE {
+        let mut cubes = [Cube::Empty; MAP_HEIGHT * CHUNK_SIZE * CHUNK_SIZE];
+        for i in 0..MAP_HEIGHT * CHUNK_SIZE * CHUNK_SIZE {
             cubes[i] = Cube::from_u8(from[i]);
         }
         Self { cubes }
