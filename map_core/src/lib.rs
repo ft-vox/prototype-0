@@ -1,4 +1,6 @@
-use ft_vox_prototype_0_map_types::{Chunk, Cube, Plantlike, Solid, CHUNK_SIZE, MAP_HEIGHT};
+use ft_vox_prototype_0_map_types::{
+    Chunk, Cube, Harvestable, Plantlike, Solid, CHUNK_SIZE, MAP_HEIGHT,
+};
 use ft_vox_prototype_0_noise::{Noise, NoiseLayer};
 
 const MIN_HEIGHT: f32 = 10.0;
@@ -44,7 +46,7 @@ impl Map {
                     } else if height < z {
                         Cube::Empty
                     } else if height == z {
-                        Cube::Plantlike(Plantlike::Grass)
+                        Cube::Harvestable(Harvestable::Wheat5)
                     } else if height == z + 1 {
                         Cube::Solid(Solid::GrassBlock)
                     } else if height == z + 2 {
