@@ -112,15 +112,54 @@ macro_rules! define_solid {
 }
 
 define_solid! {
+    // 0
     Bedrock((1, 1)),
-    Grass((0, 3), (0, 0), (0, 2)),
+    GrassBlock((0, 3), (0, 0), (0, 2)),
     Dirt((0, 2)),
     Stone((0, 1)),
-    PlankOak((0, 4)),
-    PlankBirch((13, 6)),
-    PlankJungle((12, 7)),
-    PlankSpruce((12, 6)),
-    SmoothStone((0, 5), (0, 6), (0, 6)),
+    PlankOak((0, 4)), // TODO: rename
+    PlankBirch((13, 6)), // TODO: rename
+    PlankJungle((12, 7)), // TODO: rename
+    PlankSpruce((12, 6)), // TODO: rename
+    SmoothStone((0, 6)),
+    SmoothStoneSlabs((0, 5), (0, 6), (0, 6)),
+    Bricks((0, 7)),
+    TNT((0, 8), (0, 9), (0, 10)),
+    Cobweb((0, 11)),
+    // 1
+    Cobblestone((1, 0)),
+    Sand((1, 2)),
+    Gravel((1, 3)),
+    OakLog((1, 4), (1, 5), (1, 5)),
+    BlockOfIron((1, 6)),
+    BlockOfGold((1, 7)),
+    BlockOfDiamond((1, 8)),
+    // 2
+    GoldOre((2, 0)),
+    IronOre((2, 1)),
+    CoalOre((2, 2)),
+    Bookshelf((2, 3), (0, 4), (0, 4)),
+    MossyCobblestone((2, 4)),
+    // 3
+    Obsidian((2, 5)),
+    Sponge((3, 0)),
+    Glass((3, 1)), // TODO: Translucent
+    DiamondOre((3, 2)),
+    RedstoneOre((3, 3)),
+    OakLeaves((3, 4)), // TODO: Translucent
+    StoneBricks((3, 5)),
+    // 4
+    WoolWhite((4, 0)),
+    MonsterSpawner((4, 1)), // TODO: Translucent
+    SnowBlock((4, 2)),
+    Ice((4, 3)), // TODO: Translucent
+    SnowyGrassBlock((4, 4), (4, 2), (0, 2)),
+    Clay((4, 8)),
+    Jukebox((4, 10), (4, 11), (4, 10)),
+    Mycelium((4, 13), (4, 14), (0, 2)),
+
+
+
 }
 
 macro_rules! define_plantlike {

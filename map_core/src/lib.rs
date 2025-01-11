@@ -46,7 +46,7 @@ impl Map {
                     } else if height == z {
                         Cube::Plantlike(Plantlike::Grass)
                     } else if height == z + 1 {
-                        Cube::Solid(Solid::Grass)
+                        Cube::Solid(Solid::GrassBlock)
                     } else if height == z + 2 {
                         Cube::Solid(Solid::Dirt)
                     } else {
