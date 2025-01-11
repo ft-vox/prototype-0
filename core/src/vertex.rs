@@ -69,7 +69,7 @@ pub fn create_vertices_for_chunk(
                             chunk.cubes[z * CHUNK_SIZE * CHUNK_SIZE + (y - 1) * CHUNK_SIZE + x]
                                 .is_solid()
                         },
-                        if z == CHUNK_SIZE - 1 {
+                        if z == MAP_HEIGHT - 1 {
                             false
                         } else {
                             chunk.cubes[(z + 1) * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE + x]
