@@ -5,15 +5,24 @@ use std::{
 
 use ft_vox_prototype_0_map_types::{Chunk, CHUNK_SIZE};
 
-use crate::{get_coords, terrain_worker::TerrainWorker};
+use crate::{
+    get_coords,
+    graphics::{DrawCallArgs, MeshBuffer},
+    terrain_worker::TerrainWorker,
+};
 use crate::{terrain_worker::TerrainWorkerJob, vertex::Vertex};
 
-pub struct TerrainManager<T: Clone + 'static> {
+pub struct TerrainManager {
     map_cache: Arc<Mutex<MapCache>>,
     mesh_cache: Arc<Mutex<MeshCache>>,
-    buffer_cache: BufferCache<T>,
+    buffer_cache: BufferCache,
     eye: (f32, f32),
     terrain_worker: TerrainWorker,
+}
+
+pub struct Mesh {
+    pub opaque_buffers: Vec<(Vec<Vertex>, Vec<u16>)>,
+    pub translucent_buffers: Vec<(Vec<Vertex>, Vec<u16>)>,
 }
 
 struct MapCache {
@@ -93,7 +102,7 @@ impl MapCache {
 
 struct MeshCache {
     pub mesh_load_request: VecDeque<((i32, i32), Vec<Arc<Chunk>>)>,
-    pub meshes: VecDeque<Arc<((i32, i32), (Vec<Vertex>, Vec<u16>))>>,
+    pub meshes: VecDeque<Arc<((i32, i32), Mesh)>>,
 }
 
 impl MeshCache {
@@ -105,8 +114,8 @@ impl MeshCache {
     }
 }
 
-struct BufferCache<T: Clone + 'static> {
-    pub buffers: Vec<Option<T>>,
+struct BufferCache {
+    pub buffers: Vec<Option<(Arc<Vec<DrawCallArgs>>, Arc<Vec<DrawCallArgs>>)>>,
 
     pub cache_distance: usize,
     pub coords: Vec<(i32, i32)>,
@@ -118,7 +127,7 @@ struct BufferCache<T: Clone + 'static> {
     pub farthest_distance_sq: i32,
 }
 
-impl<T: Clone + 'static> BufferCache<T> {
+impl BufferCache {
     pub fn new(cache_distance: usize, eye: (f32, f32)) -> Self {
         let size = cache_distance * 2 + 2;
         let (x, y) = eye;
@@ -135,7 +144,7 @@ impl<T: Clone + 'static> BufferCache<T> {
         }
     }
 
-    pub fn get(&self, x: i32, y: i32) -> Option<T> {
+    pub fn get(&self, x: i32, y: i32) -> Option<(Arc<Vec<DrawCallArgs>>, Arc<Vec<DrawCallArgs>>)> {
         let size = self.cache_distance * 2 + 2;
 
         let min_x = self.x - self.cache_distance as i32 - if self.eye_x_upper { 0 } else { 1 };
@@ -155,7 +164,12 @@ impl<T: Clone + 'static> BufferCache<T> {
         self.buffers[y * size + x].clone()
     }
 
-    pub fn set(&mut self, x: i32, y: i32, buffer: Option<T>) {
+    pub fn set(
+        &mut self,
+        x: i32,
+        y: i32,
+        buffer: Option<(Arc<Vec<DrawCallArgs>>, Arc<Vec<DrawCallArgs>>)>,
+    ) {
         let size = self.cache_distance * 2 + 2;
 
         let min_x = self.x - self.cache_distance as i32 - if self.eye_x_upper { 0 } else { 1 };
@@ -183,26 +197,33 @@ impl<T: Clone + 'static> BufferCache<T> {
     fn get_available(
         &mut self,
         mesh_cache: Arc<Mutex<MeshCache>>,
-        process: &mut dyn FnMut(&Vec<Vertex>, &Vec<u16>) -> T,
-    ) -> Vec<((i32, i32), T)> {
+        process: &mut dyn FnMut(&Mesh) -> (Arc<Vec<DrawCallArgs>>, Arc<Vec<DrawCallArgs>>),
+    ) -> Vec<MeshBuffer> {
         fn dst((x, y): (i32, i32)) -> i32 {
             x * x + y * y
         }
         while let Some(item) = mesh_cache.lock().unwrap().meshes.pop_front() {
-            let ((x, y), (vertices, indices)) = &*item;
-            self.set(*x, *y, Some(process(vertices, indices)));
+            let ((x, y), mesh) = &*item;
+            self.set(*x, *y, Some(process(mesh)));
             self.farthest_distance_sq =
                 std::cmp::max(self.farthest_distance_sq, dst((x - self.x, y - self.y)));
         }
         self.coords
             .iter()
             .map(|&(x, y)| (x + self.x, y + self.y))
-            .filter_map(|(x, y)| self.get(x, y).map(|mesh| ((x, y), mesh)))
+            .filter_map(|(x, y)| {
+                self.get(x, y).map(|mesh| MeshBuffer {
+                    x,
+                    y,
+                    opaque: mesh.0,
+                    translucent: mesh.1,
+                })
+            })
             .collect()
     }
 }
 
-impl<T: Clone + 'static> TerrainManager<T> {
+impl TerrainManager {
     pub fn new(cache_distance: usize, eye: (f32, f32)) -> Self {
         let mut result = Self {
             map_cache: Arc::new(Mutex::new(MapCache::new(cache_distance, eye))),
@@ -415,8 +436,8 @@ impl<T: Clone + 'static> TerrainManager<T> {
 
     pub fn get_available(
         &mut self,
-        process: &mut dyn FnMut(&Vec<Vertex>, &Vec<u16>) -> T,
-    ) -> Vec<((i32, i32), T)> {
+        process: &mut dyn FnMut(&Mesh) -> (Arc<Vec<DrawCallArgs>>, Arc<Vec<DrawCallArgs>>),
+    ) -> Vec<MeshBuffer> {
         self.buffer_cache
             .get_available(self.mesh_cache.clone(), process)
     }

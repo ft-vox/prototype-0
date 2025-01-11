@@ -4,7 +4,7 @@ use std::{
     time::Duration,
 };
 
-use crate::vertex::*;
+use crate::{terrain_manager::Mesh, vertex::*};
 use ft_vox_prototype_0_map_core::Map;
 use ft_vox_prototype_0_map_types::Chunk;
 
@@ -29,7 +29,7 @@ impl TerrainWorker {
     pub fn new(
         job_callback: Arc<Mutex<dyn Send + Sync + FnMut() -> Option<TerrainWorkerJob>>>,
         chunk_callback: Arc<Mutex<dyn Send + Sync + FnMut((i32, i32), Arc<Chunk>)>>,
-        mesh_callback: Arc<Mutex<dyn Send + Sync + FnMut((i32, i32), (Vec<Vertex>, Vec<u16>))>>,
+        mesh_callback: Arc<Mutex<dyn Send + Sync + FnMut((i32, i32), Mesh)>>,
     ) -> Self {
         let cpu_count = num_cpus::get_physical();
         let worker_count = (cpu_count - 1).max(1);
@@ -60,7 +60,7 @@ impl TerrainWorker {
                                     positive_y,
                                     negative_y,
                                 } => {
-                                    let mesh = create_vertices_for_chunk(
+                                    let mesh = create_mesh_for_chunk(
                                         &zero,
                                         x,
                                         y,

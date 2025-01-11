@@ -8,6 +8,15 @@ use crate::graphics::{SkyRenderer, UIRenderer, WorldRenderer};
 use crate::FOV;
 use crate::RENDER_DISTANCE;
 
+pub type DrawCallArgs = (wgpu::Buffer, wgpu::Buffer, u32);
+
+pub struct MeshBuffer {
+    pub x: i32,
+    pub y: i32,
+    pub opaque: Arc<Vec<DrawCallArgs>>,
+    pub translucent: Arc<Vec<DrawCallArgs>>,
+}
+
 pub struct VoxGraphicsWrapper {
     world_renderer: WorldRenderer,
     sky_renderer: SkyRenderer,
@@ -64,14 +73,14 @@ impl VoxGraphicsWrapper {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         fog_distance: f32,
-        buffer_data: Vec<((i32, i32), Arc<(wgpu::Buffer, wgpu::Buffer, u32)>)>,
+        buffers: Vec<MeshBuffer>,
     ) {
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
         self.sky_renderer.render(queue, view, &mut encoder);
         self.world_renderer
-            .render(queue, view, &mut encoder, buffer_data, fog_distance);
+            .render(queue, view, &mut encoder, buffers, fog_distance);
 
         let ui_item_bar = self.ui_renderer.create_ui_mesh(
             device,

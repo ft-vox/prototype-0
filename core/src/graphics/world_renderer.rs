@@ -1,4 +1,4 @@
-use std::{borrow::Cow, sync::Arc};
+use std::borrow::Cow;
 
 use bytemuck::{Pod, Zeroable};
 use glam::{Mat4, Vec3};
@@ -9,6 +9,8 @@ use ft_vox_prototype_0_map_types::CHUNK_SIZE;
 use crate::graphics::Frustum;
 use crate::vertex::Vertex;
 use crate::FOG_COLOR_SRGB;
+
+use super::MeshBuffer;
 
 #[repr(C)]
 #[derive(Copy, Clone, Pod, Zeroable)]
@@ -33,7 +35,8 @@ pub struct WorldRenderer {
     depth_buffer: wgpu::TextureView, // TODO: separate for other renderer(maybe)
     bind_group: wgpu::BindGroup,
     uniform_buffer: wgpu::Buffer,
-    pipeline: wgpu::RenderPipeline,
+    opaque_pipeline: wgpu::RenderPipeline,
+    translucent_pipeline: wgpu::RenderPipeline,
 }
 
 impl WorldRenderer {
@@ -182,7 +185,7 @@ impl WorldRenderer {
             ],
         }];
 
-        let world_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        let opaque_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: None,
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
@@ -220,6 +223,44 @@ impl WorldRenderer {
             cache: None,
         });
 
+        let translucent_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: None,
+            layout: Some(&pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &world_shader,
+                entry_point: "vs_world",
+                buffers: &world_vertex_buffers,
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &world_shader,
+                entry_point: "fs_world",
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: config.view_formats[0],
+                    blend: Some(wgpu::BlendState {
+                        color: wgpu::BlendComponent::OVER,
+                        alpha: wgpu::BlendComponent::OVER,
+                    }),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            }),
+            primitive: wgpu::PrimitiveState {
+                cull_mode: Some(wgpu::Face::Back),
+                ..Default::default()
+            },
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: wgpu::TextureFormat::Depth24Plus,
+                depth_write_enabled: false,
+                depth_compare: wgpu::CompareFunction::Less,
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState::default(),
+            }),
+            multisample: wgpu::MultisampleState::default(),
+            multiview: None,
+            cache: None,
+        });
+
         WorldRenderer {
             fov,
             clip_near,
@@ -238,7 +279,8 @@ impl WorldRenderer {
             depth_buffer,
             bind_group: world_bind_group,
             uniform_buffer: world_uniform_buffer,
-            pipeline: world_pipeline,
+            opaque_pipeline,
+            translucent_pipeline,
         }
     }
 
@@ -281,7 +323,7 @@ impl WorldRenderer {
         queue: &wgpu::Queue,
         view: &wgpu::TextureView,
         encoder: &mut wgpu::CommandEncoder,
-        buffer_data: Vec<((i32, i32), Arc<(wgpu::Buffer, wgpu::Buffer, u32)>)>,
+        buffer: Vec<MeshBuffer>,
         fog_distance: f32,
     ) {
         {
@@ -324,29 +366,55 @@ impl WorldRenderer {
                 timestamp_writes: None,
                 occlusion_query_set: None,
             });
-            rpass.set_pipeline(&self.pipeline);
+
+            rpass.set_pipeline(&self.opaque_pipeline);
             rpass.set_bind_group(0, &self.bind_group, &[]);
+            for MeshBuffer { opaque, .. } in &buffer {
+                for (vertex_buffer, index_buffer, index_count) in &**opaque {
+                    if *index_count == 0 {
+                        continue;
+                    }
+                    // // TODO: fix frustum culling
+                    // if !self.frustum.is_sphere_in_frustum_planes(
+                    //     Vec3::new(
+                    //         x as f32 * 16.0 + 8.0,
+                    //         y as f32 * 16.0 + 8.0,
+                    //         z as f32 * 16.0 + 8.0,
+                    //     ),
+                    //     13.8564, // sqrt(8^2 + 8^2 + 8^2)
+                    // ) {
+                    //     continue;
+                    // }
 
-            for ((_x, _y), buffers) in buffer_data {
-                let (vertex_buffer, index_buffer, index_count) = &*buffers;
-                if *index_count == 0 {
-                    continue;
+                    rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+                    rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
+                    rpass.draw_indexed(0..*index_count, 0, 0..1);
                 }
-                // // TODO: fix frustum culling
-                // if !self.frustum.is_sphere_in_frustum_planes(
-                //     Vec3::new(
-                //         x as f32 * 16.0 + 8.0,
-                //         y as f32 * 16.0 + 8.0,
-                //         z as f32 * 16.0 + 8.0,
-                //     ),
-                //     13.8564, // sqrt(8^2 + 8^2 + 8^2)
-                // ) {
-                //     continue;
-                // }
+            }
 
-                rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-                rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
-                rpass.draw_indexed(0..*index_count, 0, 0..1);
+            rpass.set_pipeline(&self.translucent_pipeline);
+            rpass.set_bind_group(0, &self.bind_group, &[]);
+            for MeshBuffer { translucent, .. } in buffer {
+                for (vertex_buffer, index_buffer, index_count) in &*translucent {
+                    if *index_count == 0 {
+                        continue;
+                    }
+                    // // TODO: fix frustum culling
+                    // if !self.frustum.is_sphere_in_frustum_planes(
+                    //     Vec3::new(
+                    //         x as f32 * 16.0 + 8.0,
+                    //         y as f32 * 16.0 + 8.0,
+                    //         z as f32 * 16.0 + 8.0,
+                    //     ),
+                    //     13.8564, // sqrt(8^2 + 8^2 + 8^2)
+                    // ) {
+                    //     continue;
+                    // }
+
+                    rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+                    rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
+                    rpass.draw_indexed(0..*index_count, 0, 0..1);
+                }
             }
         }
     }

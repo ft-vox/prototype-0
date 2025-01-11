@@ -40,7 +40,7 @@ pub struct Vox {
     vertical_rotation: f32,
     eye_dir: Vec3,
     is_paused: bool,
-    terrain_manager: TerrainManager<Arc<(wgpu::Buffer, wgpu::Buffer, u32)>>,
+    terrain_manager: TerrainManager,
     target_fog_distance: f32,
     current_fog_distance: f32,
 }
@@ -178,31 +178,53 @@ impl Vox {
         self.terrain_manager.set_cache_distance(CACHE_DISTANCE);
         self.terrain_manager.set_eye((self.eye.x, self.eye.y));
 
-        let wgpu_buffers = self
-            .terrain_manager
-            .get_available(&mut |vertices, indices| {
-                Arc::new((
-                    device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                        label: Some("Vertex Buffer"),
-                        contents: bytemuck::cast_slice(vertices),
-                        usage: wgpu::BufferUsages::VERTEX,
-                    }),
-                    device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                        label: Some("Index Buffer"),
-                        contents: bytemuck::cast_slice(indices),
-                        usage: wgpu::BufferUsages::INDEX,
-                    }),
-                    indices.len() as u32,
-                ))
-            });
+        let buffers = self.terrain_manager.get_available(&mut |mesh| {
+            (
+                Arc::new(
+                    mesh.opaque_buffers
+                        .iter()
+                        .map(|(vertices, indices)| {
+                            (
+                                device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                                    label: Some("Vertex Buffer"),
+                                    contents: bytemuck::cast_slice(vertices),
+                                    usage: wgpu::BufferUsages::VERTEX,
+                                }),
+                                device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                                    label: Some("Index Buffer"),
+                                    contents: bytemuck::cast_slice(indices),
+                                    usage: wgpu::BufferUsages::INDEX,
+                                }),
+                                indices.len() as u32,
+                            )
+                        })
+                        .collect(),
+                ),
+                Arc::new(
+                    mesh.translucent_buffers
+                        .iter()
+                        .map(|(vertices, indices)| {
+                            (
+                                device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                                    label: Some("Vertex Buffer"),
+                                    contents: bytemuck::cast_slice(vertices),
+                                    usage: wgpu::BufferUsages::VERTEX,
+                                }),
+                                device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                                    label: Some("Index Buffer"),
+                                    contents: bytemuck::cast_slice(indices),
+                                    usage: wgpu::BufferUsages::INDEX,
+                                }),
+                                indices.len() as u32,
+                            )
+                        })
+                        .collect(),
+                ),
+            )
+        });
 
         self.vox_graphics_wrapper.update(self.eye, self.eye_dir); // TODO: impl Vox.tick(), Vox.update()
-        self.vox_graphics_wrapper.render(
-            view,
-            device,
-            queue,
-            self.current_fog_distance,
-            wgpu_buffers,
-        );
+        self.vox_graphics_wrapper
+            .render(view, device, queue, self.current_fog_distance, buffers);
     }
 }
