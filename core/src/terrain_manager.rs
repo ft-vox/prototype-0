@@ -270,23 +270,23 @@ impl<T: Clone + 'static> TerrainManager<T> {
                     ];
                     for (dx, dy) in directions.iter() {
                         if let Some(chunk) = map_cache.get(x + dx, y + dy) {
-                            let mut chunks7: Vec<Arc<Chunk>> = Vec::new();
+                            let mut chunks5: Vec<Arc<Chunk>> = Vec::new();
 
-                            chunks7.push(chunk.clone());
+                            chunks5.push(chunk.clone());
 
                             for (sub_dx, sub_dy) in directions.iter() {
                                 if let Some(sub_chunk) =
                                     map_cache.get(x + dx + sub_dx, y + dy + sub_dy)
                                 {
-                                    chunks7.push(sub_chunk.clone());
+                                    chunks5.push(sub_chunk.clone());
                                 }
                             }
 
-                            if chunks7.len() == 7 {
+                            if chunks5.len() == 5 {
                                 let mut mesh_cache = mesh_cache.lock().unwrap();
                                 mesh_cache
                                     .mesh_load_request
-                                    .push_back(((x + dx, y + dy), chunks7));
+                                    .push_back(((x + dx, y + dy), chunks5));
                             }
                         }
                     }
@@ -369,21 +369,17 @@ impl<T: Clone + 'static> TerrainManager<T> {
         match new_min_x - old_min_x {
             0 => {}
             1 => {
-                for z in 0..size {
-                    for y in 0..size {
-                        let x = new_max_x.rem_euclid(size as i32) as usize;
-                        map_cache.chunks[y * size + x] = None;
-                        self.buffer_cache.buffers[y * size + x] = None;
-                    }
+                for y in 0..size {
+                    let x = new_max_x.rem_euclid(size as i32) as usize;
+                    map_cache.chunks[y * size + x] = None;
+                    self.buffer_cache.buffers[y * size + x] = None;
                 }
             }
             -1 => {
-                for z in 0..size {
-                    for y in 0..size {
-                        let x = new_min_x.rem_euclid(size as i32) as usize;
-                        map_cache.chunks[y * size + x] = None;
-                        self.buffer_cache.buffers[y * size + x] = None;
-                    }
+                for y in 0..size {
+                    let x = new_min_x.rem_euclid(size as i32) as usize;
+                    map_cache.chunks[y * size + x] = None;
+                    self.buffer_cache.buffers[y * size + x] = None;
                 }
             }
             _ => {
@@ -396,21 +392,17 @@ impl<T: Clone + 'static> TerrainManager<T> {
         match new_min_y - old_min_y {
             0 => {}
             1 => {
-                for z in 0..size {
-                    for x in 0..size {
-                        let y = new_max_y.rem_euclid(size as i32) as usize;
-                        map_cache.chunks[y * size + x] = None;
-                        self.buffer_cache.buffers[y * size + x] = None;
-                    }
+                for x in 0..size {
+                    let y = new_max_y.rem_euclid(size as i32) as usize;
+                    map_cache.chunks[y * size + x] = None;
+                    self.buffer_cache.buffers[y * size + x] = None;
                 }
             }
             -1 => {
-                for z in 0..size {
-                    for x in 0..size {
-                        let y = new_min_y.rem_euclid(size as i32) as usize;
-                        map_cache.chunks[y * size + x] = None;
-                        self.buffer_cache.buffers[y * size + x] = None;
-                    }
+                for x in 0..size {
+                    let y = new_min_y.rem_euclid(size as i32) as usize;
+                    map_cache.chunks[y * size + x] = None;
+                    self.buffer_cache.buffers[y * size + x] = None;
                 }
             }
             _ => {
