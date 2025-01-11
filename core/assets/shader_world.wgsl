@@ -17,7 +17,7 @@ struct Uniforms {
 var<uniform> uniforms: Uniforms;
 
 @vertex
-fn vs_world(
+fn vs_common(
     @location(0) position: vec4<f32>,
     @location(1) tex_coord: vec2<f32>
 ) -> VertexOutput {
@@ -34,9 +34,20 @@ fn vs_world(
 var diffuse_color: texture_2d<f32>;
 
 @fragment
-fn fs_world(input: VertexOutput) -> @location(0) vec4<f32> {
+fn fs_opaque(input: VertexOutput) -> @location(0) vec4<f32> {
     var output: vec4<f32> = textureLoad(diffuse_color, vec2<i32>(input.tex_coord * vec2<f32>(16.0, 16.0)), 0);
     var fog_factor: f32 = clamp((input.distance - uniforms.fog_start) / (uniforms.fog_end - uniforms.fog_start), 0.0, 1.0);
     output = mix(output, uniforms.fog_color, fog_factor);
+    return output;
+}
+
+@fragment
+fn fs_translucent(input: VertexOutput) -> @location(0) vec4<f32> {
+    var output: vec4<f32> = textureLoad(diffuse_color, vec2<i32>(input.tex_coord * vec2<f32>(16.0, 16.0)), 0);
+    var fog_factor: f32 = clamp((input.distance - uniforms.fog_start) / (uniforms.fog_end - uniforms.fog_start), 0.0, 1.0);
+    output = mix(output, uniforms.fog_color, fog_factor);
+    if (output.a < 1.0) {
+        discard;
+    }
     return output;
 }
