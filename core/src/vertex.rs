@@ -32,7 +32,7 @@ pub fn create_vertices_for_chunk(
     for z in 0..MAP_HEIGHT {
         for y in 0..CHUNK_SIZE {
             for x in 0..CHUNK_SIZE {
-                if chunk.cubes[z * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE + x].is_solid() {
+                if chunk.cubes[z * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE + x] != Cube::Empty {
                     let actual_x = x_offset + x as i32;
                     let actual_y = y_offset + y as i32;
                     let actual_z = z as i32;
@@ -97,12 +97,12 @@ pub fn create_vertices(
     x: f32,
     y: f32,
     z: f32,
-    px: bool,
-    nx: bool,
-    py: bool,
-    ny: bool,
-    pz: bool,
-    nz: bool,
+    px_is_solid: bool,
+    nx_is_solid: bool,
+    py_is_solid: bool,
+    ny_is_solid: bool,
+    pz_is_solid: bool,
+    nz_is_solid: bool,
     index: usize,
 ) -> (Vec<Vertex>, Vec<u16>) {
     let offset = index as u16;
@@ -110,10 +110,10 @@ pub fn create_vertices(
     let mut vertex_data = Vec::<Vertex>::new();
     let mut index_data = Vec::<u16>::new();
 
-    if !px {
-        match cube {
-            Cube::Empty => {}
-            Cube::Solid(solid) => {
+    match cube {
+        Cube::Empty => {}
+        Cube::Solid(solid) => {
+            if !px_is_solid {
                 let [a, b, c, d] = solid.tex_coord_px();
                 vertex_data.push(vertex([x + 1.0, y + 0.0, z + 0.0], a));
                 vertex_data.push(vertex([x + 1.0, y + 1.0, z + 0.0], b));
@@ -126,13 +126,7 @@ pub fn create_vertices(
                 index_data.push(offset + vertex_data.len() as u16 - 1);
                 index_data.push(offset + vertex_data.len() as u16 - 4);
             }
-        }
-    }
-
-    if !nx {
-        match cube {
-            Cube::Empty => {}
-            Cube::Solid(solid) => {
+            if !nx_is_solid {
                 let [a, b, c, d] = solid.tex_coord_nx();
                 vertex_data.push(vertex([x + 0.0, y + 0.0, z + 1.0], a));
                 vertex_data.push(vertex([x + 0.0, y + 1.0, z + 1.0], b));
@@ -145,13 +139,7 @@ pub fn create_vertices(
                 index_data.push(offset + vertex_data.len() as u16 - 1);
                 index_data.push(offset + vertex_data.len() as u16 - 4);
             }
-        }
-    }
-
-    if !py {
-        match cube {
-            Cube::Empty => {}
-            Cube::Solid(solid) => {
+            if !py_is_solid {
                 let [a, b, c, d] = solid.tex_coord_py();
                 vertex_data.push(vertex([x + 1.0, y + 1.0, z + 0.0], a));
                 vertex_data.push(vertex([x + 0.0, y + 1.0, z + 0.0], b));
@@ -164,13 +152,7 @@ pub fn create_vertices(
                 index_data.push(offset + vertex_data.len() as u16 - 1);
                 index_data.push(offset + vertex_data.len() as u16 - 4);
             }
-        }
-    }
-
-    if !ny {
-        match cube {
-            Cube::Empty => {}
-            Cube::Solid(solid) => {
+            if !ny_is_solid {
                 let [a, b, c, d] = solid.tex_coord_ny();
                 vertex_data.push(vertex([x + 1.0, y + 0.0, z + 1.0], a));
                 vertex_data.push(vertex([x + 0.0, y + 0.0, z + 1.0], b));
@@ -183,13 +165,7 @@ pub fn create_vertices(
                 index_data.push(offset + vertex_data.len() as u16 - 1);
                 index_data.push(offset + vertex_data.len() as u16 - 4);
             }
-        }
-    }
-
-    if !pz {
-        match cube {
-            Cube::Empty => {}
-            Cube::Solid(solid) => {
+            if !pz_is_solid {
                 let [a, b, c, d] = solid.tex_coord_pz();
                 vertex_data.push(vertex([x + 0.0, y + 0.0, z + 1.0], a));
                 vertex_data.push(vertex([x + 1.0, y + 0.0, z + 1.0], b));
@@ -202,13 +178,7 @@ pub fn create_vertices(
                 index_data.push(offset + vertex_data.len() as u16 - 1);
                 index_data.push(offset + vertex_data.len() as u16 - 4);
             }
-        }
-    }
-
-    if !nz {
-        match cube {
-            Cube::Empty => {}
-            Cube::Solid(solid) => {
+            if !nz_is_solid {
                 let [a, b, c, d] = solid.tex_coord_nz();
                 vertex_data.push(vertex([x + 0.0, y + 1.0, z + 0.0], a));
                 vertex_data.push(vertex([x + 1.0, y + 1.0, z + 0.0], b));
@@ -221,6 +191,41 @@ pub fn create_vertices(
                 index_data.push(offset + vertex_data.len() as u16 - 1);
                 index_data.push(offset + vertex_data.len() as u16 - 4);
             }
+        }
+        Cube::Plantlike(plantlike) => {
+            let [a, b, c, d] = plantlike.tex_coord();
+            vertex_data.push(vertex([x + 1.0, y + 0.0, z + 0.0], a));
+            vertex_data.push(vertex([x + 0.0, y + 1.0, z + 0.0], b));
+            vertex_data.push(vertex([x + 0.0, y + 1.0, z + 1.0], c));
+            vertex_data.push(vertex([x + 1.0, y + 0.0, z + 1.0], d));
+            vertex_data.push(vertex([x + 0.0, y + 0.0, z + 0.0], a));
+            vertex_data.push(vertex([x + 1.0, y + 1.0, z + 0.0], b));
+            vertex_data.push(vertex([x + 1.0, y + 1.0, z + 1.0], c));
+            vertex_data.push(vertex([x + 0.0, y + 0.0, z + 1.0], d));
+            index_data.push(offset + vertex_data.len() as u16 - 8);
+            index_data.push(offset + vertex_data.len() as u16 - 7);
+            index_data.push(offset + vertex_data.len() as u16 - 6);
+            index_data.push(offset + vertex_data.len() as u16 - 6);
+            index_data.push(offset + vertex_data.len() as u16 - 5);
+            index_data.push(offset + vertex_data.len() as u16 - 8);
+            index_data.push(offset + vertex_data.len() as u16 - 8);
+            index_data.push(offset + vertex_data.len() as u16 - 6);
+            index_data.push(offset + vertex_data.len() as u16 - 7);
+            index_data.push(offset + vertex_data.len() as u16 - 6);
+            index_data.push(offset + vertex_data.len() as u16 - 8);
+            index_data.push(offset + vertex_data.len() as u16 - 5);
+            index_data.push(offset + vertex_data.len() as u16 - 4);
+            index_data.push(offset + vertex_data.len() as u16 - 3);
+            index_data.push(offset + vertex_data.len() as u16 - 2);
+            index_data.push(offset + vertex_data.len() as u16 - 2);
+            index_data.push(offset + vertex_data.len() as u16 - 1);
+            index_data.push(offset + vertex_data.len() as u16 - 4);
+            index_data.push(offset + vertex_data.len() as u16 - 4);
+            index_data.push(offset + vertex_data.len() as u16 - 2);
+            index_data.push(offset + vertex_data.len() as u16 - 3);
+            index_data.push(offset + vertex_data.len() as u16 - 2);
+            index_data.push(offset + vertex_data.len() as u16 - 4);
+            index_data.push(offset + vertex_data.len() as u16 - 1);
         }
     }
 

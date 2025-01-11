@@ -1,4 +1,4 @@
-use ft_vox_prototype_0_map_types::{Chunk, Cube, Solid, CHUNK_SIZE, MAP_HEIGHT};
+use ft_vox_prototype_0_map_types::{Chunk, Cube, Plantlike, Solid, CHUNK_SIZE, MAP_HEIGHT};
 use ft_vox_prototype_0_noise::{Noise, NoiseLayer};
 
 const MIN_HEIGHT: f32 = 10.0;
@@ -32,44 +32,26 @@ impl Map {
         let x_offset = x * CHUNK_SIZE as i32;
         let y_offset = y * CHUNK_SIZE as i32;
 
-        for z in 0..MAP_HEIGHT {
+        for x in 0..CHUNK_SIZE {
             for y in 0..CHUNK_SIZE {
-                for x in 0..CHUNK_SIZE {
-                    if z == 0 {
-                        cubes[z * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE + x] =
-                            Cube::Solid(Solid::Bedrock);
-                        continue;
-                    }
-                    let actual_x = x_offset as f32 + x as f32;
-                    let actual_y = y_offset as f32 + y as f32;
-                    let actual_z = z as f32;
-                    let noise = self.noise.noise2(actual_x * 0.042, actual_y * 0.042);
-                    let height = lerp(noise, MIN_HEIGHT, MAX_HEIGHT);
-
-                    let noise42 = self.noise.noise3(actual_x * 0.042, actual_y * 0.042, 42.0);
-
-                    let cube = if height > actual_z.floor() + 2.0 {
-                        Cube::Solid(Solid::Stone)
-                    } else if height > actual_z.floor() + 1.0 {
-                        Cube::Solid(Solid::Dirt)
-                    } else if height > actual_z.floor() {
-                        if noise42 < 0.0 {
-                            Cube::Solid(Solid::Grass)
-                        } else if noise42 < 0.1 {
-                            Cube::Solid(Solid::PlankOak)
-                        } else if noise42 < 0.2 {
-                            Cube::Solid(Solid::PlankBirch)
-                        } else if noise42 < 0.3 {
-                            Cube::Solid(Solid::PlankSpruce)
-                        } else if noise42 < 0.4 {
-                            Cube::Solid(Solid::PlankJungle)
-                        } else {
-                            Cube::Solid(Solid::SmoothStone)
-                        }
-                    } else {
+                let actual_x = x_offset as f32 + x as f32;
+                let actual_y = y_offset as f32 + y as f32;
+                let noise = self.noise.noise2(actual_x * 0.042, actual_y * 0.042);
+                let height = lerp(noise, MIN_HEIGHT, MAX_HEIGHT).floor() as usize;
+                for z in 0..MAP_HEIGHT {
+                    cubes[z * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE + x] = if z == 0 {
+                        Cube::Solid(Solid::Bedrock)
+                    } else if height < z {
                         Cube::Empty
+                    } else if height == z {
+                        Cube::Plantlike(Plantlike::Grass)
+                    } else if height == z + 1 {
+                        Cube::Solid(Solid::Grass)
+                    } else if height == z + 2 {
+                        Cube::Solid(Solid::Dirt)
+                    } else {
+                        Cube::Solid(Solid::Stone)
                     };
-                    cubes[z * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE + x] = cube;
                 }
             }
         }

@@ -5,7 +5,7 @@ pub const MAP_HEIGHT: usize = 128;
 pub enum Cube {
     Empty,
     Solid(Solid),
-    // PlantLike(PlantLike),
+    Plantlike(Plantlike),
 }
 
 macro_rules! define_solid {
@@ -123,19 +123,44 @@ define_solid! {
     SmoothStone((0, 5), (0, 6), (0, 6)),
 }
 
-// #[derive(Clone, Copy, PartialEq, Eq)]
-// pub enum PlantLike {
-//     Grass,
-//     FlowerRed,
-//     FlowerYellow,
-//     MushroomRed,
-//     MushroomBrown,
-//     TreeSamplingOak,
-//     TreeSamplingBirch,
-//     TreeSamplingJungle,
-//     TreeSamplingSpruce,
-//     TreeSamplingLikeIDK,
-// }
+macro_rules! define_plantlike {
+    ($($variant:ident($($vals:tt),*)),* $(,)?) => {
+        #[derive(Clone, Copy, PartialEq, Eq)]
+        pub enum Plantlike {
+            $($variant),*
+        }
+
+        impl Plantlike {
+            pub fn tex_coord(&self) -> [[f32; 2]; 4] {
+                match self {
+                    $(
+                        Self::$variant => {
+                            define_plantlike!(@tex_coord $($vals),*)
+                        }
+                    ),*
+                }
+            }
+        }
+    };
+
+    (@tex_coord $y:expr, $x:expr) => {
+        [[($x + 1) as f32, ($y + 1) as f32], [$x as f32, ($y + 1) as f32], [$x as f32, $y as f32], [($x + 1) as f32, $y as f32]]
+    };
+}
+
+define_plantlike! {
+    Grass(2, 7),
+    FlowerRed(0, 12),
+    FlowerYellow(0, 13),
+    MushroomRed(1, 12),
+    MushroomBrown(1, 13),
+    TreeSamplingOak(0, 15),
+    TreeSamplingBirch(4, 15),
+    TreeSamplingJungle(1, 14),
+    TreeSamplingSpruce(3, 15),
+    TreeSamplingLikeIDK(3, 8),
+    DeadBush(3, 7),
+}
 
 #[derive(Clone)]
 pub struct Chunk {
