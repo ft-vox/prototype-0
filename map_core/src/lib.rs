@@ -35,40 +35,22 @@ impl Map {
         for z in 0..MAP_HEIGHT {
             for y in 0..CHUNK_SIZE {
                 for x in 0..CHUNK_SIZE {
+                    if z == 0 {
+                        cubes[z * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE + x] =
+                            Cube::Solid(Solid::Bedrock);
+                        continue;
+                    }
                     let actual_x = x_offset as f32 + x as f32;
                     let actual_y = y_offset as f32 + y as f32;
                     let actual_z = z as f32;
-                    let noise =
-                        self.noise
-                            .noise3(actual_x * 0.042, actual_y * 0.042, actual_z * 0.042);
-                    let density = lerp(
-                        de_lerp(actual_z, MIN_HEIGHT, MAX_HEIGHT).clamp(0.0, 1.0),
-                        1.0,
-                        -1.0,
-                    ) + noise;
-                    let up1_density = lerp(
-                        de_lerp(actual_z + 1.0, MIN_HEIGHT, MAX_HEIGHT).clamp(0.0, 1.0),
-                        1.0,
-                        -1.0,
-                    ) + self.noise.noise3(
-                        actual_x * 0.042,
-                        actual_y * 0.042,
-                        (actual_z + 1.0) * 0.042,
-                    );
-                    let up2_density = lerp(
-                        de_lerp(actual_z + 2.0, MIN_HEIGHT, MAX_HEIGHT).clamp(0.0, 1.0),
-                        1.0,
-                        -1.0,
-                    ) + self.noise.noise3(
-                        actual_x * 0.042,
-                        actual_y * 0.042,
-                        (actual_z + 2.0) * 0.042,
-                    );
-                    let cube = if up2_density > 0.0 {
+                    let noise = self.noise.noise2(actual_x * 0.042, actual_y * 0.042);
+                    let height = lerp(noise, MIN_HEIGHT, MAX_HEIGHT);
+
+                    let cube = if height > actual_z.floor() + 2.0 {
                         Cube::Solid(Solid::Stone)
-                    } else if up1_density > 0.0 {
+                    } else if height > actual_z.floor() + 1.0 {
                         Cube::Solid(Solid::Dirt)
-                    } else if density > 0.0 {
+                    } else if height > actual_z.floor() {
                         Cube::Solid(Solid::Grass)
                     } else {
                         Cube::Empty
