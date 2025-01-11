@@ -46,7 +46,7 @@ fn fs_translucent(input: VertexOutput) -> @location(0) vec4<f32> {
     var output: vec4<f32> = textureLoad(diffuse_color, vec2<i32>(input.tex_coord * vec2<f32>(16.0, 16.0)), 0);
     var fog_factor: f32 = clamp((input.distance - uniforms.fog_start) / (uniforms.fog_end - uniforms.fog_start), 0.0, 1.0);
     output = mix(output, uniforms.fog_color, fog_factor);
-    if (output.a < 1.0) {
+    if (output.a == 0.0) {
         discard;
     }
     return output;

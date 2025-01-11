@@ -3,17 +3,17 @@ use ft_vox_prototype_0_map_types::{
 };
 use ft_vox_prototype_0_noise::{Noise, NoiseLayer};
 
-const MIN_HEIGHT: f32 = 10.0;
-const MAX_HEIGHT: f32 = 120.0;
+pub const WATER_LEVEL: usize = 111;
 
 #[derive(Clone)]
 pub struct Map {
-    noise: Noise,
+    main_noise: Noise,
+    height_base_noise: Noise,
 }
 
 impl Map {
     pub fn new(seed: u64) -> Map {
-        let noise = Noise::new(
+        let main_noise = Noise::new(
             &[
                 NoiseLayer::new(0.05, 0.1),
                 NoiseLayer::new(0.1, 0.1),
@@ -24,8 +24,18 @@ impl Map {
             ],
             seed,
         );
-
-        Map { noise }
+        let height_base_noise = Noise::new(
+            &[
+                NoiseLayer::new(0.00142, 0.9),
+                NoiseLayer::new(0.0042, 0.07),
+                NoiseLayer::new(0.042, 0.03),
+            ],
+            seed,
+        );
+        Map {
+            main_noise,
+            height_base_noise,
+        }
     }
 
     // TODO: optimize
@@ -38,19 +48,50 @@ impl Map {
             for y in 0..CHUNK_SIZE {
                 let actual_x = x_offset as f32 + x as f32;
                 let actual_y = y_offset as f32 + y as f32;
-                let noise = self.noise.noise2(actual_x * 0.042, actual_y * 0.042);
-                let height = lerp(noise, MIN_HEIGHT, MAX_HEIGHT).floor() as usize;
+                macro_rules! n {
+                    ($factor:expr, $z:expr) => {
+                        self.main_noise
+                            .noise3(actual_x * $factor, actual_y * $factor, $z)
+                    };
+                }
+
+                let height = (lerp(
+                    self.height_base_noise.noise2(actual_x, actual_y) / 4.0 + 0.5,
+                    22.2,
+                    222.2,
+                ) + (n!(0.0618, 0.0) * n!(0.000922, 42.0)) * 342.0)
+                    .clamp(22.2, 222.2) as usize;
                 for z in 0..MAP_HEIGHT {
                     cubes[z * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE + x] = if z == 0 {
                         Cube::Solid(Solid::Bedrock)
                     } else if height < z {
-                        Cube::Empty
+                        if z <= WATER_LEVEL {
+                            Cube::Translucent(Translucent::Ice) // TODO: water
+                        } else {
+                            Cube::Empty
+                        }
                     } else if height == z {
-                        Cube::Translucent(Translucent::Glass)
+                        if z <= WATER_LEVEL {
+                            Cube::Translucent(Translucent::Ice) // TODO: water
+                        } else if n!(1.0, 420.0) > 0.2042 {
+                            Cube::Plantlike(Plantlike::Grass)
+                        } else {
+                            Cube::Empty
+                        }
                     } else if height == z + 1 {
-                        Cube::Solid(Solid::GrassBlock)
+                        if height == WATER_LEVEL {
+                            Cube::Solid(Solid::Dirt)
+                        } else if height < WATER_LEVEL {
+                            Cube::Solid(Solid::Gravel)
+                        } else {
+                            Cube::Solid(Solid::GrassBlock)
+                        }
                     } else if height == z + 2 {
-                        Cube::Solid(Solid::Dirt)
+                        if height >= WATER_LEVEL {
+                            Cube::Solid(Solid::Dirt)
+                        } else {
+                            Cube::Solid(Solid::Gravel)
+                        }
                     } else {
                         Cube::Solid(Solid::Stone)
                     };

@@ -1,5 +1,5 @@
 pub const CHUNK_SIZE: usize = 16;
-pub const MAP_HEIGHT: usize = 128;
+pub const MAP_HEIGHT: usize = 256;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Cube {
