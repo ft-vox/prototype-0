@@ -55,6 +55,8 @@ impl Map {
                     };
                 }
 
+                let humidity = n!(0.0042, 4242.0);
+                let is_sand = humidity < -0.2;
                 let height = (lerp(
                     self.height_base_noise.noise2(actual_x, actual_y) / 4.0 + 0.5,
                     22.2,
@@ -73,24 +75,37 @@ impl Map {
                     } else if height == z {
                         if z <= WATER_LEVEL {
                             Cube::Translucent(Translucent::Ice) // TODO: water
-                        } else if n!(1.0, 420.0) > 0.2042 {
-                            Cube::Plantlike(Plantlike::Grass)
+                        } else if is_sand && n!(1.0, 420.0) > 0.1949 {
+                            Cube::Plantlike(Plantlike::DeadBush)
+                        } else if !is_sand && n!(1.0, 420.0) > 0.2042 {
+                            let n = n!(1.0, 402.0);
+                            if n > 0.2 {
+                                Cube::Plantlike(Plantlike::FlowerRed)
+                            } else if n < -0.2 {
+                                Cube::Plantlike(Plantlike::FlowerYellow)
+                            } else {
+                                Cube::Plantlike(Plantlike::Grass)
+                            }
                         } else {
                             Cube::Empty
                         }
                     } else if height == z + 1 {
-                        if height == WATER_LEVEL {
+                        if !is_sand && height == WATER_LEVEL {
                             Cube::Solid(Solid::Dirt)
-                        } else if height < WATER_LEVEL {
+                        } else if !is_sand && height < WATER_LEVEL {
                             Cube::Solid(Solid::Gravel)
+                        } else if is_sand {
+                            Cube::Solid(Solid::Sand)
                         } else {
                             Cube::Solid(Solid::GrassBlock)
                         }
                     } else if height == z + 2 {
-                        if height >= WATER_LEVEL {
+                        if !is_sand && height >= WATER_LEVEL {
                             Cube::Solid(Solid::Dirt)
-                        } else {
+                        } else if !is_sand {
                             Cube::Solid(Solid::Gravel)
+                        } else {
+                            Cube::Solid(Solid::Sand)
                         }
                     } else {
                         Cube::Solid(Solid::Stone)
