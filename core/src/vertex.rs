@@ -1,5 +1,7 @@
 use bytemuck::{Pod, Zeroable};
-use ft_vox_prototype_0_map_types::{Chunk, Cube, Plantlike, Solid, CHUNK_SIZE, MAP_HEIGHT};
+use ft_vox_prototype_0_map_types::{
+    Chunk, Cube, Harvestable, Plantlike, Solid, CHUNK_SIZE, MAP_HEIGHT,
+};
 
 use crate::terrain_manager::Mesh;
 
@@ -111,6 +113,24 @@ pub fn create_mesh_for_chunk(
                         let (mut tmp_vertex_data, mut tmp_index_data) =
                             create_vertices_for_plantlike(
                                 plantlike,
+                                actual_x as f32,
+                                actual_y as f32,
+                                actual_z as f32,
+                                vertex_data_for_translucent.len(),
+                            );
+                        vertex_data_for_translucent.append(&mut tmp_vertex_data);
+                        index_data_for_translucent.append(&mut tmp_index_data);
+                    }
+                    Cube::Harvestable(harvestable) => {
+                        if vertex_data_for_translucent.len() > 60000 {
+                            translucent_buffers
+                                .push((vertex_data_for_translucent, index_data_for_translucent));
+                            vertex_data_for_translucent = Vec::new();
+                            index_data_for_translucent = Vec::new();
+                        }
+                        let (mut tmp_vertex_data, mut tmp_index_data) =
+                            create_vertices_for_harvestable(
+                                harvestable,
                                 actual_x as f32,
                                 actual_y as f32,
                                 actual_z as f32,
@@ -261,6 +281,62 @@ pub fn create_vertices_for_plantlike(
     index_data.push(offset + vertex_data.len() as u16 - 6);
     index_data.push(offset + vertex_data.len() as u16 - 5);
     index_data.push(offset + vertex_data.len() as u16 - 8);
+    index_data.push(offset + vertex_data.len() as u16 - 4);
+    index_data.push(offset + vertex_data.len() as u16 - 3);
+    index_data.push(offset + vertex_data.len() as u16 - 2);
+    index_data.push(offset + vertex_data.len() as u16 - 2);
+    index_data.push(offset + vertex_data.len() as u16 - 1);
+    index_data.push(offset + vertex_data.len() as u16 - 4);
+    (vertex_data, index_data)
+}
+
+pub fn create_vertices_for_harvestable(
+    harvestable: Harvestable,
+    x: f32,
+    y: f32,
+    z: f32,
+    index: usize,
+) -> (Vec<Vertex>, Vec<u16>) {
+    let offset = index as u16;
+
+    let mut vertex_data = Vec::<Vertex>::new();
+    let mut index_data = Vec::<u16>::new();
+
+    let [a, b, c, d] = harvestable.tex_coord();
+    vertex_data.push(vertex([x + 0.75, y + 0.0, z + 0.0], a));
+    vertex_data.push(vertex([x + 0.75, y + 1.0, z + 0.0], b));
+    vertex_data.push(vertex([x + 0.75, y + 1.0, z + 1.0], c));
+    vertex_data.push(vertex([x + 0.75, y + 0.0, z + 1.0], d));
+    index_data.push(offset + vertex_data.len() as u16 - 4);
+    index_data.push(offset + vertex_data.len() as u16 - 3);
+    index_data.push(offset + vertex_data.len() as u16 - 2);
+    index_data.push(offset + vertex_data.len() as u16 - 2);
+    index_data.push(offset + vertex_data.len() as u16 - 1);
+    index_data.push(offset + vertex_data.len() as u16 - 4);
+    vertex_data.push(vertex([x + 0.25, y + 1.0, z + 0.0], a));
+    vertex_data.push(vertex([x + 0.25, y + 0.0, z + 0.0], b));
+    vertex_data.push(vertex([x + 0.25, y + 0.0, z + 1.0], c));
+    vertex_data.push(vertex([x + 0.25, y + 1.0, z + 1.0], d));
+    index_data.push(offset + vertex_data.len() as u16 - 4);
+    index_data.push(offset + vertex_data.len() as u16 - 3);
+    index_data.push(offset + vertex_data.len() as u16 - 2);
+    index_data.push(offset + vertex_data.len() as u16 - 2);
+    index_data.push(offset + vertex_data.len() as u16 - 1);
+    index_data.push(offset + vertex_data.len() as u16 - 4);
+    vertex_data.push(vertex([x + 1.0, y + 0.75, z + 0.0], a));
+    vertex_data.push(vertex([x + 0.0, y + 0.75, z + 0.0], b));
+    vertex_data.push(vertex([x + 0.0, y + 0.75, z + 1.0], c));
+    vertex_data.push(vertex([x + 1.0, y + 0.75, z + 1.0], d));
+    index_data.push(offset + vertex_data.len() as u16 - 4);
+    index_data.push(offset + vertex_data.len() as u16 - 3);
+    index_data.push(offset + vertex_data.len() as u16 - 2);
+    index_data.push(offset + vertex_data.len() as u16 - 2);
+    index_data.push(offset + vertex_data.len() as u16 - 1);
+    index_data.push(offset + vertex_data.len() as u16 - 4);
+    vertex_data.push(vertex([x + 0.0, y + 0.25, z + 0.0], a));
+    vertex_data.push(vertex([x + 1.0, y + 0.25, z + 0.0], b));
+    vertex_data.push(vertex([x + 1.0, y + 0.25, z + 1.0], c));
+    vertex_data.push(vertex([x + 0.0, y + 0.25, z + 1.0], d));
     index_data.push(offset + vertex_data.len() as u16 - 4);
     index_data.push(offset + vertex_data.len() as u16 - 3);
     index_data.push(offset + vertex_data.len() as u16 - 2);

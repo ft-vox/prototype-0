@@ -6,6 +6,7 @@ pub enum Cube {
     Empty,
     Solid(Solid),
     Plantlike(Plantlike),
+    Harvestable(Harvestable),
 }
 
 macro_rules! define_solid {
@@ -160,6 +161,45 @@ define_plantlike! {
     TreeSamplingSpruce(3, 15),
     TreeSamplingLikeIDK(3, 8),
     DeadBush(3, 7),
+}
+
+macro_rules! define_harvestable {
+    ($($variant:ident($($vals:tt),*)),* $(,)?) => {
+        #[derive(Clone, Copy, PartialEq, Eq)]
+        pub enum Harvestable {
+            $($variant),*
+        }
+
+        impl Harvestable {
+            pub fn tex_coord(&self) -> [[f32; 2]; 4] {
+                match self {
+                    $(
+                        Self::$variant => {
+                            define_harvestable!(@tex_coord $($vals),*)
+                        }
+                    ),*
+                }
+            }
+        }
+    };
+
+    (@tex_coord $y:expr, $x:expr) => {
+        [[($x + 1) as f32, ($y + 1) as f32], [$x as f32, ($y + 1) as f32], [$x as f32, $y as f32], [($x + 1) as f32, $y as f32]]
+    };
+}
+
+define_harvestable! {
+    Wheat1(5, 8),
+    Wheat2(5, 9),
+    Wheat3(5, 10),
+    Wheat4(5, 11),
+    Wheat5(5, 12),
+    Wheat6(5, 13),
+    Wheat7(5, 14),
+    Wheat8(5, 15),
+    NetherWart1(14, 2),
+    NetherWart2(14, 3),
+    NetherWart3(14, 4),
 }
 
 #[derive(Clone)]
