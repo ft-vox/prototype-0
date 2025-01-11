@@ -261,23 +261,11 @@ pub fn create_vertices_for_plantlike(
     index_data.push(offset + vertex_data.len() as u16 - 6);
     index_data.push(offset + vertex_data.len() as u16 - 5);
     index_data.push(offset + vertex_data.len() as u16 - 8);
-    index_data.push(offset + vertex_data.len() as u16 - 8);
-    index_data.push(offset + vertex_data.len() as u16 - 6);
-    index_data.push(offset + vertex_data.len() as u16 - 7);
-    index_data.push(offset + vertex_data.len() as u16 - 6);
-    index_data.push(offset + vertex_data.len() as u16 - 8);
-    index_data.push(offset + vertex_data.len() as u16 - 5);
     index_data.push(offset + vertex_data.len() as u16 - 4);
     index_data.push(offset + vertex_data.len() as u16 - 3);
     index_data.push(offset + vertex_data.len() as u16 - 2);
     index_data.push(offset + vertex_data.len() as u16 - 2);
     index_data.push(offset + vertex_data.len() as u16 - 1);
     index_data.push(offset + vertex_data.len() as u16 - 4);
-    index_data.push(offset + vertex_data.len() as u16 - 4);
-    index_data.push(offset + vertex_data.len() as u16 - 2);
-    index_data.push(offset + vertex_data.len() as u16 - 3);
-    index_data.push(offset + vertex_data.len() as u16 - 2);
-    index_data.push(offset + vertex_data.len() as u16 - 4);
-    index_data.push(offset + vertex_data.len() as u16 - 1);
     (vertex_data, index_data)
 }
