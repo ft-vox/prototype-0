@@ -76,7 +76,7 @@ impl Vox {
         let vox_graphics_wrapper = VoxGraphicsWrapper::init(config, _adapter, device, queue);
         let eye_x = 0.0;
         let eye_y = -5.0;
-        let eye_z = 3.0;
+        let eye_z = 90.0;
 
         // Done
         Vox {

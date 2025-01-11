@@ -111,87 +111,117 @@ pub fn create_vertices(
     let mut index_data = Vec::<u16>::new();
 
     if !px {
-        let [a, b, c, d] = cube.tex_coord_px();
-        vertex_data.push(vertex([x + 1.0, y + 0.0, z + 0.0], a));
-        vertex_data.push(vertex([x + 1.0, y + 1.0, z + 0.0], b));
-        vertex_data.push(vertex([x + 1.0, y + 1.0, z + 1.0], c));
-        vertex_data.push(vertex([x + 1.0, y + 0.0, z + 1.0], d));
-        index_data.push(offset + vertex_data.len() as u16 - 4);
-        index_data.push(offset + vertex_data.len() as u16 - 3);
-        index_data.push(offset + vertex_data.len() as u16 - 2);
-        index_data.push(offset + vertex_data.len() as u16 - 2);
-        index_data.push(offset + vertex_data.len() as u16 - 1);
-        index_data.push(offset + vertex_data.len() as u16 - 4);
+        match cube {
+            Cube::Empty => {}
+            Cube::Solid(solid) => {
+                let [a, b, c, d] = solid.tex_coord_px();
+                vertex_data.push(vertex([x + 1.0, y + 0.0, z + 0.0], a));
+                vertex_data.push(vertex([x + 1.0, y + 1.0, z + 0.0], b));
+                vertex_data.push(vertex([x + 1.0, y + 1.0, z + 1.0], c));
+                vertex_data.push(vertex([x + 1.0, y + 0.0, z + 1.0], d));
+                index_data.push(offset + vertex_data.len() as u16 - 4);
+                index_data.push(offset + vertex_data.len() as u16 - 3);
+                index_data.push(offset + vertex_data.len() as u16 - 2);
+                index_data.push(offset + vertex_data.len() as u16 - 2);
+                index_data.push(offset + vertex_data.len() as u16 - 1);
+                index_data.push(offset + vertex_data.len() as u16 - 4);
+            }
+        }
     }
 
     if !nx {
-        let [a, b, c, d] = cube.tex_coord_nx();
-        vertex_data.push(vertex([x + 0.0, y + 0.0, z + 1.0], a));
-        vertex_data.push(vertex([x + 0.0, y + 1.0, z + 1.0], b));
-        vertex_data.push(vertex([x + 0.0, y + 1.0, z + 0.0], c));
-        vertex_data.push(vertex([x + 0.0, y + 0.0, z + 0.0], d));
-        index_data.push(offset + vertex_data.len() as u16 - 4);
-        index_data.push(offset + vertex_data.len() as u16 - 3);
-        index_data.push(offset + vertex_data.len() as u16 - 2);
-        index_data.push(offset + vertex_data.len() as u16 - 2);
-        index_data.push(offset + vertex_data.len() as u16 - 1);
-        index_data.push(offset + vertex_data.len() as u16 - 4);
+        match cube {
+            Cube::Empty => {}
+            Cube::Solid(solid) => {
+                let [a, b, c, d] = solid.tex_coord_nx();
+                vertex_data.push(vertex([x + 0.0, y + 0.0, z + 1.0], a));
+                vertex_data.push(vertex([x + 0.0, y + 1.0, z + 1.0], b));
+                vertex_data.push(vertex([x + 0.0, y + 1.0, z + 0.0], c));
+                vertex_data.push(vertex([x + 0.0, y + 0.0, z + 0.0], d));
+                index_data.push(offset + vertex_data.len() as u16 - 4);
+                index_data.push(offset + vertex_data.len() as u16 - 3);
+                index_data.push(offset + vertex_data.len() as u16 - 2);
+                index_data.push(offset + vertex_data.len() as u16 - 2);
+                index_data.push(offset + vertex_data.len() as u16 - 1);
+                index_data.push(offset + vertex_data.len() as u16 - 4);
+            }
+        }
     }
 
     if !py {
-        let [a, b, c, d] = cube.tex_coord_py();
-        vertex_data.push(vertex([x + 1.0, y + 1.0, z + 0.0], a));
-        vertex_data.push(vertex([x + 0.0, y + 1.0, z + 0.0], b));
-        vertex_data.push(vertex([x + 0.0, y + 1.0, z + 1.0], c));
-        vertex_data.push(vertex([x + 1.0, y + 1.0, z + 1.0], d));
-        index_data.push(offset + vertex_data.len() as u16 - 4);
-        index_data.push(offset + vertex_data.len() as u16 - 3);
-        index_data.push(offset + vertex_data.len() as u16 - 2);
-        index_data.push(offset + vertex_data.len() as u16 - 2);
-        index_data.push(offset + vertex_data.len() as u16 - 1);
-        index_data.push(offset + vertex_data.len() as u16 - 4);
+        match cube {
+            Cube::Empty => {}
+            Cube::Solid(solid) => {
+                let [a, b, c, d] = solid.tex_coord_py();
+                vertex_data.push(vertex([x + 1.0, y + 1.0, z + 0.0], a));
+                vertex_data.push(vertex([x + 0.0, y + 1.0, z + 0.0], b));
+                vertex_data.push(vertex([x + 0.0, y + 1.0, z + 1.0], c));
+                vertex_data.push(vertex([x + 1.0, y + 1.0, z + 1.0], d));
+                index_data.push(offset + vertex_data.len() as u16 - 4);
+                index_data.push(offset + vertex_data.len() as u16 - 3);
+                index_data.push(offset + vertex_data.len() as u16 - 2);
+                index_data.push(offset + vertex_data.len() as u16 - 2);
+                index_data.push(offset + vertex_data.len() as u16 - 1);
+                index_data.push(offset + vertex_data.len() as u16 - 4);
+            }
+        }
     }
 
     if !ny {
-        let [a, b, c, d] = cube.tex_coord_ny();
-        vertex_data.push(vertex([x + 1.0, y + 0.0, z + 1.0], a));
-        vertex_data.push(vertex([x + 0.0, y + 0.0, z + 1.0], b));
-        vertex_data.push(vertex([x + 0.0, y + 0.0, z + 0.0], c));
-        vertex_data.push(vertex([x + 1.0, y + 0.0, z + 0.0], d));
-        index_data.push(offset + vertex_data.len() as u16 - 4);
-        index_data.push(offset + vertex_data.len() as u16 - 3);
-        index_data.push(offset + vertex_data.len() as u16 - 2);
-        index_data.push(offset + vertex_data.len() as u16 - 2);
-        index_data.push(offset + vertex_data.len() as u16 - 1);
-        index_data.push(offset + vertex_data.len() as u16 - 4);
+        match cube {
+            Cube::Empty => {}
+            Cube::Solid(solid) => {
+                let [a, b, c, d] = solid.tex_coord_ny();
+                vertex_data.push(vertex([x + 1.0, y + 0.0, z + 1.0], a));
+                vertex_data.push(vertex([x + 0.0, y + 0.0, z + 1.0], b));
+                vertex_data.push(vertex([x + 0.0, y + 0.0, z + 0.0], c));
+                vertex_data.push(vertex([x + 1.0, y + 0.0, z + 0.0], d));
+                index_data.push(offset + vertex_data.len() as u16 - 4);
+                index_data.push(offset + vertex_data.len() as u16 - 3);
+                index_data.push(offset + vertex_data.len() as u16 - 2);
+                index_data.push(offset + vertex_data.len() as u16 - 2);
+                index_data.push(offset + vertex_data.len() as u16 - 1);
+                index_data.push(offset + vertex_data.len() as u16 - 4);
+            }
+        }
     }
 
     if !pz {
-        let [a, b, c, d] = cube.tex_coord_pz();
-        vertex_data.push(vertex([x + 0.0, y + 0.0, z + 1.0], a));
-        vertex_data.push(vertex([x + 1.0, y + 0.0, z + 1.0], b));
-        vertex_data.push(vertex([x + 1.0, y + 1.0, z + 1.0], c));
-        vertex_data.push(vertex([x + 0.0, y + 1.0, z + 1.0], d));
-        index_data.push(offset + vertex_data.len() as u16 - 4);
-        index_data.push(offset + vertex_data.len() as u16 - 3);
-        index_data.push(offset + vertex_data.len() as u16 - 2);
-        index_data.push(offset + vertex_data.len() as u16 - 2);
-        index_data.push(offset + vertex_data.len() as u16 - 1);
-        index_data.push(offset + vertex_data.len() as u16 - 4);
+        match cube {
+            Cube::Empty => {}
+            Cube::Solid(solid) => {
+                let [a, b, c, d] = solid.tex_coord_pz();
+                vertex_data.push(vertex([x + 0.0, y + 0.0, z + 1.0], a));
+                vertex_data.push(vertex([x + 1.0, y + 0.0, z + 1.0], b));
+                vertex_data.push(vertex([x + 1.0, y + 1.0, z + 1.0], c));
+                vertex_data.push(vertex([x + 0.0, y + 1.0, z + 1.0], d));
+                index_data.push(offset + vertex_data.len() as u16 - 4);
+                index_data.push(offset + vertex_data.len() as u16 - 3);
+                index_data.push(offset + vertex_data.len() as u16 - 2);
+                index_data.push(offset + vertex_data.len() as u16 - 2);
+                index_data.push(offset + vertex_data.len() as u16 - 1);
+                index_data.push(offset + vertex_data.len() as u16 - 4);
+            }
+        }
     }
 
     if !nz {
-        let [a, b, c, d] = cube.tex_coord_nz();
-        vertex_data.push(vertex([x + 0.0, y + 1.0, z + 0.0], a));
-        vertex_data.push(vertex([x + 1.0, y + 1.0, z + 0.0], b));
-        vertex_data.push(vertex([x + 1.0, y + 0.0, z + 0.0], c));
-        vertex_data.push(vertex([x + 0.0, y + 0.0, z + 0.0], d));
-        index_data.push(offset + vertex_data.len() as u16 - 4);
-        index_data.push(offset + vertex_data.len() as u16 - 3);
-        index_data.push(offset + vertex_data.len() as u16 - 2);
-        index_data.push(offset + vertex_data.len() as u16 - 2);
-        index_data.push(offset + vertex_data.len() as u16 - 1);
-        index_data.push(offset + vertex_data.len() as u16 - 4);
+        match cube {
+            Cube::Empty => {}
+            Cube::Solid(solid) => {
+                let [a, b, c, d] = solid.tex_coord_nz();
+                vertex_data.push(vertex([x + 0.0, y + 1.0, z + 0.0], a));
+                vertex_data.push(vertex([x + 1.0, y + 1.0, z + 0.0], b));
+                vertex_data.push(vertex([x + 1.0, y + 0.0, z + 0.0], c));
+                vertex_data.push(vertex([x + 0.0, y + 0.0, z + 0.0], d));
+                index_data.push(offset + vertex_data.len() as u16 - 4);
+                index_data.push(offset + vertex_data.len() as u16 - 3);
+                index_data.push(offset + vertex_data.len() as u16 - 2);
+                index_data.push(offset + vertex_data.len() as u16 - 2);
+                index_data.push(offset + vertex_data.len() as u16 - 1);
+                index_data.push(offset + vertex_data.len() as u16 - 4);
+            }
+        }
     }
 
     (vertex_data, index_data)

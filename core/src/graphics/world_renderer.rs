@@ -327,7 +327,7 @@ impl WorldRenderer {
             rpass.set_pipeline(&self.pipeline);
             rpass.set_bind_group(0, &self.bind_group, &[]);
 
-            for ((x, y), buffers) in buffer_data {
+            for ((_x, _y), buffers) in buffer_data {
                 let (vertex_buffer, index_buffer, index_count) = &*buffers;
                 if *index_count == 0 {
                     continue;
