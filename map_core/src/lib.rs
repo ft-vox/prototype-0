@@ -46,12 +46,26 @@ impl Map {
                     let noise = self.noise.noise2(actual_x * 0.042, actual_y * 0.042);
                     let height = lerp(noise, MIN_HEIGHT, MAX_HEIGHT);
 
+                    let noise42 = self.noise.noise3(actual_x * 0.042, actual_y * 0.042, 42.0);
+
                     let cube = if height > actual_z.floor() + 2.0 {
                         Cube::Solid(Solid::Stone)
                     } else if height > actual_z.floor() + 1.0 {
                         Cube::Solid(Solid::Dirt)
                     } else if height > actual_z.floor() {
-                        Cube::Solid(Solid::Grass)
+                        if noise42 < 0.0 {
+                            Cube::Solid(Solid::Grass)
+                        } else if noise42 < 0.1 {
+                            Cube::Solid(Solid::PlankOak)
+                        } else if noise42 < 0.2 {
+                            Cube::Solid(Solid::PlankBirch)
+                        } else if noise42 < 0.3 {
+                            Cube::Solid(Solid::PlankSpruce)
+                        } else if noise42 < 0.4 {
+                            Cube::Solid(Solid::PlankJungle)
+                        } else {
+                            Cube::Solid(Solid::SmoothStone)
+                        }
                     } else {
                         Cube::Empty
                     };

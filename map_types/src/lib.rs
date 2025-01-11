@@ -116,6 +116,11 @@ define_solid! {
     Grass((0, 3), (0, 0), (0, 2)),
     Dirt((0, 2)),
     Stone((0, 1)),
+    PlankOak((0, 4)),
+    PlankBirch((13, 6)),
+    PlankJungle((12, 7)),
+    PlankSpruce((12, 6)),
+    SmoothStone((0, 5), (0, 6), (0, 6)),
 }
 
 // #[derive(Clone, Copy, PartialEq, Eq)]
