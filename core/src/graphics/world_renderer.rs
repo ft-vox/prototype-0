@@ -190,13 +190,13 @@ impl WorldRenderer {
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &world_shader,
-                entry_point: "vs_world",
+                entry_point: "vs_common",
                 buffers: &world_vertex_buffers,
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
             fragment: Some(wgpu::FragmentState {
                 module: &world_shader,
-                entry_point: "fs_world",
+                entry_point: "fs_opaque",
                 targets: &[Some(wgpu::ColorTargetState {
                     format: config.view_formats[0],
                     blend: Some(wgpu::BlendState {
@@ -228,13 +228,13 @@ impl WorldRenderer {
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &world_shader,
-                entry_point: "vs_world",
+                entry_point: "vs_common",
                 buffers: &world_vertex_buffers,
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
             fragment: Some(wgpu::FragmentState {
                 module: &world_shader,
-                entry_point: "fs_world",
+                entry_point: "fs_translucent",
                 targets: &[Some(wgpu::ColorTargetState {
                     format: config.view_formats[0],
                     blend: Some(wgpu::BlendState {
@@ -251,7 +251,7 @@ impl WorldRenderer {
             },
             depth_stencil: Some(wgpu::DepthStencilState {
                 format: wgpu::TextureFormat::Depth24Plus,
-                depth_write_enabled: false,
+                depth_write_enabled: true,
                 depth_compare: wgpu::CompareFunction::Less,
                 stencil: wgpu::StencilState::default(),
                 bias: wgpu::DepthBiasState::default(),
