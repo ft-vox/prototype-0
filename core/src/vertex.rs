@@ -1,6 +1,6 @@
 use bytemuck::{Pod, Zeroable};
 use ft_vox_prototype_0_map_types::{
-    Chunk, Cube, Harvestable, Plantlike, Solid, CHUNK_SIZE, MAP_HEIGHT,
+    Chunk, Cube, Harvestable, Plantlike, Solid, Translucent, CHUNK_SIZE, MAP_HEIGHT,
 };
 
 use crate::terrain_manager::Mesh;
@@ -103,6 +103,75 @@ pub fn create_mesh_for_chunk(
                         vertex_data_for_opaque.append(&mut tmp_vertex_data);
                         index_data_for_opaque.append(&mut tmp_index_data);
                     }
+                    Cube::Translucent(translucent) => {
+                        if vertex_data_for_translucent.len() > 60000 {
+                            translucent_buffers
+                                .push((vertex_data_for_translucent, index_data_for_translucent));
+                            vertex_data_for_translucent = Vec::new();
+                            index_data_for_translucent = Vec::new();
+                        }
+                        let (mut tmp_vertex_data, mut tmp_index_data) =
+                            create_vertices_for_translucent(
+                                translucent,
+                                actual_x as f32,
+                                actual_y as f32,
+                                actual_z as f32,
+                                if x == CHUNK_SIZE - 1 {
+                                    chunk_px.cubes[z * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE]
+                                        .is_translucent_or_solid()
+                                } else {
+                                    chunk.cubes
+                                        [z * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE + x + 1]
+                                        .is_translucent_or_solid()
+                                },
+                                if x == 0 {
+                                    chunk_nx.cubes[z * CHUNK_SIZE * CHUNK_SIZE
+                                        + y * CHUNK_SIZE
+                                        + CHUNK_SIZE
+                                        - 1]
+                                    .is_translucent_or_solid()
+                                } else {
+                                    chunk.cubes
+                                        [z * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE + x - 1]
+                                        .is_translucent_or_solid()
+                                },
+                                if y == CHUNK_SIZE - 1 {
+                                    chunk_py.cubes[z * CHUNK_SIZE * CHUNK_SIZE + x]
+                                        .is_translucent_or_solid()
+                                } else {
+                                    chunk.cubes
+                                        [z * CHUNK_SIZE * CHUNK_SIZE + (y + 1) * CHUNK_SIZE + x]
+                                        .is_translucent_or_solid()
+                                },
+                                if y == 0 {
+                                    chunk_ny.cubes[z * CHUNK_SIZE * CHUNK_SIZE
+                                        + (CHUNK_SIZE - 1) * CHUNK_SIZE
+                                        + x]
+                                        .is_translucent_or_solid()
+                                } else {
+                                    chunk.cubes
+                                        [z * CHUNK_SIZE * CHUNK_SIZE + (y - 1) * CHUNK_SIZE + x]
+                                        .is_translucent_or_solid()
+                                },
+                                if z == MAP_HEIGHT - 1 {
+                                    false
+                                } else {
+                                    chunk.cubes
+                                        [(z + 1) * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE + x]
+                                        .is_translucent_or_solid()
+                                },
+                                if z == 0 {
+                                    false
+                                } else {
+                                    chunk.cubes
+                                        [(z - 1) * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE + x]
+                                        .is_translucent_or_solid()
+                                },
+                                vertex_data_for_translucent.len(),
+                            );
+                        vertex_data_for_translucent.append(&mut tmp_vertex_data);
+                        index_data_for_translucent.append(&mut tmp_index_data);
+                    }
                     Cube::Plantlike(plantlike) => {
                         if vertex_data_for_translucent.len() > 60000 {
                             translucent_buffers
@@ -143,10 +212,10 @@ pub fn create_mesh_for_chunk(
             }
         }
     }
-    if index_data_for_opaque.len() > 0 {
+    if !index_data_for_opaque.is_empty() {
         opaque_buffers.push((vertex_data_for_opaque, index_data_for_opaque));
     }
-    if index_data_for_translucent.len() > 0 {
+    if !index_data_for_translucent.is_empty() {
         translucent_buffers.push((vertex_data_for_translucent, index_data_for_translucent));
     }
     Mesh {
@@ -240,6 +309,105 @@ pub fn create_vertices_for_solid(
     }
     if !nz_is_solid {
         let [a, b, c, d] = solid.tex_coord_nz();
+        vertex_data.push(vertex([x + 0.0, y + 1.0, z + 0.0], a));
+        vertex_data.push(vertex([x + 1.0, y + 1.0, z + 0.0], b));
+        vertex_data.push(vertex([x + 1.0, y + 0.0, z + 0.0], c));
+        vertex_data.push(vertex([x + 0.0, y + 0.0, z + 0.0], d));
+        index_data.push(offset + vertex_data.len() as u16 - 4);
+        index_data.push(offset + vertex_data.len() as u16 - 3);
+        index_data.push(offset + vertex_data.len() as u16 - 2);
+        index_data.push(offset + vertex_data.len() as u16 - 2);
+        index_data.push(offset + vertex_data.len() as u16 - 1);
+        index_data.push(offset + vertex_data.len() as u16 - 4);
+    }
+    (vertex_data, index_data)
+}
+
+pub fn create_vertices_for_translucent(
+    translucent: Translucent,
+    x: f32,
+    y: f32,
+    z: f32,
+    px_is_translucent_or_solid: bool,
+    nx_is_translucent_or_solid: bool,
+    py_is_translucent_or_solid: bool,
+    ny_is_translucent_or_solid: bool,
+    pz_is_translucent_or_solid: bool,
+    nz_is_translucent_or_solid: bool,
+    index: usize,
+) -> (Vec<Vertex>, Vec<u16>) {
+    let offset = index as u16;
+
+    let mut vertex_data = Vec::<Vertex>::new();
+    let mut index_data = Vec::<u16>::new();
+
+    if !px_is_translucent_or_solid {
+        let [a, b, c, d] = translucent.tex_coord();
+        vertex_data.push(vertex([x + 1.0, y + 0.0, z + 0.0], a));
+        vertex_data.push(vertex([x + 1.0, y + 1.0, z + 0.0], b));
+        vertex_data.push(vertex([x + 1.0, y + 1.0, z + 1.0], c));
+        vertex_data.push(vertex([x + 1.0, y + 0.0, z + 1.0], d));
+        index_data.push(offset + vertex_data.len() as u16 - 4);
+        index_data.push(offset + vertex_data.len() as u16 - 3);
+        index_data.push(offset + vertex_data.len() as u16 - 2);
+        index_data.push(offset + vertex_data.len() as u16 - 2);
+        index_data.push(offset + vertex_data.len() as u16 - 1);
+        index_data.push(offset + vertex_data.len() as u16 - 4);
+    }
+    if !nx_is_translucent_or_solid {
+        let [a, b, c, d] = translucent.tex_coord();
+        vertex_data.push(vertex([x + 0.0, y + 0.0, z + 1.0], a));
+        vertex_data.push(vertex([x + 0.0, y + 1.0, z + 1.0], b));
+        vertex_data.push(vertex([x + 0.0, y + 1.0, z + 0.0], c));
+        vertex_data.push(vertex([x + 0.0, y + 0.0, z + 0.0], d));
+        index_data.push(offset + vertex_data.len() as u16 - 4);
+        index_data.push(offset + vertex_data.len() as u16 - 3);
+        index_data.push(offset + vertex_data.len() as u16 - 2);
+        index_data.push(offset + vertex_data.len() as u16 - 2);
+        index_data.push(offset + vertex_data.len() as u16 - 1);
+        index_data.push(offset + vertex_data.len() as u16 - 4);
+    }
+    if !py_is_translucent_or_solid {
+        let [a, b, c, d] = translucent.tex_coord();
+        vertex_data.push(vertex([x + 1.0, y + 1.0, z + 0.0], a));
+        vertex_data.push(vertex([x + 0.0, y + 1.0, z + 0.0], b));
+        vertex_data.push(vertex([x + 0.0, y + 1.0, z + 1.0], c));
+        vertex_data.push(vertex([x + 1.0, y + 1.0, z + 1.0], d));
+        index_data.push(offset + vertex_data.len() as u16 - 4);
+        index_data.push(offset + vertex_data.len() as u16 - 3);
+        index_data.push(offset + vertex_data.len() as u16 - 2);
+        index_data.push(offset + vertex_data.len() as u16 - 2);
+        index_data.push(offset + vertex_data.len() as u16 - 1);
+        index_data.push(offset + vertex_data.len() as u16 - 4);
+    }
+    if !ny_is_translucent_or_solid {
+        let [a, b, c, d] = translucent.tex_coord();
+        vertex_data.push(vertex([x + 1.0, y + 0.0, z + 1.0], a));
+        vertex_data.push(vertex([x + 0.0, y + 0.0, z + 1.0], b));
+        vertex_data.push(vertex([x + 0.0, y + 0.0, z + 0.0], c));
+        vertex_data.push(vertex([x + 1.0, y + 0.0, z + 0.0], d));
+        index_data.push(offset + vertex_data.len() as u16 - 4);
+        index_data.push(offset + vertex_data.len() as u16 - 3);
+        index_data.push(offset + vertex_data.len() as u16 - 2);
+        index_data.push(offset + vertex_data.len() as u16 - 2);
+        index_data.push(offset + vertex_data.len() as u16 - 1);
+        index_data.push(offset + vertex_data.len() as u16 - 4);
+    }
+    if !pz_is_translucent_or_solid {
+        let [a, b, c, d] = translucent.tex_coord();
+        vertex_data.push(vertex([x + 0.0, y + 0.0, z + 1.0], a));
+        vertex_data.push(vertex([x + 1.0, y + 0.0, z + 1.0], b));
+        vertex_data.push(vertex([x + 1.0, y + 1.0, z + 1.0], c));
+        vertex_data.push(vertex([x + 0.0, y + 1.0, z + 1.0], d));
+        index_data.push(offset + vertex_data.len() as u16 - 4);
+        index_data.push(offset + vertex_data.len() as u16 - 3);
+        index_data.push(offset + vertex_data.len() as u16 - 2);
+        index_data.push(offset + vertex_data.len() as u16 - 2);
+        index_data.push(offset + vertex_data.len() as u16 - 1);
+        index_data.push(offset + vertex_data.len() as u16 - 4);
+    }
+    if !nz_is_translucent_or_solid {
+        let [a, b, c, d] = translucent.tex_coord();
         vertex_data.push(vertex([x + 0.0, y + 1.0, z + 0.0], a));
         vertex_data.push(vertex([x + 1.0, y + 1.0, z + 0.0], b));
         vertex_data.push(vertex([x + 1.0, y + 0.0, z + 0.0], c));

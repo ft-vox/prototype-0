@@ -5,6 +5,7 @@ pub const MAP_HEIGHT: usize = 128;
 pub enum Cube {
     Empty,
     Solid(Solid),
+    Translucent(Translucent),
     Plantlike(Plantlike),
     Harvestable(Harvestable),
 }
@@ -126,7 +127,6 @@ define_solid! {
     SmoothStoneSlabs((0, 5), (0, 6), (0, 6)),
     Bricks((0, 7)),
     TNT((0, 8), (0, 9), (0, 10)),
-    Cobweb((0, 11)),
     // 1
     Cobblestone((1, 0)),
     Sand((1, 2)),
@@ -144,16 +144,12 @@ define_solid! {
     // 3
     Obsidian((2, 5)),
     Sponge((3, 0)),
-    Glass((3, 1)), // TODO: Translucent
     DiamondOre((3, 2)),
     RedstoneOre((3, 3)),
-    OakLeaves((3, 4)), // TODO: Translucent
     StoneBricks((3, 5)),
     // 4
     WoolWhite((4, 0)),
-    MonsterSpawner((4, 1)), // TODO: Translucent
     SnowBlock((4, 2)),
-    Ice((4, 3)), // TODO: Translucent
     SnowyGrassBlock((4, 4), (4, 2), (0, 2)),
     Clay((4, 8)),
     Jukebox((4, 10), (4, 11), (4, 10)),
@@ -161,6 +157,38 @@ define_solid! {
 
 
 
+}
+
+macro_rules! define_translucent {
+    ($($variant:ident($($vals:tt),*)),* $(,)?) => {
+        #[derive(Clone, Copy, PartialEq, Eq)]
+        pub enum Translucent {
+            $($variant),*
+        }
+
+        impl Translucent {
+            pub fn tex_coord(&self) -> [[f32; 2]; 4] {
+                match self {
+                    $(
+                        Self::$variant => {
+                            define_translucent!(@tex_coord $($vals),*)
+                        }
+                    ),*
+                }
+            }
+        }
+    };
+
+    (@tex_coord $y:expr, $x:expr) => {
+        [[($x + 1) as f32, ($y + 1) as f32], [$x as f32, ($y + 1) as f32], [$x as f32, $y as f32], [($x + 1) as f32, $y as f32]]
+    };
+}
+
+define_translucent! {
+    Glass(3, 1),
+    OakLeaves(3, 4),
+    MonsterSpawner(4, 1),
+    Ice(4, 3),
 }
 
 macro_rules! define_plantlike {
@@ -200,6 +228,7 @@ define_plantlike! {
     TreeSamplingSpruce(3, 15),
     TreeSamplingLikeIDK(3, 8),
     DeadBush(3, 7),
+    Cobweb(0, 11),
 }
 
 macro_rules! define_harvestable {
@@ -249,5 +278,9 @@ pub struct Chunk {
 impl Cube {
     pub fn is_solid(&self) -> bool {
         matches!(self, Cube::Solid(_))
+    }
+
+    pub fn is_translucent_or_solid(&self) -> bool {
+        matches!(self, Cube::Translucent(_) | Cube::Solid(_))
     }
 }
