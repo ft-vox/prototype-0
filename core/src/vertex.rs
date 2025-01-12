@@ -563,66 +563,102 @@ pub fn create_vertices_for_custom(
 
     match custom {
         Custom::Cactus => {
-            vertex_data_opaque.push(vertex([x + 0.9375, y + 0.0, z + 0.0], [7.0, 5.0]));
-            vertex_data_opaque.push(vertex([x + 0.9375, y + 1.0, z + 0.0], [6.0, 5.0]));
-            vertex_data_opaque.push(vertex([x + 0.9375, y + 1.0, z + 1.0], [6.0, 4.0]));
-            vertex_data_opaque.push(vertex([x + 0.9375, y + 0.0, z + 1.0], [7.0, 4.0]));
-            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 4);
-            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 3);
-            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 2);
-            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 2);
-            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 1);
-            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 4);
-            vertex_data_opaque.push(vertex([x + 0.0625, y + 0.0, z + 1.0], [7.0, 4.0]));
-            vertex_data_opaque.push(vertex([x + 0.0625, y + 1.0, z + 1.0], [6.0, 4.0]));
-            vertex_data_opaque.push(vertex([x + 0.0625, y + 1.0, z + 0.0], [6.0, 5.0]));
-            vertex_data_opaque.push(vertex([x + 0.0625, y + 0.0, z + 0.0], [7.0, 5.0]));
-            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 4);
-            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 3);
-            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 2);
-            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 2);
-            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 1);
-            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 4);
-            vertex_data_opaque.push(vertex([x + 1.0, y + 0.9375, z + 0.0], [6.0, 5.0]));
-            vertex_data_opaque.push(vertex([x + 0.0, y + 0.9375, z + 0.0], [7.0, 5.0]));
-            vertex_data_opaque.push(vertex([x + 0.0, y + 0.9375, z + 1.0], [7.0, 4.0]));
-            vertex_data_opaque.push(vertex([x + 1.0, y + 0.9375, z + 1.0], [6.0, 4.0]));
-            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 4);
-            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 3);
-            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 2);
-            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 2);
-            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 1);
-            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 4);
-            vertex_data_opaque.push(vertex([x + 1.0, y + 0.0625, z + 1.0], [6.0, 4.0]));
-            vertex_data_opaque.push(vertex([x + 0.0, y + 0.0625, z + 1.0], [7.0, 4.0]));
-            vertex_data_opaque.push(vertex([x + 0.0, y + 0.0625, z + 0.0], [7.0, 5.0]));
-            vertex_data_opaque.push(vertex([x + 1.0, y + 0.0625, z + 0.0], [6.0, 5.0]));
-            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 4);
-            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 3);
-            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 2);
-            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 2);
-            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 1);
-            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 4);
-            vertex_data_opaque.push(vertex([x + 0.0, y + 0.0, z + 1.0], [6.0, 5.0]));
-            vertex_data_opaque.push(vertex([x + 1.0, y + 0.0, z + 1.0], [5.0, 5.0]));
-            vertex_data_opaque.push(vertex([x + 1.0, y + 1.0, z + 1.0], [5.0, 4.0]));
-            vertex_data_opaque.push(vertex([x + 0.0, y + 1.0, z + 1.0], [6.0, 4.0]));
-            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 4);
-            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 3);
-            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 2);
-            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 2);
-            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 1);
-            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 4);
-            vertex_data_opaque.push(vertex([x + 0.0, y + 1.0, z + 0.0], [8.0, 5.0]));
-            vertex_data_opaque.push(vertex([x + 1.0, y + 1.0, z + 0.0], [7.0, 5.0]));
-            vertex_data_opaque.push(vertex([x + 1.0, y + 0.0, z + 0.0], [7.0, 4.0]));
-            vertex_data_opaque.push(vertex([x + 0.0, y + 0.0, z + 0.0], [8.0, 4.0]));
-            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 4);
-            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 3);
-            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 2);
-            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 2);
-            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 1);
-            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 4);
+            vertex_data_translucent.push(vertex([x + 0.9375, y + 0.0, z + 0.0], [7.0, 5.0]));
+            vertex_data_translucent.push(vertex([x + 0.9375, y + 1.0, z + 0.0], [6.0, 5.0]));
+            vertex_data_translucent.push(vertex([x + 0.9375, y + 1.0, z + 1.0], [6.0, 4.0]));
+            vertex_data_translucent.push(vertex([x + 0.9375, y + 0.0, z + 1.0], [7.0, 4.0]));
+            index_data_translucent
+                .push(translucent_offset + vertex_data_translucent.len() as u16 - 4);
+            index_data_translucent
+                .push(translucent_offset + vertex_data_translucent.len() as u16 - 3);
+            index_data_translucent
+                .push(translucent_offset + vertex_data_translucent.len() as u16 - 2);
+            index_data_translucent
+                .push(translucent_offset + vertex_data_translucent.len() as u16 - 2);
+            index_data_translucent
+                .push(translucent_offset + vertex_data_translucent.len() as u16 - 1);
+            index_data_translucent
+                .push(translucent_offset + vertex_data_translucent.len() as u16 - 4);
+            vertex_data_translucent.push(vertex([x + 0.0625, y + 0.0, z + 1.0], [7.0, 4.0]));
+            vertex_data_translucent.push(vertex([x + 0.0625, y + 1.0, z + 1.0], [6.0, 4.0]));
+            vertex_data_translucent.push(vertex([x + 0.0625, y + 1.0, z + 0.0], [6.0, 5.0]));
+            vertex_data_translucent.push(vertex([x + 0.0625, y + 0.0, z + 0.0], [7.0, 5.0]));
+            index_data_translucent
+                .push(translucent_offset + vertex_data_translucent.len() as u16 - 4);
+            index_data_translucent
+                .push(translucent_offset + vertex_data_translucent.len() as u16 - 3);
+            index_data_translucent
+                .push(translucent_offset + vertex_data_translucent.len() as u16 - 2);
+            index_data_translucent
+                .push(translucent_offset + vertex_data_translucent.len() as u16 - 2);
+            index_data_translucent
+                .push(translucent_offset + vertex_data_translucent.len() as u16 - 1);
+            index_data_translucent
+                .push(translucent_offset + vertex_data_translucent.len() as u16 - 4);
+            vertex_data_translucent.push(vertex([x + 1.0, y + 0.9375, z + 0.0], [6.0, 5.0]));
+            vertex_data_translucent.push(vertex([x + 0.0, y + 0.9375, z + 0.0], [7.0, 5.0]));
+            vertex_data_translucent.push(vertex([x + 0.0, y + 0.9375, z + 1.0], [7.0, 4.0]));
+            vertex_data_translucent.push(vertex([x + 1.0, y + 0.9375, z + 1.0], [6.0, 4.0]));
+            index_data_translucent
+                .push(translucent_offset + vertex_data_translucent.len() as u16 - 4);
+            index_data_translucent
+                .push(translucent_offset + vertex_data_translucent.len() as u16 - 3);
+            index_data_translucent
+                .push(translucent_offset + vertex_data_translucent.len() as u16 - 2);
+            index_data_translucent
+                .push(translucent_offset + vertex_data_translucent.len() as u16 - 2);
+            index_data_translucent
+                .push(translucent_offset + vertex_data_translucent.len() as u16 - 1);
+            index_data_translucent
+                .push(translucent_offset + vertex_data_translucent.len() as u16 - 4);
+            vertex_data_translucent.push(vertex([x + 1.0, y + 0.0625, z + 1.0], [6.0, 4.0]));
+            vertex_data_translucent.push(vertex([x + 0.0, y + 0.0625, z + 1.0], [7.0, 4.0]));
+            vertex_data_translucent.push(vertex([x + 0.0, y + 0.0625, z + 0.0], [7.0, 5.0]));
+            vertex_data_translucent.push(vertex([x + 1.0, y + 0.0625, z + 0.0], [6.0, 5.0]));
+            index_data_translucent
+                .push(translucent_offset + vertex_data_translucent.len() as u16 - 4);
+            index_data_translucent
+                .push(translucent_offset + vertex_data_translucent.len() as u16 - 3);
+            index_data_translucent
+                .push(translucent_offset + vertex_data_translucent.len() as u16 - 2);
+            index_data_translucent
+                .push(translucent_offset + vertex_data_translucent.len() as u16 - 2);
+            index_data_translucent
+                .push(translucent_offset + vertex_data_translucent.len() as u16 - 1);
+            index_data_translucent
+                .push(translucent_offset + vertex_data_translucent.len() as u16 - 4);
+            vertex_data_translucent.push(vertex([x + 0.0, y + 0.0, z + 1.0], [6.0, 5.0]));
+            vertex_data_translucent.push(vertex([x + 1.0, y + 0.0, z + 1.0], [5.0, 5.0]));
+            vertex_data_translucent.push(vertex([x + 1.0, y + 1.0, z + 1.0], [5.0, 4.0]));
+            vertex_data_translucent.push(vertex([x + 0.0, y + 1.0, z + 1.0], [6.0, 4.0]));
+            index_data_translucent
+                .push(translucent_offset + vertex_data_translucent.len() as u16 - 4);
+            index_data_translucent
+                .push(translucent_offset + vertex_data_translucent.len() as u16 - 3);
+            index_data_translucent
+                .push(translucent_offset + vertex_data_translucent.len() as u16 - 2);
+            index_data_translucent
+                .push(translucent_offset + vertex_data_translucent.len() as u16 - 2);
+            index_data_translucent
+                .push(translucent_offset + vertex_data_translucent.len() as u16 - 1);
+            index_data_translucent
+                .push(translucent_offset + vertex_data_translucent.len() as u16 - 4);
+            vertex_data_translucent.push(vertex([x + 0.0, y + 1.0, z + 0.0], [8.0, 5.0]));
+            vertex_data_translucent.push(vertex([x + 1.0, y + 1.0, z + 0.0], [7.0, 5.0]));
+            vertex_data_translucent.push(vertex([x + 1.0, y + 0.0, z + 0.0], [7.0, 4.0]));
+            vertex_data_translucent.push(vertex([x + 0.0, y + 0.0, z + 0.0], [8.0, 4.0]));
+            index_data_translucent
+                .push(translucent_offset + vertex_data_translucent.len() as u16 - 4);
+            index_data_translucent
+                .push(translucent_offset + vertex_data_translucent.len() as u16 - 3);
+            index_data_translucent
+                .push(translucent_offset + vertex_data_translucent.len() as u16 - 2);
+            index_data_translucent
+                .push(translucent_offset + vertex_data_translucent.len() as u16 - 2);
+            index_data_translucent
+                .push(translucent_offset + vertex_data_translucent.len() as u16 - 1);
+            index_data_translucent
+                .push(translucent_offset + vertex_data_translucent.len() as u16 - 4);
         }
     }
     (
