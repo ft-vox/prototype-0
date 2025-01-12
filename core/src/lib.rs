@@ -13,7 +13,7 @@ use graphics::VoxGraphicsWrapper;
 use player::Human;
 use terrain_manager::TerrainManager;
 
-pub const CACHE_DISTANCE: usize = 22;
+pub const CACHE_DISTANCE: usize = 30;
 pub const RENDER_DISTANCE: f32 = CACHE_DISTANCE as f32;
 pub const FOG_COLOR_SRGB: [f32; 4] = [130.0 / 255.0, 173.0 / 255.0, 253.0 / 255.0, 1.0];
 pub const FOV: f32 = 80.0;
@@ -37,7 +37,7 @@ pub fn get_coords(distance: f32) -> Vec<(i32, i32)> {
 
 pub struct Vox {
     vox_graphics_wrapper: VoxGraphicsWrapper,
-    player: Human,
+    local_player: Human,
     is_paused: bool,
     terrain_manager: TerrainManager,
     target_fog_distance: f32,
@@ -54,12 +54,12 @@ impl Vox {
         let vox_graphics_wrapper = VoxGraphicsWrapper::init(config, _adapter, device, queue);
         let eye_x = 0.0;
         let eye_y = -5.0;
-        let eye_z = 90.0;
+        let eye_z = 100.0;
 
         // Done
         Vox {
             vox_graphics_wrapper,
-            player: Human::new(Vec3::new(eye_x, eye_y, eye_z)),
+            local_player: Human::new(Vec3::new(eye_x, eye_y, eye_z)),
             is_paused: false,
             terrain_manager: TerrainManager::new(CACHE_DISTANCE, (eye_x, eye_y)),
             target_fog_distance: 0.0,
@@ -96,8 +96,8 @@ impl Vox {
             return;
         }
 
-        self.player.move_speed = move_speed;
-        self.player.update(
+        self.local_player.move_speed = move_speed;
+        self.local_player.update(
             delta_time,
             move_direction,
             delta_horizontal_rotation,
@@ -121,7 +121,7 @@ impl Vox {
 
     pub fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
         self.terrain_manager.set_cache_distance(CACHE_DISTANCE);
-        let eye_pos = self.player.get_eye_position();
+        let eye_pos = self.local_player.get_eye_position();
         self.terrain_manager.set_eye((eye_pos.x, eye_pos.y));
 
         let buffers = self.terrain_manager.get_available(&mut |mesh| {
@@ -170,8 +170,8 @@ impl Vox {
         });
 
         self.vox_graphics_wrapper.update(
-            self.player.get_eye_position(),
-            self.player.get_eye_direction(),
+            self.local_player.get_eye_position(),
+            self.local_player.get_eye_direction(),
         );
         self.vox_graphics_wrapper
             .render(view, device, queue, self.current_fog_distance, buffers);
