@@ -4,11 +4,13 @@ use glam::{Mat3, Vec3};
 use wgpu::util::DeviceExt;
 
 mod graphics;
+pub mod player;
 pub mod terrain_manager;
 mod terrain_worker;
 pub mod vertex;
 
 use graphics::VoxGraphicsWrapper;
+use player::Human;
 use terrain_manager::TerrainManager;
 
 pub const CACHE_DISTANCE: usize = 22;
@@ -35,35 +37,11 @@ pub fn get_coords(distance: f32) -> Vec<(i32, i32)> {
 
 pub struct Vox {
     vox_graphics_wrapper: VoxGraphicsWrapper,
-    eye: Vec3,
-    horizontal_rotation: f32,
-    vertical_rotation: f32,
-    eye_dir: Vec3,
+    player: Human,
     is_paused: bool,
     terrain_manager: TerrainManager,
     target_fog_distance: f32,
     current_fog_distance: f32,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum MoveSpeed {
-    Walk,
-    Sprint,
-    CreativeFly,
-    FtVoxFly,
-    FtMinecraftFly,
-}
-
-impl MoveSpeed {
-    pub const fn speed_per_sec(&self) -> f32 {
-        match self {
-            Self::Walk => 4.317,
-            Self::Sprint => 5.612,
-            Self::CreativeFly => 10.89,
-            Self::FtVoxFly => 20.00,
-            Self::FtMinecraftFly => 40.00,
-        }
-    }
 }
 
 impl Vox {
@@ -81,13 +59,9 @@ impl Vox {
         // Done
         Vox {
             vox_graphics_wrapper,
-            eye: glam::Vec3::new(eye_x, eye_y, eye_z),
-            horizontal_rotation: 0.0,
-            vertical_rotation: 0.0,
-            eye_dir: Vec3::new(0.0, 0.0, 0.0),
+            player: Human::new(Vec3::new(eye_x, eye_y, eye_z)),
             is_paused: false,
             terrain_manager: TerrainManager::new(CACHE_DISTANCE, (eye_x, eye_y)),
-
             target_fog_distance: 0.0,
             current_fog_distance: 0.0,
         }
@@ -114,7 +88,7 @@ impl Vox {
         &mut self,
         delta_time: f32,
         move_direction: [f32; 3],
-        move_speed: MoveSpeed,
+        move_speed: player::MoveSpeed,
         delta_horizontal_rotation: f32,
         delta_vertical_rotation: f32,
     ) {
@@ -122,42 +96,13 @@ impl Vox {
             return;
         }
 
-        // eye_dir
-        {
-            self.eye_dir = (glam::Mat3::from_rotation_z(self.horizontal_rotation)
-                * glam::Mat3::from_rotation_x(self.vertical_rotation))
-                * glam::Vec3::Y;
-        }
-
-        // rotate
-        {
-            self.horizontal_rotation += delta_horizontal_rotation;
-            self.horizontal_rotation %= 2.0 * std::f32::consts::PI;
-            if self.horizontal_rotation < 0.0 {
-                self.horizontal_rotation += 2.0 * std::f32::consts::PI;
-            }
-
-            self.vertical_rotation += delta_vertical_rotation;
-            self.vertical_rotation = self.vertical_rotation.clamp(
-                -0.4999 * std::f32::consts::PI,
-                0.4999 * std::f32::consts::PI,
-            );
-        }
-
-        // move
-        {
-            let move_direction = {
-                let move_direction = Mat3::from_rotation_z(self.horizontal_rotation)
-                    * Vec3::new(move_direction[0], move_direction[1], move_direction[2]);
-                let move_speed = move_direction.length();
-                if move_speed > 1.0 {
-                    move_direction / move_speed
-                } else {
-                    move_direction
-                }
-            };
-            self.eye += move_direction * move_speed.speed_per_sec() * delta_time;
-        }
+        self.player.move_speed = move_speed;
+        self.player.update(
+            delta_time,
+            move_direction,
+            delta_horizontal_rotation,
+            delta_vertical_rotation,
+        );
 
         // smooth fog distance
         {
@@ -176,7 +121,8 @@ impl Vox {
 
     pub fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
         self.terrain_manager.set_cache_distance(CACHE_DISTANCE);
-        self.terrain_manager.set_eye((self.eye.x, self.eye.y));
+        let eye_pos = self.player.get_eye_position();
+        self.terrain_manager.set_eye((eye_pos.x, eye_pos.y));
 
         let buffers = self.terrain_manager.get_available(&mut |mesh| {
             (
@@ -223,7 +169,10 @@ impl Vox {
             )
         });
 
-        self.vox_graphics_wrapper.update(self.eye, self.eye_dir); // TODO: impl Vox.tick(), Vox.update()
+        self.vox_graphics_wrapper.update(
+            self.player.get_eye_position(),
+            self.player.get_eye_direction(),
+        );
         self.vox_graphics_wrapper
             .render(view, device, queue, self.current_fog_distance, buffers);
     }

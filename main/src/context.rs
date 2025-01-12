@@ -5,7 +5,7 @@ use winit::{
     window::{Fullscreen, Window},
 };
 
-use ft_vox_prototype_0_core::MoveSpeed;
+use ft_vox_prototype_0_core::player::MoveSpeed;
 use ft_vox_prototype_0_core::Vox;
 
 use crate::surface_wrapper::SurfaceWrapper;
@@ -136,7 +136,7 @@ impl Context {
         }
 
         let speed = if self.fly_toggle {
-            MoveSpeed::FtVoxFly
+            MoveSpeed::CreativeFly
         } else {
             MoveSpeed::Walk
         };
