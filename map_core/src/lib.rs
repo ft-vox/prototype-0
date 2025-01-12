@@ -66,6 +66,13 @@ impl Map {
                 for z in 0..MAP_HEIGHT {
                     cubes[z * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE + x] = if z == 0 {
                         Cube::Solid(Solid::Bedrock)
+                    } else if height + 1 == z
+                        && is_sand
+                        && z > WATER_LEVEL
+                        && n!(1.0, 420.0) > 0.1949
+                        && n!(1.0, 402.0) <= -0.2
+                    {
+                        Cube::Custom(Custom::Cactus)
                     } else if height < z {
                         if z <= WATER_LEVEL {
                             Cube::Translucent(Translucent::Ice) // TODO: water
@@ -77,7 +84,7 @@ impl Map {
                             Cube::Translucent(Translucent::Ice) // TODO: water
                         } else if is_sand && n!(1.0, 420.0) > 0.1949 {
                             let n = n!(1.0, 402.0);
-                            if n > 0.0 {
+                            if n > -0.2 {
                                 Cube::Plantlike(Plantlike::DeadBush)
                             } else {
                                 Cube::Custom(Custom::Cactus)
