@@ -8,6 +8,7 @@ pub enum Cube {
     Translucent(Translucent),
     Plantlike(Plantlike),
     Harvestable(Harvestable),
+    Custom(Custom),
 }
 
 macro_rules! define_solid {
@@ -268,6 +269,11 @@ define_harvestable! {
     NetherWart1(14, 2),
     NetherWart2(14, 3),
     NetherWart3(14, 4),
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Custom {
+    Cactus,
 }
 
 #[derive(Clone)]

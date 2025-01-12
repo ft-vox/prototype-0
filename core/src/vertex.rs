@@ -1,6 +1,6 @@
 use bytemuck::{Pod, Zeroable};
 use ft_vox_prototype_0_map_types::{
-    Chunk, Cube, Harvestable, Plantlike, Solid, Translucent, CHUNK_SIZE, MAP_HEIGHT,
+    Chunk, Cube, Custom, Harvestable, Plantlike, Solid, Translucent, CHUNK_SIZE, MAP_HEIGHT,
 };
 
 use crate::terrain_manager::Mesh;
@@ -207,6 +207,37 @@ pub fn create_mesh_for_chunk(
                             );
                         vertex_data_for_translucent.append(&mut tmp_vertex_data);
                         index_data_for_translucent.append(&mut tmp_index_data);
+                    }
+                    Cube::Custom(custom) => {
+                        if vertex_data_for_opaque.len() > 60000 {
+                            opaque_buffers.push((vertex_data_for_opaque, index_data_for_opaque));
+                            vertex_data_for_opaque = Vec::new();
+                            index_data_for_opaque = Vec::new();
+                        }
+                        if vertex_data_for_translucent.len() > 60000 {
+                            translucent_buffers
+                                .push((vertex_data_for_translucent, index_data_for_translucent));
+                            vertex_data_for_translucent = Vec::new();
+                            index_data_for_translucent = Vec::new();
+                        }
+                        let (
+                            (mut tmp_vertex_data_for_opaque, mut tmp_index_data_for_opaque),
+                            (
+                                mut tmp_vertex_data_for_translucent,
+                                mut tmp_index_data_for_translucent,
+                            ),
+                        ) = create_vertices_for_custom(
+                            custom,
+                            actual_x as f32,
+                            actual_y as f32,
+                            actual_z as f32,
+                            vertex_data_for_opaque.len(),
+                            vertex_data_for_translucent.len(),
+                        );
+                        vertex_data_for_opaque.append(&mut tmp_vertex_data_for_opaque);
+                        index_data_for_opaque.append(&mut tmp_index_data_for_opaque);
+                        vertex_data_for_translucent.append(&mut tmp_vertex_data_for_translucent);
+                        index_data_for_translucent.append(&mut tmp_index_data_for_translucent);
                     }
                 }
             }
@@ -512,4 +543,90 @@ pub fn create_vertices_for_harvestable(
     index_data.push(offset + vertex_data.len() as u16 - 1);
     index_data.push(offset + vertex_data.len() as u16 - 4);
     (vertex_data, index_data)
+}
+
+pub fn create_vertices_for_custom(
+    custom: Custom,
+    x: f32,
+    y: f32,
+    z: f32,
+    opaque_index: usize,
+    translucent_index: usize,
+) -> ((Vec<Vertex>, Vec<u16>), (Vec<Vertex>, Vec<u16>)) {
+    let opaque_offset = opaque_index as u16;
+    let translucent_offset = translucent_index as u16;
+
+    let mut vertex_data_opaque = Vec::<Vertex>::new();
+    let mut index_data_opaque = Vec::<u16>::new();
+    let mut vertex_data_translucent = Vec::<Vertex>::new();
+    let mut index_data_translucent = Vec::<u16>::new();
+
+    match custom {
+        Custom::Cactus => {
+            vertex_data_opaque.push(vertex([x + 0.9375, y + 0.0, z + 0.0], [7.0, 5.0]));
+            vertex_data_opaque.push(vertex([x + 0.9375, y + 1.0, z + 0.0], [6.0, 5.0]));
+            vertex_data_opaque.push(vertex([x + 0.9375, y + 1.0, z + 1.0], [6.0, 4.0]));
+            vertex_data_opaque.push(vertex([x + 0.9375, y + 0.0, z + 1.0], [7.0, 4.0]));
+            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 4);
+            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 3);
+            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 2);
+            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 2);
+            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 1);
+            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 4);
+            vertex_data_opaque.push(vertex([x + 0.0625, y + 0.0, z + 1.0], [7.0, 4.0]));
+            vertex_data_opaque.push(vertex([x + 0.0625, y + 1.0, z + 1.0], [6.0, 4.0]));
+            vertex_data_opaque.push(vertex([x + 0.0625, y + 1.0, z + 0.0], [6.0, 5.0]));
+            vertex_data_opaque.push(vertex([x + 0.0625, y + 0.0, z + 0.0], [7.0, 5.0]));
+            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 4);
+            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 3);
+            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 2);
+            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 2);
+            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 1);
+            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 4);
+            vertex_data_opaque.push(vertex([x + 1.0, y + 0.9375, z + 0.0], [6.0, 5.0]));
+            vertex_data_opaque.push(vertex([x + 0.0, y + 0.9375, z + 0.0], [7.0, 5.0]));
+            vertex_data_opaque.push(vertex([x + 0.0, y + 0.9375, z + 1.0], [7.0, 4.0]));
+            vertex_data_opaque.push(vertex([x + 1.0, y + 0.9375, z + 1.0], [6.0, 4.0]));
+            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 4);
+            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 3);
+            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 2);
+            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 2);
+            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 1);
+            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 4);
+            vertex_data_opaque.push(vertex([x + 1.0, y + 0.0625, z + 1.0], [6.0, 4.0]));
+            vertex_data_opaque.push(vertex([x + 0.0, y + 0.0625, z + 1.0], [7.0, 4.0]));
+            vertex_data_opaque.push(vertex([x + 0.0, y + 0.0625, z + 0.0], [7.0, 5.0]));
+            vertex_data_opaque.push(vertex([x + 1.0, y + 0.0625, z + 0.0], [6.0, 5.0]));
+            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 4);
+            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 3);
+            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 2);
+            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 2);
+            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 1);
+            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 4);
+            vertex_data_opaque.push(vertex([x + 0.0, y + 0.0, z + 1.0], [6.0, 5.0]));
+            vertex_data_opaque.push(vertex([x + 1.0, y + 0.0, z + 1.0], [5.0, 5.0]));
+            vertex_data_opaque.push(vertex([x + 1.0, y + 1.0, z + 1.0], [5.0, 4.0]));
+            vertex_data_opaque.push(vertex([x + 0.0, y + 1.0, z + 1.0], [6.0, 4.0]));
+            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 4);
+            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 3);
+            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 2);
+            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 2);
+            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 1);
+            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 4);
+            vertex_data_opaque.push(vertex([x + 0.0, y + 1.0, z + 0.0], [8.0, 5.0]));
+            vertex_data_opaque.push(vertex([x + 1.0, y + 1.0, z + 0.0], [7.0, 5.0]));
+            vertex_data_opaque.push(vertex([x + 1.0, y + 0.0, z + 0.0], [7.0, 4.0]));
+            vertex_data_opaque.push(vertex([x + 0.0, y + 0.0, z + 0.0], [8.0, 4.0]));
+            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 4);
+            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 3);
+            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 2);
+            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 2);
+            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 1);
+            index_data_opaque.push(opaque_offset + vertex_data_opaque.len() as u16 - 4);
+        }
+    }
+    (
+        (vertex_data_opaque, index_data_opaque),
+        (vertex_data_translucent, index_data_translucent),
+    )
 }

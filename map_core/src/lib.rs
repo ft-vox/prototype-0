@@ -1,5 +1,5 @@
 use ft_vox_prototype_0_map_types::{
-    Chunk, Cube, Harvestable, Plantlike, Solid, Translucent, CHUNK_SIZE, MAP_HEIGHT,
+    Chunk, Cube, Custom, Harvestable, Plantlike, Solid, Translucent, CHUNK_SIZE, MAP_HEIGHT,
 };
 use ft_vox_prototype_0_noise::{Noise, NoiseLayer};
 
@@ -76,7 +76,12 @@ impl Map {
                         if z <= WATER_LEVEL {
                             Cube::Translucent(Translucent::Ice) // TODO: water
                         } else if is_sand && n!(1.0, 420.0) > 0.1949 {
-                            Cube::Plantlike(Plantlike::DeadBush)
+                            let n = n!(1.0, 402.0);
+                            if n > 0.0 {
+                                Cube::Plantlike(Plantlike::DeadBush)
+                            } else {
+                                Cube::Custom(Custom::Cactus)
+                            }
                         } else if !is_sand && n!(1.0, 420.0) > 0.2042 {
                             let n = n!(1.0, 402.0);
                             if n > 0.2 {
