@@ -12,6 +12,7 @@ pub struct UIRenderer {
     transform: Mat4,
     ui_area_logical_size: Vec2,
     ui_texture_sheet_size: Vec2,
+    texture_sheet_count: u32,
 }
 
 #[repr(C)]
@@ -27,6 +28,7 @@ struct UIUniforms {
 pub struct UIVertex {
     position: [f32; 2],  // -1.0 ~ 1.0
     tex_coord: [f32; 2], // 0.0 ~ 1.0
+    tex_layer: u32,      // texture array layer index
 }
 
 pub struct UIMesh {
@@ -61,14 +63,14 @@ impl UIRenderer {
             mapped_at_creation: false,
         });
 
-        let (texels, width, height) = load_texture_from_ui_png();
+        let (texels_array, width, height, layer_count) = load_texture_sheets();
         let ui_texture_extent = wgpu::Extent3d {
             width,
             height,
-            depth_or_array_layers: 1,
+            depth_or_array_layers: layer_count,
         };
         let ui_texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("UI Texture"),
+            label: Some("UI Texture Array"),
             size: ui_texture_extent,
             mip_level_count: 1,
             sample_count: 1,
@@ -77,17 +79,37 @@ impl UIRenderer {
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });
-        let ui_texture_view = ui_texture.create_view(&wgpu::TextureViewDescriptor::default());
-        queue.write_texture(
-            ui_texture.as_image_copy(),
-            &texels,
-            wgpu::ImageDataLayout {
-                offset: 0,
-                bytes_per_row: Some(4 * width),
-                rows_per_image: None,
-            },
-            ui_texture_extent,
-        );
+        let ui_texture_view = ui_texture.create_view(&wgpu::TextureViewDescriptor {
+            dimension: Some(wgpu::TextureViewDimension::D2Array),
+            ..Default::default()
+        });
+
+        // Write each texture layer
+        for (layer_index, texels) in texels_array.iter().enumerate() {
+            queue.write_texture(
+                wgpu::ImageCopyTexture {
+                    texture: &ui_texture,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d {
+                        x: 0,
+                        y: 0,
+                        z: layer_index as u32,
+                    },
+                    aspect: wgpu::TextureAspect::All,
+                },
+                texels,
+                wgpu::ImageDataLayout {
+                    offset: 0,
+                    bytes_per_row: Some(4 * width),
+                    rows_per_image: None,
+                },
+                wgpu::Extent3d {
+                    width,
+                    height,
+                    depth_or_array_layers: 1,
+                },
+            );
+        }
 
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             address_mode_u: wgpu::AddressMode::ClampToEdge,
@@ -117,7 +139,7 @@ impl UIRenderer {
                     visibility: wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Texture {
                         sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
+                        view_dimension: wgpu::TextureViewDimension::D2Array,
                         multisampled: false,
                     },
                     count: None,
@@ -176,6 +198,11 @@ impl UIRenderer {
                             offset: 8,
                             shader_location: 1,
                         },
+                        wgpu::VertexAttribute {
+                            format: wgpu::VertexFormat::Uint32,
+                            offset: 16,
+                            shader_location: 2,
+                        },
                     ],
                 }],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
@@ -215,6 +242,7 @@ impl UIRenderer {
             transform: Self::calculate_transform_matrix(config.width as f32, config.height as f32),
             ui_area_logical_size: Vec2::new(1600.0, 900.0),
             ui_texture_sheet_size: Vec2::new(width as f32, height as f32),
+            texture_sheet_count: layer_count,
         }
     }
     fn calculate_transform_matrix(screen_width: f32, screen_height: f32) -> Mat4 {
@@ -304,6 +332,7 @@ impl UIRenderer {
         size: Vec2,
         texture_position: Vec2,
         texture_size: Vec2,
+        texture_layer: u32,
     ) -> UIMeshWGPU {
         let mut mesh = UIMesh {
             vertices: Vec::new(),
@@ -326,6 +355,7 @@ impl UIRenderer {
             UIVertex {
                 position: [mapped_position.x, mapped_position.y],
                 tex_coord: [mapped_texture_position.x, mapped_texture_position.y],
+                tex_layer: texture_layer,
             },
             UIVertex {
                 position: [mapped_position.x + mapped_size.x, mapped_position.y],
@@ -333,6 +363,7 @@ impl UIRenderer {
                     mapped_texture_position.x + mapped_texture_size.x,
                     mapped_texture_position.y,
                 ],
+                tex_layer: texture_layer,
             },
             UIVertex {
                 position: [mapped_position.x, mapped_position.y - mapped_size.y],
@@ -340,6 +371,7 @@ impl UIRenderer {
                     mapped_texture_position.x,
                     mapped_texture_position.y + mapped_texture_size.y,
                 ],
+                tex_layer: texture_layer,
             },
             UIVertex {
                 position: [
@@ -350,6 +382,7 @@ impl UIRenderer {
                     mapped_texture_position.x + mapped_texture_size.x,
                     mapped_texture_position.y + mapped_texture_size.y,
                 ],
+                tex_layer: texture_layer,
             },
         ];
 
@@ -361,14 +394,38 @@ impl UIRenderer {
 
 // TODO: add Texture atlas system or Texture array system
 
-fn load_texture_from_ui_png() -> (Vec<u8>, u32, u32) {
-    let img = image::load_from_memory_with_format(
-        include_bytes!("../../assets/ui-sheet.png"),
-        image::ImageFormat::Png,
-    )
-    .expect("Failed to load UI texture");
+fn load_texture_sheets() -> (Vec<Vec<u8>>, u32, u32, u32) {
+    use image::ImageFormat;
 
-    let (width, height) = img.dimensions();
-    let rgba = img.to_rgba8();
-    (rgba.into_raw(), width, height)
+    const TEXTURE_SHEETS: [&[u8]; 2] = [
+        include_bytes!("../../assets/ui-sheet-0000.png"),
+        include_bytes!("../../assets/ui-sheet-0001.png"),
+    ];
+
+    let mut texels_array = Vec::new();
+    let mut width = 0;
+    let mut height = 0;
+
+    for (index, &data) in TEXTURE_SHEETS.iter().enumerate() {
+        let img = image::load_from_memory_with_format(data, ImageFormat::Png)
+            .unwrap_or_else(|_| panic!("Failed to load texture sheet. index: {}", index));
+
+        let (img_width, img_height) = img.dimensions();
+
+        if texels_array.is_empty() {
+            width = img_width;
+            height = img_height;
+        } else if width != img_width || height != img_height {
+            panic!(
+                "All UI texture sheets must have the same dimensions. Mismatch at index {}",
+                index
+            );
+        }
+
+        texels_array.push(img.to_rgba8().into_raw());
+    }
+
+    let layer_count = texels_array.len() as u32;
+
+    (texels_array, width, height, layer_count)
 }
