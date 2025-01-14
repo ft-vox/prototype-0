@@ -91,7 +91,7 @@ impl VoxGraphicsWrapper {
             0,
         );
 
-        let ui_active_item_highlight = self.ui_renderer.create_ui_mesh(
+        let mut ui_active_item_highlight = self.ui_renderer.create_ui_mesh(
             device,
             vec2(1600.0 / 2.0 - (24.0 * 4.0) / 2.0, 900.0 - (23.0 * 4.0)),
             vec2(24.0 * 4.0, 24.0 * 4.0),
@@ -99,6 +99,7 @@ impl VoxGraphicsWrapper {
             vec2(24.0, 24.0),
             0,
         );
+        ui_active_item_highlight.1.position = vec2(0.0, 0.0);
 
         let ui_elements = vec![ui_item_bar, ui_active_item_highlight];
         self.ui_renderer

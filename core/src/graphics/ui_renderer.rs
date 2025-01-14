@@ -41,6 +41,13 @@ pub struct UIMeshWGPU {
     pub vertex_buffer: wgpu::Buffer,
     pub index_buffer: wgpu::Buffer,
     pub index_count: u32,
+    pub base_vertices: Vec<UIVertex>, // Store original vertices for transformation
+}
+
+#[derive(Clone, Copy)]
+pub struct UITransform {
+    pub position: Vec2,
+    pub size: Vec2,
 }
 
 impl UIRenderer {
@@ -268,7 +275,7 @@ impl UIRenderer {
         view: &wgpu::TextureView,
         encoder: &mut wgpu::CommandEncoder,
         queue: &wgpu::Queue,
-        ui_elements: &Vec<UIMeshWGPU>,
+        ui_elements: &[(UIMeshWGPU, UITransform)],
     ) {
         let uniforms = UIUniforms {
             transform: self.transform.to_cols_array(),
@@ -296,32 +303,41 @@ impl UIRenderer {
         render_pass.set_pipeline(&self.pipeline);
         render_pass.set_bind_group(0, &self.bind_group, &[]);
 
-        for ui_element in ui_elements {
-            render_pass.set_vertex_buffer(0, ui_element.vertex_buffer.slice(..));
-            render_pass
-                .set_index_buffer(ui_element.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-            render_pass.draw_indexed(0..ui_element.index_count, 0, 0..1);
+        for (mesh, transform) in ui_elements {
+            // Update vertex positions based on transform
+            let mut transformed_vertices = mesh.base_vertices.clone();
+            for vertex in &mut transformed_vertices {
+                let mapped_position =
+                    self.map_position(transform.position, self.ui_area_logical_size);
+                let mapped_size = transform.size / self.ui_area_logical_size * 2.0;
+
+                // Calculate relative position within the UI element
+                let relative_x = (vertex.position[0] + 1.0) / 2.0;
+                let relative_y = (-vertex.position[1] + 1.0) / 2.0;
+
+                // Apply new transform
+                vertex.position[0] = mapped_position.x + relative_x * mapped_size.x;
+                vertex.position[1] = mapped_position.y - relative_y * mapped_size.y;
+            }
+
+            // Update vertex buffer with new positions
+            queue.write_buffer(
+                &mesh.vertex_buffer,
+                0,
+                bytemuck::cast_slice(&transformed_vertices),
+            );
+
+            render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
+            render_pass.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+            render_pass.draw_indexed(0..mesh.index_count, 0, 0..1);
         }
     }
 
-    fn create_ui_mesh_wgpu(device: &wgpu::Device, mesh: &UIMesh) -> UIMeshWGPU {
-        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("UI Vertex Buffer"),
-            contents: bytemuck::cast_slice(&mesh.vertices),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-
-        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("UI Index Buffer"),
-            contents: bytemuck::cast_slice(&mesh.indices),
-            usage: wgpu::BufferUsages::INDEX,
-        });
-
-        UIMeshWGPU {
-            vertex_buffer,
-            index_buffer,
-            index_count: mesh.index_count,
-        }
+    fn map_position(&self, position: Vec2, logical_size: Vec2) -> Vec2 {
+        Vec2::new(
+            (position.x / logical_size.x) * 2.0 - 1.0,
+            (1.0 - (position.y / logical_size.y)) * 2.0 - 1.0,
+        )
     }
 
     // TODO: Separate to UI FRAMEWORK
@@ -333,32 +349,24 @@ impl UIRenderer {
         texture_position: Vec2,
         texture_size: Vec2,
         texture_layer: u32,
-    ) -> UIMeshWGPU {
+    ) -> (UIMeshWGPU, UITransform) {
         let mut mesh = UIMesh {
             vertices: Vec::new(),
             indices: Vec::new(),
             index_count: 0,
         };
 
-        fn map_position(position: Vec2, logical_size: Vec2) -> Vec2 {
-            Vec2::new(
-                (position.x / logical_size.x) * 2.0 - 1.0,
-                (1.0 - (position.y / logical_size.y)) * 2.0 - 1.0,
-            )
-        }
-        let mapped_position = map_position(position, self.ui_area_logical_size);
-        let mapped_size = size / self.ui_area_logical_size * 2.0;
         let mapped_texture_position = texture_position / self.ui_texture_sheet_size;
         let mapped_texture_size = texture_size / self.ui_texture_sheet_size;
 
-        mesh.vertices = vec![
+        let base_vertices = vec![
             UIVertex {
-                position: [mapped_position.x, mapped_position.y],
+                position: [-1.0, 1.0],
                 tex_coord: [mapped_texture_position.x, mapped_texture_position.y],
                 tex_layer: texture_layer,
             },
             UIVertex {
-                position: [mapped_position.x + mapped_size.x, mapped_position.y],
+                position: [1.0, 1.0],
                 tex_coord: [
                     mapped_texture_position.x + mapped_texture_size.x,
                     mapped_texture_position.y,
@@ -366,7 +374,7 @@ impl UIRenderer {
                 tex_layer: texture_layer,
             },
             UIVertex {
-                position: [mapped_position.x, mapped_position.y - mapped_size.y],
+                position: [-1.0, -1.0],
                 tex_coord: [
                     mapped_texture_position.x,
                     mapped_texture_position.y + mapped_texture_size.y,
@@ -374,10 +382,7 @@ impl UIRenderer {
                 tex_layer: texture_layer,
             },
             UIVertex {
-                position: [
-                    mapped_position.x + mapped_size.x,
-                    mapped_position.y - mapped_size.y,
-                ],
+                position: [1.0, -1.0],
                 tex_coord: [
                     mapped_texture_position.x + mapped_texture_size.x,
                     mapped_texture_position.y + mapped_texture_size.y,
@@ -386,9 +391,26 @@ impl UIRenderer {
             },
         ];
 
+        mesh.vertices = base_vertices.clone();
         mesh.indices = vec![0, 1, 2, 1, 3, 2];
         mesh.index_count = 6;
-        Self::create_ui_mesh_wgpu(device, &mesh)
+
+        let mesh_wgpu = UIMeshWGPU {
+            vertex_buffer: device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("UI Vertex Buffer"),
+                contents: bytemuck::cast_slice(&mesh.vertices),
+                usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            }),
+            index_buffer: device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("UI Index Buffer"),
+                contents: bytemuck::cast_slice(&mesh.indices),
+                usage: wgpu::BufferUsages::INDEX,
+            }),
+            index_count: mesh.index_count,
+            base_vertices,
+        };
+
+        (mesh_wgpu, UITransform { position, size })
     }
 }
 
