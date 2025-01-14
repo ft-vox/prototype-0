@@ -392,8 +392,6 @@ impl UIRenderer {
     }
 }
 
-// TODO: add Texture atlas system or Texture array system
-
 fn load_texture_sheets() -> (Vec<Vec<u8>>, u32, u32, u32) {
     use image::ImageFormat;
 
