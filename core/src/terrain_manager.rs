@@ -44,7 +44,7 @@ impl MapCache {
 
         MapCache {
             chunk_loading: HashSet::new(),
-            chunks: vec![None; size * size * size],
+            chunks: vec![None; size * size],
             cache_distance,
             coords: calculate_coords(cache_distance as f32),
             x: (x / CHUNK_SIZE as f32).floor() as i32,
@@ -53,6 +53,7 @@ impl MapCache {
             eye_y_upper: y % CHUNK_SIZE as f32 > CHUNK_SIZE as f32 / 2.0,
         }
     }
+
     pub fn get(&self, x: i32, y: i32) -> Option<Arc<Chunk>> {
         let size = self.cache_distance * 2 + 2;
 
@@ -95,7 +96,7 @@ impl MapCache {
 
     fn reset(&mut self) {
         let size = self.cache_distance * 2 + 2;
-        self.chunks = vec![None; size * size * size];
+        self.chunks = vec![None; size * size];
         self.chunk_loading.clear();
     }
 }
@@ -133,7 +134,7 @@ impl BufferCache {
         let (x, y) = eye;
 
         BufferCache {
-            buffers: vec![None; size * size * size],
+            buffers: vec![None; size * size],
             cache_distance,
             coords: calculate_coords(cache_distance as f32),
             x: (x / CHUNK_SIZE as f32).floor() as i32,
@@ -191,7 +192,7 @@ impl BufferCache {
 
     fn reset(&mut self) {
         let size = self.cache_distance * 2 + 2;
-        self.buffers = vec![None; size * size * size];
+        self.buffers = vec![None; size * size];
     }
 
     fn get_available(
@@ -283,13 +284,20 @@ impl TerrainManager {
 
                     map_cache.chunk_loading.remove(&(x, y));
                     map_cache.set(x, y, Some(chunk));
+                    let directions2 = [
+                        (0, 0),  // itself
+                        (1, 0),  // x+1
+                        (-1, 0), // x-1
+                        (0, 1),  // y+1
+                        (0, -1), // y-1
+                    ];
                     let directions = [
                         (1, 0),  // x+1
                         (-1, 0), // x-1
                         (0, 1),  // y+1
                         (0, -1), // y-1
                     ];
-                    for (dx, dy) in directions.iter() {
+                    for (dx, dy) in directions2.iter() {
                         if let Some(chunk) = map_cache.get(x + dx, y + dy) {
                             let mut chunks5: Vec<Arc<Chunk>> = Vec::new();
 
