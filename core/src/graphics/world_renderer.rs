@@ -50,9 +50,8 @@ impl WorldRenderer {
         clip_far: f32,
     ) -> Self {
         let min_alignment = device.limits().min_uniform_buffer_offset_alignment as usize;
-        let world_uniform_size = std::mem::size_of::<WorldUniforms>();
-        let world_aligned_uniform_size =
-            ((world_uniform_size + min_alignment - 1) / min_alignment) * min_alignment;
+        let uniform_size = std::mem::size_of::<WorldUniforms>();
+        let aligned_uniform_size = uniform_size.div_ceil(min_alignment) * min_alignment;
         let texture_extent = wgpu::Extent3d {
             width: config.width,
             height: config.height,
@@ -72,39 +71,36 @@ impl WorldRenderer {
         });
         let depth_buffer = draw_depth_buffer.create_view(&wgpu::TextureViewDescriptor::default());
 
-        let world_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: None,
-                entries: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: wgpu::BufferSize::new(
-                                world_aligned_uniform_size as u64,
-                            ),
-                        },
-                        count: None,
+        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: None,
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: wgpu::BufferSize::new(aligned_uniform_size as u64),
                     },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Texture {
-                            multisampled: false,
-                            sample_type: wgpu::TextureSampleType::Float {
-                                filterable: (false),
-                            },
-                            view_dimension: wgpu::TextureViewDimension::D2,
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        multisampled: false,
+                        sample_type: wgpu::TextureSampleType::Float {
+                            filterable: (false),
                         },
-                        count: None,
+                        view_dimension: wgpu::TextureViewDimension::D2,
                     },
-                ],
-            });
+                    count: None,
+                },
+            ],
+        });
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
-            bind_group_layouts: &[&world_bind_group_layout],
+            bind_group_layouts: &[&bind_group_layout],
             push_constant_ranges: &[],
         });
 
@@ -137,19 +133,19 @@ impl WorldRenderer {
             terrain_texture_extent,
         );
 
-        let world_uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Uniform Buffer"),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            size: world_aligned_uniform_size as wgpu::BufferAddress,
+            size: aligned_uniform_size as wgpu::BufferAddress,
             mapped_at_creation: false,
         });
 
-        let world_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &world_bind_group_layout,
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &bind_group_layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: world_uniform_buffer.as_entire_binding(),
+                    resource: uniform_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
@@ -159,17 +155,17 @@ impl WorldRenderer {
             label: None,
         });
 
-        let world_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!(
                 "../../assets/shader_world.wgsl"
             ))),
         });
 
-        let world_vertex_size = std::mem::size_of::<Vertex>();
+        let vertex_size = std::mem::size_of::<Vertex>();
 
-        let world_vertex_buffers = [wgpu::VertexBufferLayout {
-            array_stride: world_vertex_size as wgpu::BufferAddress,
+        let vertex_buffers = [wgpu::VertexBufferLayout {
+            array_stride: vertex_size as wgpu::BufferAddress,
             step_mode: wgpu::VertexStepMode::Vertex,
             attributes: &[
                 wgpu::VertexAttribute {
@@ -189,13 +185,13 @@ impl WorldRenderer {
             label: None,
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
-                module: &world_shader,
+                module: &shader,
                 entry_point: "vs_common",
-                buffers: &world_vertex_buffers,
+                buffers: &vertex_buffers,
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
             fragment: Some(wgpu::FragmentState {
-                module: &world_shader,
+                module: &shader,
                 entry_point: "fs_opaque",
                 targets: &[Some(wgpu::ColorTargetState {
                     format: config.view_formats[0],
@@ -227,13 +223,13 @@ impl WorldRenderer {
             label: None,
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
-                module: &world_shader,
+                module: &shader,
                 entry_point: "vs_common",
-                buffers: &world_vertex_buffers,
+                buffers: &vertex_buffers,
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
             fragment: Some(wgpu::FragmentState {
-                module: &world_shader,
+                module: &shader,
                 entry_point: "fs_translucent",
                 targets: &[Some(wgpu::ColorTargetState {
                     format: config.view_formats[0],
@@ -277,8 +273,8 @@ impl WorldRenderer {
             view_matrix: Mat4::ZERO,
             frustum: Frustum::new(),
             depth_buffer,
-            bind_group: world_bind_group,
-            uniform_buffer: world_uniform_buffer,
+            bind_group,
+            uniform_buffer,
             opaque_pipeline,
             translucent_pipeline,
         }
