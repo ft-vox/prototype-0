@@ -1,5 +1,6 @@
 use ft_vox_prototype_0_map_types::{
-    Chunk, Cube, Custom, Harvestable, Plantlike, Solid, Translucent, CHUNK_SIZE, MAP_HEIGHT,
+    Chunk, Cube, Custom, FilteredSolid, Harvestable, Plantlike, Solid, Translucent, CHUNK_SIZE,
+    MAP_HEIGHT,
 };
 use ft_vox_prototype_0_noise::{Noise, NoiseLayer};
 
@@ -41,6 +42,7 @@ impl Map {
     // TODO: optimize
     pub fn get_chunk(&self, x: i32, y: i32) -> Chunk {
         let mut cubes = [Cube::Empty; MAP_HEIGHT * CHUNK_SIZE * CHUNK_SIZE];
+        let mut biome_colors = [[0.0f32; 4]; CHUNK_SIZE * CHUNK_SIZE];
         let x_offset = x * CHUNK_SIZE as i32;
         let y_offset = y * CHUNK_SIZE as i32;
 
@@ -56,6 +58,10 @@ impl Map {
                 }
 
                 let humidity = n!(0.0042, 4242.0);
+                let biome1 = n!(0.042, 42042.0);
+                let biome2 = n!(0.042, 42042.0);
+                let biome3 = n!(0.042, 424242.0);
+                let biome4 = n!(0.042, 420420.0);
                 let is_sand = humidity < -0.2;
                 let height = (lerp(
                     self.height_base_noise.noise2(actual_x, actual_y) / 4.0 + 0.5,
@@ -63,6 +69,12 @@ impl Map {
                     222.2,
                 ) + (n!(0.0618, 0.0) * n!(0.000922, 42.0)) * 342.0)
                     .clamp(22.2, 222.2) as usize;
+                biome_colors[y * CHUNK_SIZE + x] = [
+                    de_lerp(biome1, -1.0, 1.0),
+                    de_lerp(biome2, -1.0, 1.0),
+                    de_lerp(biome3, -1.0, 1.0),
+                    de_lerp(biome4, -1.0, 1.0),
+                ];
                 for z in 0..MAP_HEIGHT {
                     cubes[z * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE + x] = if z == 0 {
                         Cube::Solid(Solid::Bedrock)
@@ -109,7 +121,7 @@ impl Map {
                         } else if is_sand {
                             Cube::Solid(Solid::Sand)
                         } else {
-                            Cube::Solid(Solid::GrassBlock)
+                            Cube::FilteredSolid(FilteredSolid::GrassBlock)
                         }
                     } else if height == z + 2 {
                         if !is_sand && height >= WATER_LEVEL {
@@ -126,7 +138,10 @@ impl Map {
             }
         }
 
-        Chunk { cubes }
+        Chunk {
+            cubes,
+            biome_colors,
+        }
     }
 }
 

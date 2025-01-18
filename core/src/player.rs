@@ -20,12 +20,12 @@ pub enum MoveSpeed {
 
 impl MoveSpeed {
     pub const fn speed_per_sec(&self) -> f32 {
-        match self {
+        (match self {
             Self::Walk => 4.317,
             Self::Sprint => 5.612,
             Self::CreativeFly => 10.89,
             Self::FtMinecraftFly => 40.00,
-        }
+        }) * 8.0
     }
 }
 

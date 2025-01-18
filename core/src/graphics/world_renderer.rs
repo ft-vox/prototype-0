@@ -178,6 +178,16 @@ impl WorldRenderer {
                     offset: 4 * 4,
                     shader_location: 1,
                 },
+                wgpu::VertexAttribute {
+                    format: wgpu::VertexFormat::Float32x2,
+                    offset: 4 * 6,
+                    shader_location: 2,
+                },
+                wgpu::VertexAttribute {
+                    format: wgpu::VertexFormat::Float32x4,
+                    offset: 4 * 8,
+                    shader_location: 3,
+                },
             ],
         }];
 

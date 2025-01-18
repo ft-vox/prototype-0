@@ -1,6 +1,7 @@
 use bytemuck::{Pod, Zeroable};
 use ft_vox_prototype_0_map_types::{
-    Chunk, Cube, Custom, Harvestable, Plantlike, Solid, Translucent, CHUNK_SIZE, MAP_HEIGHT,
+    Chunk, Cube, Custom, FilteredSolid, Harvestable, Plantlike, Solid, Translucent, CHUNK_SIZE,
+    MAP_HEIGHT,
 };
 
 use crate::terrain_manager::Mesh;
@@ -10,12 +11,25 @@ use crate::terrain_manager::Mesh;
 pub struct Vertex {
     _pos: [f32; 4],
     _tex_coord: [f32; 2],
+    _filter_tex_coord: [f32; 2],
+    _filter_color: [f32; 4],
 }
 
 pub fn vertex(pos: [f32; 3], tc: [f32; 2]) -> Vertex {
     Vertex {
         _pos: [pos[0], pos[1], pos[2], 1.0],
-        _tex_coord: [tc[0], tc[1]],
+        _tex_coord: tc,
+        _filter_tex_coord: [0.0, 0.0],
+        _filter_color: [0.0, 0.0, 0.0, 0.0],
+    }
+}
+
+pub fn filtered_vertex(pos: [f32; 3], tc: [f32; 2], ftc: [f32; 2], fc: [f32; 4]) -> Vertex {
+    Vertex {
+        _pos: [pos[0], pos[1], pos[2], 1.0],
+        _tex_coord: tc,
+        _filter_tex_coord: ftc,
+        _filter_color: fc,
     }
 }
 
@@ -171,6 +185,97 @@ pub fn create_mesh_for_chunk(
                             );
                         vertex_data_for_translucent.append(&mut tmp_vertex_data);
                         index_data_for_translucent.append(&mut tmp_index_data);
+                    }
+                    Cube::FilteredSolid(filtered_solid) => {
+                        if vertex_data_for_opaque.len() > 60000 {
+                            opaque_buffers.push((vertex_data_for_opaque, index_data_for_opaque));
+                            vertex_data_for_opaque = Vec::new();
+                            index_data_for_opaque = Vec::new();
+                        }
+                        let (mut tmp_vertex_data, mut tmp_index_data) =
+                            create_vertices_for_filtered_solid(
+                                filtered_solid,
+                                actual_x as f32,
+                                actual_y as f32,
+                                actual_z as f32,
+                                if x == CHUNK_SIZE - 1 {
+                                    chunk_px.cubes[z * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE]
+                                        .is_solid()
+                                } else {
+                                    chunk.cubes
+                                        [z * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE + x + 1]
+                                        .is_solid()
+                                },
+                                if x == 0 {
+                                    chunk_nx.cubes[z * CHUNK_SIZE * CHUNK_SIZE
+                                        + y * CHUNK_SIZE
+                                        + CHUNK_SIZE
+                                        - 1]
+                                    .is_solid()
+                                } else {
+                                    chunk.cubes
+                                        [z * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE + x - 1]
+                                        .is_solid()
+                                },
+                                if y == CHUNK_SIZE - 1 {
+                                    chunk_py.cubes[z * CHUNK_SIZE * CHUNK_SIZE + x].is_solid()
+                                } else {
+                                    chunk.cubes
+                                        [z * CHUNK_SIZE * CHUNK_SIZE + (y + 1) * CHUNK_SIZE + x]
+                                        .is_solid()
+                                },
+                                if y == 0 {
+                                    chunk_ny.cubes[z * CHUNK_SIZE * CHUNK_SIZE
+                                        + (CHUNK_SIZE - 1) * CHUNK_SIZE
+                                        + x]
+                                        .is_solid()
+                                } else {
+                                    chunk.cubes
+                                        [z * CHUNK_SIZE * CHUNK_SIZE + (y - 1) * CHUNK_SIZE + x]
+                                        .is_solid()
+                                },
+                                if z == MAP_HEIGHT - 1 {
+                                    false
+                                } else {
+                                    chunk.cubes
+                                        [(z + 1) * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE + x]
+                                        .is_solid()
+                                },
+                                if z == 0 {
+                                    false
+                                } else {
+                                    chunk.cubes
+                                        [(z - 1) * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE + x]
+                                        .is_solid()
+                                },
+                                [
+                                    chunk.biome_colors[y * CHUNK_SIZE + x],
+                                    if x == CHUNK_SIZE - 1 {
+                                        chunk_px.biome_colors[y * CHUNK_SIZE]
+                                    } else {
+                                        chunk.biome_colors[y * CHUNK_SIZE + x + 1]
+                                    },
+                                    if y == CHUNK_SIZE - 1 {
+                                        chunk_py.biome_colors[x]
+                                    } else {
+                                        chunk.biome_colors[(y + 1) * CHUNK_SIZE + x]
+                                    },
+                                    if y == CHUNK_SIZE - 1 {
+                                        if x == CHUNK_SIZE - 1 {
+                                            [0.0, 0.0, 0.0, 0.0] // TODO: fix
+                                        } else {
+                                            chunk_py.biome_colors[x + 1]
+                                        }
+                                    } else if x == CHUNK_SIZE - 1 {
+                                        chunk_px.biome_colors[(y + 1) * CHUNK_SIZE]
+                                    } else {
+                                        chunk.biome_colors[(y + 1) * CHUNK_SIZE + x + 1]
+                                    },
+                                ],
+                                vertex_data_for_opaque.len(),
+                            );
+                        vertex_data_for_opaque.append(&mut tmp_vertex_data);
+                        index_data_for_opaque.append(&mut tmp_index_data);
                     }
                     Cube::Plantlike(plantlike) => {
                         if vertex_data_for_translucent.len() > 60000 {
@@ -443,6 +548,226 @@ pub fn create_vertices_for_translucent(
         vertex_data.push(vertex([x + 1.0, y + 1.0, z + 0.0], b));
         vertex_data.push(vertex([x + 1.0, y + 0.0, z + 0.0], c));
         vertex_data.push(vertex([x + 0.0, y + 0.0, z + 0.0], d));
+        index_data.push(offset + vertex_data.len() as u16 - 4);
+        index_data.push(offset + vertex_data.len() as u16 - 3);
+        index_data.push(offset + vertex_data.len() as u16 - 2);
+        index_data.push(offset + vertex_data.len() as u16 - 2);
+        index_data.push(offset + vertex_data.len() as u16 - 1);
+        index_data.push(offset + vertex_data.len() as u16 - 4);
+    }
+    (vertex_data, index_data)
+}
+
+pub fn create_vertices_for_filtered_solid(
+    filtered_solid: FilteredSolid,
+    x: f32,
+    y: f32,
+    z: f32,
+    px_is_solid: bool,
+    nx_is_solid: bool,
+    py_is_solid: bool,
+    ny_is_solid: bool,
+    pz_is_solid: bool,
+    nz_is_solid: bool,
+    biome_color: [[f32; 4]; 4],
+    index: usize,
+) -> (Vec<Vertex>, Vec<u16>) {
+    let offset = index as u16;
+
+    let mut vertex_data = Vec::<Vertex>::new();
+    let mut index_data = Vec::<u16>::new();
+
+    if !px_is_solid {
+        let ([a, b, c, d], [e, f, g, h]) = filtered_solid.extras_px();
+        vertex_data.push(filtered_vertex(
+            [x + 1.0, y + 0.0, z + 0.0],
+            a,
+            e,
+            biome_color[1],
+        ));
+        vertex_data.push(filtered_vertex(
+            [x + 1.0, y + 1.0, z + 0.0],
+            b,
+            f,
+            biome_color[3],
+        ));
+        vertex_data.push(filtered_vertex(
+            [x + 1.0, y + 1.0, z + 1.0],
+            c,
+            g,
+            biome_color[3],
+        ));
+        vertex_data.push(filtered_vertex(
+            [x + 1.0, y + 0.0, z + 1.0],
+            d,
+            h,
+            biome_color[1],
+        ));
+        index_data.push(offset + vertex_data.len() as u16 - 4);
+        index_data.push(offset + vertex_data.len() as u16 - 3);
+        index_data.push(offset + vertex_data.len() as u16 - 2);
+        index_data.push(offset + vertex_data.len() as u16 - 2);
+        index_data.push(offset + vertex_data.len() as u16 - 1);
+        index_data.push(offset + vertex_data.len() as u16 - 4);
+    }
+    if !nx_is_solid {
+        let ([a, b, c, d], [e, f, g, h]) = filtered_solid.extras_nx();
+        vertex_data.push(filtered_vertex(
+            [x + 0.0, y + 0.0, z + 1.0],
+            a,
+            e,
+            biome_color[0],
+        ));
+        vertex_data.push(filtered_vertex(
+            [x + 0.0, y + 1.0, z + 1.0],
+            b,
+            f,
+            biome_color[2],
+        ));
+        vertex_data.push(filtered_vertex(
+            [x + 0.0, y + 1.0, z + 0.0],
+            c,
+            g,
+            biome_color[2],
+        ));
+        vertex_data.push(filtered_vertex(
+            [x + 0.0, y + 0.0, z + 0.0],
+            d,
+            h,
+            biome_color[0],
+        ));
+        index_data.push(offset + vertex_data.len() as u16 - 4);
+        index_data.push(offset + vertex_data.len() as u16 - 3);
+        index_data.push(offset + vertex_data.len() as u16 - 2);
+        index_data.push(offset + vertex_data.len() as u16 - 2);
+        index_data.push(offset + vertex_data.len() as u16 - 1);
+        index_data.push(offset + vertex_data.len() as u16 - 4);
+    }
+    if !py_is_solid {
+        let ([a, b, c, d], [e, f, g, h]) = filtered_solid.extras_py();
+        vertex_data.push(filtered_vertex(
+            [x + 1.0, y + 1.0, z + 0.0],
+            a,
+            e,
+            biome_color[3],
+        ));
+        vertex_data.push(filtered_vertex(
+            [x + 0.0, y + 1.0, z + 0.0],
+            b,
+            f,
+            biome_color[2],
+        ));
+        vertex_data.push(filtered_vertex(
+            [x + 0.0, y + 1.0, z + 1.0],
+            c,
+            g,
+            biome_color[2],
+        ));
+        vertex_data.push(filtered_vertex(
+            [x + 1.0, y + 1.0, z + 1.0],
+            d,
+            h,
+            biome_color[3],
+        ));
+        index_data.push(offset + vertex_data.len() as u16 - 4);
+        index_data.push(offset + vertex_data.len() as u16 - 3);
+        index_data.push(offset + vertex_data.len() as u16 - 2);
+        index_data.push(offset + vertex_data.len() as u16 - 2);
+        index_data.push(offset + vertex_data.len() as u16 - 1);
+        index_data.push(offset + vertex_data.len() as u16 - 4);
+    }
+    if !ny_is_solid {
+        let ([a, b, c, d], [e, f, g, h]) = filtered_solid.extras_ny();
+        vertex_data.push(filtered_vertex(
+            [x + 1.0, y + 0.0, z + 1.0],
+            a,
+            e,
+            biome_color[1],
+        ));
+        vertex_data.push(filtered_vertex(
+            [x + 0.0, y + 0.0, z + 1.0],
+            b,
+            f,
+            biome_color[0],
+        ));
+        vertex_data.push(filtered_vertex(
+            [x + 0.0, y + 0.0, z + 0.0],
+            c,
+            g,
+            biome_color[0],
+        ));
+        vertex_data.push(filtered_vertex(
+            [x + 1.0, y + 0.0, z + 0.0],
+            d,
+            h,
+            biome_color[1],
+        ));
+        index_data.push(offset + vertex_data.len() as u16 - 4);
+        index_data.push(offset + vertex_data.len() as u16 - 3);
+        index_data.push(offset + vertex_data.len() as u16 - 2);
+        index_data.push(offset + vertex_data.len() as u16 - 2);
+        index_data.push(offset + vertex_data.len() as u16 - 1);
+        index_data.push(offset + vertex_data.len() as u16 - 4);
+    }
+    if !pz_is_solid {
+        let ([a, b, c, d], [e, f, g, h]) = filtered_solid.extras_pz();
+        vertex_data.push(filtered_vertex(
+            [x + 0.0, y + 0.0, z + 1.0],
+            a,
+            e,
+            biome_color[0],
+        ));
+        vertex_data.push(filtered_vertex(
+            [x + 1.0, y + 0.0, z + 1.0],
+            b,
+            f,
+            biome_color[1],
+        ));
+        vertex_data.push(filtered_vertex(
+            [x + 1.0, y + 1.0, z + 1.0],
+            c,
+            g,
+            biome_color[3],
+        ));
+        vertex_data.push(filtered_vertex(
+            [x + 0.0, y + 1.0, z + 1.0],
+            d,
+            h,
+            biome_color[2],
+        ));
+        index_data.push(offset + vertex_data.len() as u16 - 4);
+        index_data.push(offset + vertex_data.len() as u16 - 3);
+        index_data.push(offset + vertex_data.len() as u16 - 2);
+        index_data.push(offset + vertex_data.len() as u16 - 2);
+        index_data.push(offset + vertex_data.len() as u16 - 1);
+        index_data.push(offset + vertex_data.len() as u16 - 4);
+    }
+    if !nz_is_solid {
+        let ([a, b, c, d], [e, f, g, h]) = filtered_solid.extras_nz();
+        vertex_data.push(filtered_vertex(
+            [x + 0.0, y + 1.0, z + 0.0],
+            a,
+            e,
+            biome_color[2],
+        ));
+        vertex_data.push(filtered_vertex(
+            [x + 1.0, y + 1.0, z + 0.0],
+            b,
+            f,
+            biome_color[3],
+        ));
+        vertex_data.push(filtered_vertex(
+            [x + 1.0, y + 0.0, z + 0.0],
+            c,
+            g,
+            biome_color[1],
+        ));
+        vertex_data.push(filtered_vertex(
+            [x + 0.0, y + 0.0, z + 0.0],
+            d,
+            h,
+            biome_color[0],
+        ));
         index_data.push(offset + vertex_data.len() as u16 - 4);
         index_data.push(offset + vertex_data.len() as u16 - 3);
         index_data.push(offset + vertex_data.len() as u16 - 2);

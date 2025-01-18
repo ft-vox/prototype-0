@@ -6,6 +6,7 @@ pub enum Cube {
     Empty,
     Solid(Solid),
     Translucent(Translucent),
+    FilteredSolid(FilteredSolid),
     Plantlike(Plantlike),
     Harvestable(Harvestable),
     Custom(Custom),
@@ -117,7 +118,6 @@ macro_rules! define_solid {
 define_solid! {
     // 0
     Bedrock((1, 1)),
-    GrassBlock((0, 3), (0, 0), (0, 2)),
     Dirt((0, 2)),
     Stone((0, 1)),
     PlankOak((0, 4)), // TODO: rename
@@ -190,6 +190,113 @@ define_translucent! {
     OakLeaves(3, 4),
     MonsterSpawner(4, 1),
     Ice(4, 3),
+}
+
+macro_rules! define_filtered_solid {
+    ($($variant:ident($($vals:tt),*)),* $(,)?) => {
+        #[derive(Clone, Copy, PartialEq, Eq)]
+        pub enum FilteredSolid {
+            $($variant),*
+        }
+
+        impl FilteredSolid {
+            pub fn extras_px(&self) -> ([[f32; 2]; 4], [[f32; 2]; 4]) {
+                match self {
+                    $(
+                        Self::$variant => {
+                            define_filtered_solid!(@extras_px $($vals),*)
+                        }
+                    ),*
+                }
+            }
+            pub fn extras_nx(&self) -> ([[f32; 2]; 4], [[f32; 2]; 4]) {
+                match self {
+                    $(
+                        Self::$variant => {
+                            define_filtered_solid!(@extras_nx $($vals),*)
+                        }
+                    ),*
+                }
+            }
+            pub fn extras_py(&self) -> ([[f32; 2]; 4], [[f32; 2]; 4]) {
+                match self {
+                    $(
+                        Self::$variant => {
+                            define_filtered_solid!(@extras_py $($vals),*)
+                        }
+                    ),*
+                }
+            }
+            pub fn extras_ny(&self) -> ([[f32; 2]; 4], [[f32; 2]; 4]) {
+                match self {
+                    $(
+                        Self::$variant => {
+                            define_filtered_solid!(@extras_ny $($vals),*)
+                        }
+                    ),*
+                }
+            }
+            pub fn extras_pz(&self) -> ([[f32; 2]; 4], [[f32; 2]; 4]) {
+                match self {
+                    $(
+                        Self::$variant => {
+                            define_filtered_solid!(@extras_pz $($vals),*)
+                        }
+                    ),*
+                }
+            }
+            pub fn extras_nz(&self) -> ([[f32; 2]; 4], [[f32; 2]; 4]) {
+                match self {
+                    $(
+                        Self::$variant => {
+                            define_filtered_solid!(@extras_nz $($vals),*)
+                        }
+                    ),*
+                }
+            }
+        }
+    };
+
+    (@extras_px ($original_y:expr, $original_x:expr), ($filter_y:expr, $filter_x:expr)) => {
+        define_filtered_solid!(@extras_px ($original_y, $original_x), ($original_y, $original_x), ($original_y, $original_x), ($filter_y, $filter_x), ($filter_y, $filter_x), ($filter_y, $filter_x))
+    };
+    (@extras_px ($original_side_y:expr, $original_side_x:expr), ($original_top_y:expr, $original_top_x:expr), ($original_bottom_y:expr, $original_bottom_x:expr), ($filter_side_y:expr, $filter_side_x:expr), ($filter_top_y:expr, $filter_top_x:expr), ($filter_bottom_y:expr, $filter_bottom_x:expr)) => {
+        ([[($original_side_x + 1) as f32, ($original_side_y + 1) as f32], [$original_side_x as f32, ($original_side_y + 1) as f32], [$original_side_x as f32, $original_side_y as f32], [($original_side_x + 1) as f32, $original_side_y as f32]], [[($filter_side_x + 1) as f32, ($filter_side_y + 1) as f32], [$filter_side_x as f32, ($filter_side_y + 1) as f32], [$filter_side_x as f32, $filter_side_y as f32], [($filter_side_x + 1) as f32, $filter_side_y as f32]])
+    };
+    (@extras_nx ($original_y:expr, $original_x:expr), ($filter_y:expr, $filter_x:expr)) => {
+        define_filtered_solid!(@extras_nx ($original_y, $original_x), ($original_y, $original_x), ($original_y, $original_x), ($filter_y, $filter_x), ($filter_y, $filter_x), ($filter_y, $filter_x))
+    };
+    (@extras_nx ($original_side_y:expr, $original_side_x:expr), ($original_top_y:expr, $original_top_x:expr), ($original_bottom_y:expr, $original_bottom_x:expr), ($filter_side_y:expr, $filter_side_x:expr), ($filter_top_y:expr, $filter_top_x:expr), ($filter_bottom_y:expr, $filter_bottom_x:expr)) => {
+        ([[($original_side_x + 1) as f32, $original_side_y as f32], [$original_side_x as f32, $original_side_y as f32], [$original_side_x as f32, ($original_side_y + 1) as f32], [($original_side_x + 1) as f32, ($original_side_y + 1) as f32]], [[($filter_side_x + 1) as f32, $filter_side_y as f32], [$filter_side_x as f32, $filter_side_y as f32], [$filter_side_x as f32, ($filter_side_y + 1) as f32], [($filter_side_x + 1) as f32, ($filter_side_y + 1) as f32]])
+    };
+    (@extras_py ($original_y:expr, $original_x:expr), ($filter_y:expr, $filter_x:expr)) => {
+        define_filtered_solid!(@extras_py ($original_y, $original_x), ($original_y, $original_x), ($original_y, $original_x), ($filter_y, $filter_x), ($filter_y, $filter_x), ($filter_y, $filter_x))
+    };
+    (@extras_py ($original_side_y:expr, $original_side_x:expr), ($original_top_y:expr, $original_top_x:expr), ($original_bottom_y:expr, $original_bottom_x:expr), ($filter_side_y:expr, $filter_side_x:expr), ($filter_top_y:expr, $filter_top_x:expr), ($filter_bottom_y:expr, $filter_bottom_x:expr)) => {
+        ([[$original_side_x as f32, ($original_side_y + 1) as f32], [($original_side_x + 1) as f32, ($original_side_y + 1) as f32], [($original_side_x + 1) as f32, $original_side_y as f32], [$original_side_x as f32, $original_side_y as f32]], [[$filter_side_x as f32, ($filter_side_y + 1) as f32], [($filter_side_x + 1) as f32, ($filter_side_y + 1) as f32], [($filter_side_x + 1) as f32, $filter_side_y as f32], [$filter_side_x as f32, $filter_side_y as f32]])
+    };
+    (@extras_ny ($original_y:expr, $original_x:expr), ($filter_y:expr, $filter_x:expr)) => {
+        define_filtered_solid!(@extras_ny ($original_y, $original_x), ($original_y, $original_x), ($original_y, $original_x), ($filter_y, $filter_x), ($filter_y, $filter_x), ($filter_y, $filter_x))
+    };
+    (@extras_ny ($original_side_y:expr, $original_side_x:expr), ($original_top_y:expr, $original_top_x:expr), ($original_bottom_y:expr, $original_bottom_x:expr), ($filter_side_y:expr, $filter_side_x:expr), ($filter_top_y:expr, $filter_top_x:expr), ($filter_bottom_y:expr, $filter_bottom_x:expr)) => {
+        ([[$original_side_x as f32, $original_side_y as f32], [($original_side_x + 1) as f32, $original_side_y as f32], [($original_side_x + 1) as f32, ($original_side_y + 1) as f32], [$original_side_x as f32, ($original_side_y + 1) as f32]], [[$filter_side_x as f32, $filter_side_y as f32], [($filter_side_x + 1) as f32, $filter_side_y as f32], [($filter_side_x + 1) as f32, ($filter_side_y + 1) as f32], [$filter_side_x as f32, ($filter_side_y + 1) as f32]])
+    };
+    (@extras_pz ($original_y:expr, $original_x:expr), ($filter_y:expr, $filter_x:expr)) => {
+        define_filtered_solid!(@extras_pz ($original_y, $original_x), ($original_y, $original_x), ($original_y, $original_x), ($filter_y, $filter_x), ($filter_y, $filter_x), ($filter_y, $filter_x))
+    };
+    (@extras_pz ($original_side_y:expr, $original_side_x:expr), ($original_top_y:expr, $original_top_x:expr), ($original_bottom_y:expr, $original_bottom_x:expr), ($filter_side_y:expr, $filter_side_x:expr), ($filter_top_y:expr, $filter_top_x:expr), ($filter_bottom_y:expr, $filter_bottom_x:expr)) => {
+        ([[($original_top_x + 1) as f32, ($original_top_y + 1) as f32], [$original_top_x as f32, ($original_top_y + 1) as f32], [$original_top_x as f32, $original_top_y as f32], [($filter_top_x + 1) as f32, $filter_top_y as f32]], [[($filter_top_x + 1) as f32, ($filter_top_y + 1) as f32], [$filter_top_x as f32, ($filter_top_y + 1) as f32], [$filter_top_x as f32, $filter_top_y as f32], [($original_top_x + 1) as f32, $original_top_y as f32]])
+    };
+    (@extras_nz ($original_y:expr, $original_x:expr), ($filter_y:expr, $filter_x:expr)) => {
+        define_filtered_solid!(@extras_nz ($original_y, $original_x), ($original_y, $original_x), ($original_y, $original_x), ($filter_y, $filter_x), ($filter_y, $filter_x), ($filter_y, $filter_x))
+    };
+    (@extras_nz ($original_side_y:expr, $original_side_x:expr), ($original_top_y:expr, $original_top_x:expr), ($original_bottom_y:expr, $original_bottom_x:expr), ($filter_side_y:expr, $filter_side_x:expr), ($filter_top_y:expr, $filter_top_x:expr), ($filter_bottom_y:expr, $filter_bottom_x:expr)) => {
+        ([[($original_bottom_x + 1) as f32, ($original_bottom_y + 1) as f32], [$original_bottom_x as f32, ($original_bottom_y + 1) as f32], [$original_bottom_x as f32, $original_bottom_y as f32], [($original_bottom_x + 1) as f32, $original_bottom_y as f32]], [[($filter_bottom_x + 1) as f32, ($filter_bottom_y + 1) as f32], [$filter_bottom_x as f32, ($filter_bottom_y + 1) as f32], [$filter_bottom_x as f32, $filter_bottom_y as f32], [($filter_bottom_x + 1) as f32, $filter_bottom_y as f32]])
+    };
+}
+
+define_filtered_solid! {
+    GrassBlock((0, 3), (0, 0), (0, 2), (2, 6), (0, 0), (11, 4)),
 }
 
 macro_rules! define_plantlike {
@@ -279,14 +386,18 @@ pub enum Custom {
 #[derive(Clone)]
 pub struct Chunk {
     pub cubes: [Cube; MAP_HEIGHT * CHUNK_SIZE * CHUNK_SIZE],
+    pub biome_colors: [[f32; 4]; CHUNK_SIZE * CHUNK_SIZE],
 }
 
 impl Cube {
     pub fn is_solid(&self) -> bool {
-        matches!(self, Cube::Solid(_))
+        matches!(self, Cube::Solid(_) | Cube::FilteredSolid(_))
     }
 
     pub fn is_translucent_or_solid(&self) -> bool {
-        matches!(self, Cube::Translucent(_) | Cube::Solid(_))
+        matches!(
+            self,
+            Cube::Translucent(_) | Cube::Solid(_) | Cube::FilteredSolid(_)
+        )
     }
 }
