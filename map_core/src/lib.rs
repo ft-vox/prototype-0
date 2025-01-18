@@ -58,7 +58,7 @@ impl Map {
                 }
 
                 let humidity = n!(0.0042, 4242.0);
-                let biome1 = n!(0.042, 42042.0);
+                let biome1 = n!(0.042, 4242.0);
                 let biome2 = n!(0.042, 42042.0);
                 let biome3 = n!(0.042, 424242.0);
                 let biome4 = n!(0.042, 420420.0);
@@ -70,10 +70,10 @@ impl Map {
                 ) + (n!(0.0618, 0.0) * n!(0.000922, 42.0)) * 342.0)
                     .clamp(22.2, 222.2) as usize;
                 biome_colors[y * CHUNK_SIZE + x] = [
-                    de_lerp(biome1, -1.0, 1.0),
-                    de_lerp(biome2, -1.0, 1.0),
-                    de_lerp(biome3, -1.0, 1.0),
-                    de_lerp(biome4, -1.0, 1.0),
+                    (de_lerp(biome1, -0.1, 0.1).sin() / 2.0 + 0.5).powi(2),
+                    (de_lerp(biome2, -0.1, 0.1).sin() / 2.0 + 0.5).powi(2),
+                    (de_lerp(biome3, -0.1, 0.1).sin() / 2.0 + 0.5).powi(2),
+                    (de_lerp(biome4, -0.1, 0.1).sin() / 2.0 + 0.5).powi(8),
                 ];
                 for z in 0..MAP_HEIGHT {
                     cubes[z * CHUNK_SIZE * CHUNK_SIZE + y * CHUNK_SIZE + x] = if z == 0 {

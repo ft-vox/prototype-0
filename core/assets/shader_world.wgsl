@@ -58,7 +58,6 @@ var diffuse_color: texture_2d<f32>;
 fn fs_opaque(input: VertexOutput) -> @location(0) vec4<f32> {
     var output: vec4<f32> = textureLoad(diffuse_color, vec2<i32>(input.tex_coord * vec2<f32>(16.0, 16.0)), 0);
     var filter_color: vec4<f32> = textureLoad(diffuse_color, vec2<i32>(input.filter_tex_coord * vec2<f32>(16.0, 16.0)), 0) * input.filter_color;
-    filter_color = filter_color * 3.0; // debug
     output = applyTerrainFilter(output, filter_color);
     var fog_factor: f32 = clamp((input.distance - uniforms.fog_start) / (uniforms.fog_end - uniforms.fog_start), 0.0, 1.0);
     output = mix(output, uniforms.fog_color, fog_factor);
@@ -69,7 +68,6 @@ fn fs_opaque(input: VertexOutput) -> @location(0) vec4<f32> {
 fn fs_translucent(input: VertexOutput) -> @location(0) vec4<f32> {
     var output: vec4<f32> = textureLoad(diffuse_color, vec2<i32>(input.tex_coord * vec2<f32>(16.0, 16.0)), 0);
     var filter_color: vec4<f32> = textureLoad(diffuse_color, vec2<i32>(input.filter_tex_coord * vec2<f32>(16.0, 16.0)), 0) * input.filter_color;
-    filter_color = filter_color * 3.0; // debug
     output = applyTerrainFilter(output, filter_color);
     var fog_factor: f32 = clamp((input.distance - uniforms.fog_start) / (uniforms.fog_end - uniforms.fog_start), 0.0, 1.0);
     output = mix(output, uniforms.fog_color, fog_factor);
