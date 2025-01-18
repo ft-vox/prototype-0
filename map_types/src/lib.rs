@@ -285,7 +285,7 @@ macro_rules! define_filtered_solid {
         define_filtered_solid!(@extras_pz ($original_y, $original_x), ($original_y, $original_x), ($original_y, $original_x), ($filter_y, $filter_x), ($filter_y, $filter_x), ($filter_y, $filter_x))
     };
     (@extras_pz ($original_side_y:expr, $original_side_x:expr), ($original_top_y:expr, $original_top_x:expr), ($original_bottom_y:expr, $original_bottom_x:expr), ($filter_side_y:expr, $filter_side_x:expr), ($filter_top_y:expr, $filter_top_x:expr), ($filter_bottom_y:expr, $filter_bottom_x:expr)) => {
-        ([[($original_top_x + 1) as f32, ($original_top_y + 1) as f32], [$original_top_x as f32, ($original_top_y + 1) as f32], [$original_top_x as f32, $original_top_y as f32], [($filter_top_x + 1) as f32, $filter_top_y as f32]], [[($filter_top_x + 1) as f32, ($filter_top_y + 1) as f32], [$filter_top_x as f32, ($filter_top_y + 1) as f32], [$filter_top_x as f32, $filter_top_y as f32], [($original_top_x + 1) as f32, $original_top_y as f32]])
+        ([[($original_top_x + 1) as f32, ($original_top_y + 1) as f32], [$original_top_x as f32, ($original_top_y + 1) as f32], [$original_top_x as f32, $original_top_y as f32], [($original_top_x + 1) as f32, $original_top_y as f32]], [[($filter_top_x + 1) as f32, ($filter_top_y + 1) as f32], [$filter_top_x as f32, ($filter_top_y + 1) as f32], [$filter_top_x as f32, $filter_top_y as f32], [($filter_top_x + 1) as f32, $filter_top_y as f32]])
     };
     (@extras_nz ($original_y:expr, $original_x:expr), ($filter_y:expr, $filter_x:expr)) => {
         define_filtered_solid!(@extras_nz ($original_y, $original_x), ($original_y, $original_x), ($original_y, $original_x), ($filter_y, $filter_x), ($filter_y, $filter_x), ($filter_y, $filter_x))
@@ -296,7 +296,7 @@ macro_rules! define_filtered_solid {
 }
 
 define_filtered_solid! {
-    GrassBlock((0, 3), (0, 0), (0, 2), (2, 6), (0, 0), (11, 4)),
+    GrassBlock((0, 3), (0, 0), (0, 2), (2, 6), (11, 4), (11, 5)),
 }
 
 macro_rules! define_plantlike {
