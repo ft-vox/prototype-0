@@ -8,8 +8,10 @@
 
 ## Run
 
+see `usage.sh`
+
 ```sh
-cargo run --release
+sh usage.sh
 ```
 
 ## Contributing
