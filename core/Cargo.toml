@@ -1,12 +1,12 @@
 [package]
-name = "ft-vox-prototype-0-core"
+name = "core"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
 bytemuck = { version = "1.14.3", features = ["derive"] }
-ft-vox-prototype-0-map-core = { version = "0.1.0", path = "../map_core" }
-ft-vox-prototype-0-map-types = { version = "0.1.0", path = "../map_types" }
+map-core = { version = "0.1.0", path = "../map_core" }
+map-types = { version = "0.1.0", path = "../map_types" }
 glam = "0.25.0"
 wgpu = "22.0"
 image = "0.25.2"

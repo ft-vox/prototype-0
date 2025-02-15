@@ -4,7 +4,7 @@ use bytemuck::{Pod, Zeroable};
 use glam::{Mat4, Vec3};
 use image::GenericImageView;
 
-use ft_vox_prototype_0_map_types::CHUNK_SIZE;
+use map_types::CHUNK_SIZE;
 
 use crate::graphics::Frustum;
 use crate::vertex::Vertex;

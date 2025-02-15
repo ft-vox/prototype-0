@@ -5,8 +5,8 @@ use std::{
 };
 
 use crate::{terrain_manager::Mesh, vertex::*};
-use ft_vox_prototype_0_map_core::Map;
-use ft_vox_prototype_0_map_types::{Chunk, CHUNK_SIZE};
+use map_core::Map;
+use map_types::Chunk;
 
 pub enum TerrainWorkerJob {
     Map((i32, i32)),

@@ -1,5 +1,5 @@
 [package]
-name = "ft-vox-prototype-0-main"
+name = "client"
 version = "0.1.0"
 edition = "2021"
 
@@ -9,4 +9,4 @@ log = "0.4.22"
 wgpu = "22.0"
 winit = { version = "0.29.10", features = ["rwh_05"] }
 futures = "0.3.30"
-ft-vox-prototype-0-core = { version = "0.1.0", path = "../core" }
+core = { version = "0.1.0", path = "../core" }

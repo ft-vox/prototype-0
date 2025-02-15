@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use ft_vox_prototype_0_map_types::{Chunk, CHUNK_SIZE};
+use map_types::{Chunk, CHUNK_SIZE};
 
 use crate::{
     get_coords,

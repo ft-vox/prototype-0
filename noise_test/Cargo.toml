@@ -1,8 +1,8 @@
 [package]
-name = "ft-vox-prototype-0-noise-test"
+name = "noise-test"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-ft-vox-prototype-0-noise = { path = "../noise" }
+noise = { path = "../noise" }
 png = "0.17.14"

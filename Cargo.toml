@@ -1,4 +1,12 @@
 [workspace]
 resolver = "2"
-members = ["core", "main", "map_core", "map_types", "noise", "noise_test"]
-default-members = ["main"]
+members = [
+    "core",
+    "client",
+    "map_core",
+    "map_types",
+    "noise",
+    "noise_test",
+    "server",
+]
+default-members = ["client"]

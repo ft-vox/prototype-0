@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use glam::{vec2, Vec3};
 
-use ft_vox_prototype_0_map_types::CHUNK_SIZE;
+use map_types::CHUNK_SIZE;
 
 use crate::graphics::{SkyRenderer, UIRenderer, WorldRenderer};
 use crate::FOV;

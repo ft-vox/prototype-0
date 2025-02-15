@@ -1,4 +1,4 @@
-use ft_vox_prototype_0_noise::{Noise, NoiseLayer};
+use noise::{Noise, NoiseLayer};
 
 use png::Encoder;
 use std::{env, fs::File, io::BufWriter};

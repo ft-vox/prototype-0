@@ -1,5 +1,5 @@
 use bytemuck::{Pod, Zeroable};
-use ft_vox_prototype_0_map_types::{
+use map_types::{
     Chunk, Cube, Custom, FilteredSolid, Harvestable, Plantlike, Solid, Translucent, CHUNK_SIZE,
     MAP_HEIGHT,
 };

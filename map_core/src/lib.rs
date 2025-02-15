@@ -1,8 +1,8 @@
-use ft_vox_prototype_0_map_types::{
+use map_types::{
     Chunk, Cube, Custom, FilteredSolid, Harvestable, Plantlike, Solid, Translucent, CHUNK_SIZE,
     MAP_HEIGHT,
 };
-use ft_vox_prototype_0_noise::{Noise, NoiseLayer};
+use noise::{Noise, NoiseLayer};
 
 pub const WATER_LEVEL: usize = 111;
 

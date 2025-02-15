@@ -2,19 +2,19 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug main (Windows)",
+            "name": "Debug client (Windows)",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/target/debug/ft-vox-prototype-0-main.exe",
+            "program": "${workspaceFolder}/target/debug/client.exe",
             "args": [],
             "cwd": "${workspaceFolder}",
             "preLaunchTask": "rust: cargo build",
         },
         {
-            "name": "Debug main Test",
+            "name": "Debug client Test",
             "type": "lldb",
             "request": "launch",
-            "program": "target/debug/ft-vox-prototype-0-main",
+            "program": "target/debug/client",
             "args": [],
             "cwd": "${workspaceFolder}",
             "preLaunchTask": "rust: cargo build",
