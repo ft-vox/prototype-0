@@ -878,11 +878,11 @@ pub fn create_vertices_for_custom(
     opaque_index: usize,
     translucent_index: usize,
 ) -> ((Vec<Vertex>, Vec<u16>), (Vec<Vertex>, Vec<u16>)) {
-    let opaque_offset = opaque_index as u16;
+    // let opaque_offset = opaque_index as u16;
     let translucent_offset = translucent_index as u16;
 
-    let mut vertex_data_opaque = Vec::<Vertex>::new();
-    let mut index_data_opaque = Vec::<u16>::new();
+    let /* mut */ vertex_data_opaque = Vec::<Vertex>::new();
+    let /* mut */ index_data_opaque = Vec::<u16>::new();
     let mut vertex_data_translucent = Vec::<Vertex>::new();
     let mut index_data_translucent = Vec::<u16>::new();
 
@@ -986,6 +986,7 @@ pub fn create_vertices_for_custom(
                 .push(translucent_offset + vertex_data_translucent.len() as u16 - 4);
         }
     }
+
     (
         (vertex_data_opaque, index_data_opaque),
         (vertex_data_translucent, index_data_translucent),

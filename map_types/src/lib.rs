@@ -1,9 +1,4 @@
-use std::fmt;
-
-use serde::{
-    de::{SeqAccess, Visitor},
-    Deserialize, Deserializer, Serialize, Serializer,
-};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 pub const CHUNK_SIZE: usize = 16;
 pub const MAP_HEIGHT: usize = 256;

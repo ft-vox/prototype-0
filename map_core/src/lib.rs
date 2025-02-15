@@ -1,6 +1,5 @@
 use map_types::{
-    Chunk, Cube, Custom, FilteredSolid, Harvestable, Plantlike, Solid, Translucent, CHUNK_SIZE,
-    MAP_HEIGHT,
+    Chunk, Cube, Custom, FilteredSolid, Plantlike, Solid, Translucent, CHUNK_SIZE, MAP_HEIGHT,
 };
 use noise::{Noise, NoiseLayer};
 

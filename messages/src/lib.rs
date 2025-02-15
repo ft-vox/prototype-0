@@ -35,7 +35,7 @@ pub enum ClientMessage {
     },
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub enum ServerMessage {
     Init {
         your_player_id: u32,
@@ -70,16 +70,17 @@ pub enum ServerMessage {
     },
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub enum PlayerAction {
     DestroyBlock,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub enum PlayerPosition {
     NotInWorld,
     InWorld {
         position: [f32; 3],
-        direction: [f32; 3],
+        horizontal_rotation: f32,
+        vertical_rotation: f32,
     },
 }

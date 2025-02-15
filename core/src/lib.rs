@@ -1,13 +1,13 @@
-use std::sync::Arc;
+use std::{
+    collections::VecDeque,
+    sync::{Arc, Mutex},
+};
 
-use glam::{Mat3, Vec3};
-use messages::ClientMessage;
+use glam::Vec3;
+use messages::{ClientMessage, PlayerPosition, ServerMessage};
 use tokio::{
-    io::AsyncWriteExt,
-    net::{
-        tcp::{OwnedReadHalf, OwnedWriteHalf},
-        TcpStream,
-    },
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::{tcp::OwnedWriteHalf, TcpStream},
 };
 use wgpu::util::DeviceExt;
 
@@ -43,9 +43,87 @@ pub fn get_coords(distance: f32) -> Vec<(i32, i32)> {
     coords
 }
 
+struct Server {
+    player_id: Arc<Mutex<Option<u32>>>,
+    writer: Arc<tokio::sync::Mutex<OwnedWriteHalf>>,
+    send_buffer: Arc<tokio::sync::Mutex<VecDeque<ClientMessage>>>,
+    is_sender_spawned: Arc<tokio::sync::Mutex<bool>>,
+    receive_buffer: Arc<Mutex<VecDeque<ServerMessage>>>,
+    receiver_arc: Arc<()>, // stop receiver on destroy
+}
+
+impl Server {
+    fn new(stream: TcpStream) -> Server {
+        let (mut reader, writer) = stream.into_split();
+
+        let result = Server {
+            player_id: Arc::new(Mutex::new(None)),
+            send_buffer: Arc::new(tokio::sync::Mutex::new(VecDeque::new())),
+            is_sender_spawned: Arc::new(tokio::sync::Mutex::new(false)),
+            writer: Arc::new(tokio::sync::Mutex::new(writer)),
+            receive_buffer: Arc::new(Mutex::new(VecDeque::new())),
+            receiver_arc: Arc::new(()),
+        };
+
+        let receiver_weak = Arc::downgrade(&result.receiver_arc);
+        let receive_buffer = result.receive_buffer.clone();
+        tokio::spawn(async move {
+            let mut buffer = Vec::new();
+
+            while let Ok(n) = reader.read_buf(&mut buffer).await {
+                if n == 0 {
+                    println!("Disconnected");
+                    break;
+                }
+
+                while let Ok((message, consumed)) = try_deserialize::<ServerMessage>(&buffer) {
+                    buffer.drain(..consumed);
+
+                    receive_buffer.lock().unwrap().push_back(message);
+                }
+
+                if receiver_weak.upgrade().is_none() {
+                    break;
+                }
+            }
+        });
+
+        result
+    }
+
+    fn send(&mut self, message: ClientMessage) {
+        let buffer = self.send_buffer.clone();
+        let is_sender_spawned = self.is_sender_spawned.clone();
+        let writer = self.writer.clone();
+
+        tokio::spawn(async move {
+            {
+                buffer.lock().await.push_back(message);
+            }
+
+            let mut sender_spawned_guard = is_sender_spawned.lock().await;
+            if !*sender_spawned_guard {
+                *sender_spawned_guard = true;
+                let is_sender_spawned = is_sender_spawned.clone();
+                tokio::spawn(async move {
+                    while let Some(message) = buffer.lock().await.pop_front() {
+                        let response_bytes = bincode::serialize(&message).unwrap();
+                        writer
+                            .lock()
+                            .await
+                            .write_all(&response_bytes)
+                            .await
+                            .unwrap();
+                    }
+                    *is_sender_spawned.lock().await = false;
+                });
+            }
+        });
+    }
+}
+
 pub struct Vox {
-    reader: OwnedReadHalf,
-    writer: OwnedWriteHalf,
+    server: Arc<Mutex<Server>>,
     vox_graphics_wrapper: VoxGraphicsWrapper,
     local_player: Human,
     is_paused: bool,
@@ -66,7 +144,7 @@ impl Vox {
         let eye_x = 0.0;
         let eye_y = -5.0;
         let eye_z = 120.0;
-        let (reader, writer) = stream.into_split();
+        let server = Arc::new(Mutex::new(Server::new(stream)));
 
         // Done
         Vox {
@@ -76,8 +154,7 @@ impl Vox {
             terrain_manager: TerrainManager::new(CACHE_DISTANCE, (eye_x, eye_y)),
             target_fog_distance: 0.0,
             current_fog_distance: 0.0,
-            reader,
-            writer,
+            server,
         }
     }
 
@@ -106,6 +183,35 @@ impl Vox {
         delta_horizontal_rotation: f32,
         delta_vertical_rotation: f32,
     ) {
+        {
+            let server_guard = self.server.lock().unwrap();
+            let player_id = server_guard.player_id.clone();
+            let mut buffer_guard = server_guard.receive_buffer.lock().unwrap();
+            while let Some(message) = buffer_guard.pop_front() {
+                match message {
+                    ServerMessage::Init {
+                        your_player_id,
+                        your_position,
+                    } => {
+                        player_id.lock().unwrap().replace(your_player_id);
+                        if let PlayerPosition::InWorld {
+                            position: [x, y, z],
+                            horizontal_rotation,
+                            vertical_rotation,
+                        } = your_position
+                        {
+                            self.local_player.position = Vec3::new(x, y, z);
+                            self.local_player.horizontal_rotation = horizontal_rotation;
+                            self.local_player.vertical_rotation = vertical_rotation;
+                        }
+                    }
+                    _ => {
+                        // TODO: remove _
+                    }
+                }
+            }
+        }
+
         if self.is_paused {
             return;
         }
@@ -117,6 +223,22 @@ impl Vox {
             delta_horizontal_rotation,
             delta_vertical_rotation,
         );
+
+        // if player is moved
+        {
+            let mut server_guard = self.server.lock().unwrap();
+            server_guard.send(ClientMessage::Move {
+                position: PlayerPosition::InWorld {
+                    position: [
+                        self.local_player.position.x,
+                        self.local_player.position.y,
+                        self.local_player.position.z,
+                    ],
+                    horizontal_rotation: self.local_player.horizontal_rotation,
+                    vertical_rotation: self.local_player.vertical_rotation,
+                },
+            });
+        }
 
         // smooth fog distance
         {
