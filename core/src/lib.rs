@@ -1,6 +1,14 @@
 use std::sync::Arc;
 
 use glam::{Mat3, Vec3};
+use messages::ClientMessage;
+use tokio::{
+    io::AsyncWriteExt,
+    net::{
+        tcp::{OwnedReadHalf, OwnedWriteHalf},
+        TcpStream,
+    },
+};
 use wgpu::util::DeviceExt;
 
 mod graphics;
@@ -36,6 +44,8 @@ pub fn get_coords(distance: f32) -> Vec<(i32, i32)> {
 }
 
 pub struct Vox {
+    reader: OwnedReadHalf,
+    writer: OwnedWriteHalf,
     vox_graphics_wrapper: VoxGraphicsWrapper,
     local_player: Human,
     is_paused: bool,
@@ -50,11 +60,13 @@ impl Vox {
         _adapter: &wgpu::Adapter,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
+        stream: TcpStream,
     ) -> Self {
         let vox_graphics_wrapper = VoxGraphicsWrapper::init(config, _adapter, device, queue);
         let eye_x = 0.0;
         let eye_y = -5.0;
         let eye_z = 120.0;
+        let (reader, writer) = stream.into_split();
 
         // Done
         Vox {
@@ -64,6 +76,8 @@ impl Vox {
             terrain_manager: TerrainManager::new(CACHE_DISTANCE, (eye_x, eye_y)),
             target_fog_distance: 0.0,
             current_fog_distance: 0.0,
+            reader,
+            writer,
         }
     }
 
@@ -175,5 +189,20 @@ impl Vox {
         );
         self.vox_graphics_wrapper
             .render(view, device, queue, self.current_fog_distance, buffers);
+    }
+}
+
+async fn send_message(writer: &mut tokio::net::tcp::OwnedWriteHalf, message: ClientMessage) {
+    let message_bytes = bincode::serialize(&message).unwrap();
+    writer.write_all(&message_bytes).await.unwrap();
+}
+
+fn try_deserialize<T: serde::de::DeserializeOwned>(
+    buffer: &[u8],
+) -> Result<(T, usize), bincode::Error> {
+    let mut cursor = std::io::Cursor::new(buffer);
+    match bincode::deserialize_from(&mut cursor) {
+        Ok(msg) => Ok((msg, cursor.position() as usize)),
+        Err(_) => Err(bincode::ErrorKind::SizeLimit.into()),
     }
 }

@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use tokio::net::TcpStream;
 use winit::{
     dpi::{PhysicalPosition, PhysicalSize},
     window::{Fullscreen, Window},
@@ -38,10 +39,11 @@ impl Context {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         window: Arc<Window>,
+        stream: TcpStream,
     ) -> Self {
         println!("\n[ CONTROL KEYS ]\nmovement: WASD + Shift + Space\nspeeding: CTRL\npause: ESC\nscreen mode: Tab");
         Context {
-            vox: Vox::init(config, adapter, device, queue),
+            vox: Vox::init(config, adapter, device, queue, stream),
             window,
             input: FrameDrivenInput::new(),
             window_inner_position: PhysicalPosition::new(0, 0),

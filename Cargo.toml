@@ -8,5 +8,6 @@ members = [
     "noise",
     "noise_test",
     "server",
+    "messages",
 ]
-default-members = ["client"]
+default-members = ["client", "server"]

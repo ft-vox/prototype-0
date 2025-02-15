@@ -1,7 +1,14 @@
+use std::fmt;
+
+use serde::{
+    de::{SeqAccess, Visitor},
+    Deserialize, Deserializer, Serialize, Serializer,
+};
+
 pub const CHUNK_SIZE: usize = 16;
 pub const MAP_HEIGHT: usize = 256;
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Cube {
     Empty,
     Solid(Solid),
@@ -14,7 +21,7 @@ pub enum Cube {
 
 macro_rules! define_solid {
     ($($variant:ident($($vals:tt),*)),* $(,)?) => {
-        #[derive(Clone, Copy, PartialEq, Eq)]
+        #[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
         pub enum Solid {
             $($variant),*
         }
@@ -162,7 +169,7 @@ define_solid! {
 
 macro_rules! define_translucent {
     ($($variant:ident($($vals:tt),*)),* $(,)?) => {
-        #[derive(Clone, Copy, PartialEq, Eq)]
+        #[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
         pub enum Translucent {
             $($variant),*
         }
@@ -194,7 +201,7 @@ define_translucent! {
 
 macro_rules! define_filtered_solid {
     ($($variant:ident($($vals:tt),*)),* $(,)?) => {
-        #[derive(Clone, Copy, PartialEq, Eq)]
+        #[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
         pub enum FilteredSolid {
             $($variant),*
         }
@@ -301,7 +308,7 @@ define_filtered_solid! {
 
 macro_rules! define_plantlike {
     ($($variant:ident($($vals:tt),*)),* $(,)?) => {
-        #[derive(Clone, Copy, PartialEq, Eq)]
+        #[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
         pub enum Plantlike {
             $($variant),*
         }
@@ -341,7 +348,7 @@ define_plantlike! {
 
 macro_rules! define_harvestable {
     ($($variant:ident($($vals:tt),*)),* $(,)?) => {
-        #[derive(Clone, Copy, PartialEq, Eq)]
+        #[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
         pub enum Harvestable {
             $($variant),*
         }
@@ -378,7 +385,7 @@ define_harvestable! {
     NetherWart3(14, 4),
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Custom {
     Cactus,
 }
@@ -387,6 +394,34 @@ pub enum Custom {
 pub struct Chunk {
     pub cubes: [Cube; MAP_HEIGHT * CHUNK_SIZE * CHUNK_SIZE],
     pub biome_colors: [[f32; 4]; CHUNK_SIZE * CHUNK_SIZE],
+}
+
+impl Serialize for Chunk {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let cubes_vec: Vec<Cube> = self.cubes.to_vec(); // Convert array to Vec
+        let biome_colors_vec: Vec<[f32; 4]> = self.biome_colors.to_vec();
+
+        (cubes_vec, biome_colors_vec).serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for Chunk {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let (cubes_vec, biome_colors_vec): (Vec<Cube>, Vec<[f32; 4]>) =
+            Deserialize::deserialize(deserializer)?;
+
+        let cubes: [Cube; MAP_HEIGHT * CHUNK_SIZE * CHUNK_SIZE] = cubes_vec
+            .try_into()
+            .map_err(|_| serde::de::Error::custom("Invalid cube array length"))?;
+        let biome_colors: [[f32; 4]; CHUNK_SIZE * CHUNK_SIZE] = biome_colors_vec
+            .try_into()
+            .map_err(|_| serde::de::Error::custom("Invalid biome_colors array length"))?;
+
+        Ok(Chunk {
+            cubes,
+            biome_colors,
+        })
+    }
 }
 
 impl Cube {
