@@ -67,8 +67,13 @@ impl VoxGraphicsWrapper {
         let ui_elements = vec![ui_item_bar];
 
         let font_info = FontInfo::new(1, 16.0, 16.0);
-        let text_meshes =
-            ui_renderer.create_text_mesh(device, "FPS 0\n", vec2(20.0, 20.0), 2.0, &font_info);
+        let text_meshes = ui_renderer.create_text_mesh(
+            device,
+            "FPS 0\nTriangle 0",
+            vec2(20.0, 20.0),
+            1.0,
+            &font_info,
+        );
 
         VoxGraphicsWrapper {
             world_renderer,
@@ -101,12 +106,12 @@ impl VoxGraphicsWrapper {
     pub fn update_text(&mut self, device: &wgpu::Device, text: &str) {
         self.text_meshes =
             self.ui_renderer
-                .create_text_mesh(device, text, vec2(20.0, 20.0), 2.0, &self.font_info);
+                .create_text_mesh(device, text, vec2(20.0, 20.0), 1.0, &self.font_info);
     }
 
-    pub fn update_fps_text(&mut self, device: &wgpu::Device, fps: u32) {
-        let fps_text = format!("FPS {}", fps);
-        self.update_text(device, &fps_text);
+    pub fn update_info_text(&mut self, device: &wgpu::Device, fps: u32, triangle_count: u32) {
+        let info_text = format!("FPS {}\nTriangle {}", fps, triangle_count);
+        self.update_text(device, &info_text);
     }
 
     fn calculate_fps(&mut self) {
@@ -131,7 +136,6 @@ impl VoxGraphicsWrapper {
         buffers: Vec<MeshBuffer>,
     ) {
         self.calculate_fps();
-        self.update_fps_text(device, self.current_fps);
 
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
@@ -139,6 +143,9 @@ impl VoxGraphicsWrapper {
         self.sky_renderer.render(queue, view, &mut encoder);
         self.world_renderer
             .render(queue, view, &mut encoder, buffers, fog_distance);
+
+        let triangle_count = self.world_renderer.get_triangle_count();
+        self.update_info_text(device, self.current_fps, triangle_count);
 
         let mut ui_element_refs = Vec::new();
         for element in &self.ui_elements {

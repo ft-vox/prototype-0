@@ -37,6 +37,7 @@ pub struct WorldRenderer {
     uniform_buffer: wgpu::Buffer,
     opaque_pipeline: wgpu::RenderPipeline,
     translucent_pipeline: wgpu::RenderPipeline,
+    triangle_count: u32,
 }
 
 impl WorldRenderer {
@@ -287,6 +288,7 @@ impl WorldRenderer {
             uniform_buffer,
             opaque_pipeline,
             translucent_pipeline,
+            triangle_count: 0,
         }
     }
 
@@ -332,6 +334,8 @@ impl WorldRenderer {
         buffer: Vec<MeshBuffer>,
         fog_distance: f32,
     ) {
+        self.reset_triangle_count();
+
         {
             let view_projection_matrix = self.projection_matrix * self.view_matrix;
 
@@ -395,6 +399,8 @@ impl WorldRenderer {
                     rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
                     rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
                     rpass.draw_indexed(0..*index_count, 0, 0..1);
+
+                    self.triangle_count += *index_count / 3;
                 }
             }
 
@@ -420,9 +426,19 @@ impl WorldRenderer {
                     rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint16);
                     rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
                     rpass.draw_indexed(0..*index_count, 0, 0..1);
+
+                    self.triangle_count += *index_count / 3;
                 }
             }
         }
+    }
+
+    pub fn get_triangle_count(&self) -> u32 {
+        self.triangle_count
+    }
+
+    pub fn reset_triangle_count(&mut self) {
+        self.triangle_count = 0;
     }
 }
 
