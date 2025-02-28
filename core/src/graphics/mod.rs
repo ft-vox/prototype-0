@@ -1,3 +1,4 @@
+mod font_info;
 mod frustum;
 mod sky_renderer;
 mod ui_renderer;

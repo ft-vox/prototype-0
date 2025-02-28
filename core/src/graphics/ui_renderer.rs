@@ -5,6 +5,8 @@ use glam::{Mat4, Vec2, Vec3};
 use image::GenericImageView;
 use wgpu::util::DeviceExt;
 
+use crate::graphics::font_info::FontInfo;
+
 pub struct UIRenderer {
     bind_group: wgpu::BindGroup,
     uniform_buffer: wgpu::Buffer,
@@ -275,7 +277,7 @@ impl UIRenderer {
         view: &wgpu::TextureView,
         encoder: &mut wgpu::CommandEncoder,
         queue: &wgpu::Queue,
-        ui_elements: &[(UIMeshWGPU, UITransform)],
+        ui_elements: &[&(UIMeshWGPU, UITransform)],
     ) {
         let uniforms = UIUniforms {
             transform: self.transform.to_cols_array(),
@@ -342,7 +344,7 @@ impl UIRenderer {
 
     // TODO: Separate to UI FRAMEWORK
     pub fn create_ui_mesh(
-        &mut self,
+        &self,
         device: &wgpu::Device,
         position: Vec2,
         size: Vec2,
@@ -411,6 +413,51 @@ impl UIRenderer {
         };
 
         (mesh_wgpu, UITransform { position, size })
+    }
+
+    pub fn create_text_mesh(
+        &self,
+        device: &wgpu::Device,
+        text: &str,
+        position: Vec2,
+        scale: f32,
+        font_info: &FontInfo,
+    ) -> Vec<(UIMeshWGPU, UITransform)> {
+        let mut result = Vec::new();
+        let mut cursor_x = position.x;
+        let mut cursor_y = position.y;
+
+        let scaled_width = font_info.character_width * scale;
+        let scaled_height = font_info.character_height * scale;
+        let scaled_spacing = font_info.spacing * scale;
+        let scaled_line_height = font_info.line_height * scale;
+
+        for c in text.chars() {
+            if c == '\n' {
+                cursor_x = position.x;
+                cursor_y += scaled_line_height;
+                continue;
+            }
+            if let Some((tex_x, tex_y)) = font_info.get_character_position(c) {
+                let char_position = Vec2::new(cursor_x, cursor_y);
+                let char_size = Vec2::new(scaled_width, scaled_height);
+                let texture_position = Vec2::new(tex_x, tex_y);
+                let texture_size = Vec2::new(font_info.character_width, font_info.character_height);
+                let char_mesh = self.create_ui_mesh(
+                    device,
+                    char_position,
+                    char_size,
+                    texture_position,
+                    texture_size,
+                    font_info.texture_layer,
+                );
+                result.push(char_mesh);
+                cursor_x += scaled_spacing;
+            } else {
+                cursor_x += scaled_spacing;
+            }
+        }
+        result
     }
 }
 
