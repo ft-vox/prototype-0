@@ -4,6 +4,10 @@ use std::{
 };
 
 use glam::Vec3;
+use kira::{
+    sound::static_sound::{StaticSoundData, StaticSoundHandle, StaticSoundSettings},
+    AudioManager, AudioManagerSettings, DefaultBackend,
+};
 use messages::{ClientMessage, PlayerPosition, ServerMessage};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
@@ -130,6 +134,8 @@ pub struct Vox {
     terrain_manager: TerrainManager,
     target_fog_distance: f32,
     current_fog_distance: f32,
+    audio_manager: AudioManager<DefaultBackend>,
+    bgm_handle: StaticSoundHandle,
 }
 
 impl Vox {
@@ -146,6 +152,16 @@ impl Vox {
         let eye_z = 120.0;
         let server = Arc::new(Mutex::new(Server::new(stream)));
 
+        let mut audio_manager =
+            AudioManager::<DefaultBackend>::new(AudioManagerSettings::default())
+                .expect("오디오 매니저 생성 실패");
+        let bgm_data =
+            StaticSoundData::from_file("core/assets/bgm.mp3").expect("BGM 파일 로드 실패");
+        let bgm_settings = StaticSoundSettings::new().loop_region(..);
+        let bgm_handle = audio_manager
+            .play(bgm_data.with_settings(bgm_settings))
+            .expect("BGM 재생 실패");
+
         // Done
         Vox {
             vox_graphics_wrapper,
@@ -155,6 +171,8 @@ impl Vox {
             target_fog_distance: 0.0,
             current_fog_distance: 0.0,
             server,
+            audio_manager,
+            bgm_handle,
         }
     }
 
