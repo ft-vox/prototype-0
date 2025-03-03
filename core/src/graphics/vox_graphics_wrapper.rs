@@ -106,11 +106,17 @@ impl VoxGraphicsWrapper {
     pub fn update_text(&mut self, device: &wgpu::Device, text: &str) {
         self.text_meshes =
             self.ui_renderer
-                .create_text_mesh(device, text, vec2(20.0, 20.0), 1.0, &self.font_info);
+                .create_text_mesh(device, text, vec2(10.0, 10.0), 0.8, &self.font_info);
     }
 
     pub fn update_info_text(&mut self, device: &wgpu::Device, fps: u32, triangle_count: u32) {
-        let info_text = format!("FPS {}\nTriangle {}", fps, triangle_count);
+        let test_string = "abcdefghijklmnopqrstuvwxyz";
+        let test_string_upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        let test_string_number = "0123456789";
+        let info_text = format!(
+            "FPS: {}\nTriangle: {}\n{}\n{}\n{}",
+            fps, triangle_count, test_string, test_string_upper, test_string_number
+        );
         self.update_text(device, &info_text);
     }
 

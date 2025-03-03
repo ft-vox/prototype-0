@@ -452,7 +452,15 @@ impl UIRenderer {
                     font_info.texture_layer,
                 );
                 result.push(char_mesh);
-                cursor_x += scaled_spacing;
+                if c == 'i' || c == 'l' {
+                    cursor_x += scaled_spacing * 0.5;
+                } else if c == 't' || c == 'I' {
+                    cursor_x += scaled_spacing * 0.75;
+                } else if c == ':' {
+                    cursor_x += scaled_spacing * 0.25;
+                } else {
+                    cursor_x += scaled_spacing;
+                }
             } else {
                 cursor_x += scaled_spacing;
             }
