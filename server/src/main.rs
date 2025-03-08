@@ -1,5 +1,5 @@
 use messages::{ClientMessage, ServerMessage};
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::env;
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -7,14 +7,26 @@ use tokio::net::tcp::OwnedWriteHalf;
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 
+type ChunkIndex = (i32, i32);
+
 struct Server {
-    client_map: BTreeMap<u32, Arc<Mutex<Client>>>, // Store clients with Mutex for safe access
+    client_map: BTreeMap<u32, Arc<Mutex<Client>>>,
+    watchers: Arc<Mutex<HashMap<ChunkIndex, Arc<Mutex<HashSet<u32>>>>>>,
+}
+
+struct Client {
+    player_id: u32,
+    watching_chunks: Arc<Mutex<HashSet<ChunkIndex>>>,
+    writer: Arc<Mutex<OwnedWriteHalf>>,
+    buffer: Arc<Mutex<VecDeque<ServerMessage>>>,
+    is_sender_spawned: Arc<Mutex<bool>>,
 }
 
 impl Server {
     fn new() -> Server {
         Server {
             client_map: BTreeMap::new(),
+            watchers: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -38,6 +50,22 @@ impl Server {
                     }
                 }
             }
+            ClientMessage::WatchChunk { x, y } => {
+                let index: ChunkIndex = (x, y);
+                let Some(tmp) = self.client_map.get_mut(&player_id) else {
+                    return;
+                };
+                let player = tmp.lock().await;
+                let newly_added = player.watching_chunks.lock().await.insert(index);
+                if newly_added {
+                    let mut watcher = self.watchers.lock().await;
+                    let entry = watcher
+                        .entry(index)
+                        .or_insert_with(|| Arc::new(Mutex::new(HashSet::new())));
+                    let mut set = entry.lock().await;
+                    set.insert(player_id);
+                }
+            }
             _ => {
                 // TODO: remove _
             }
@@ -50,21 +78,28 @@ impl Server {
     }
 
     async fn remove_client(&mut self, player_id: u32) {
-        self.client_map.remove(&player_id);
+        let tmp = self.client_map.remove(&player_id).unwrap();
+        let client = tmp.lock().await;
+        let mut watchers = self.watchers.lock().await;
+        for index in client.watching_chunks.lock().await.iter() {
+            let to_delete = {
+                let tmp = watchers.get_mut(index).unwrap();
+                let mut node = tmp.lock().await;
+                node.remove(&client.player_id);
+                node.len() == 0
+            };
+            if to_delete {
+                watchers.remove(index);
+            }
+        }
     }
-}
-
-struct Client {
-    player_id: u32,
-    writer: Arc<Mutex<OwnedWriteHalf>>,
-    buffer: Arc<Mutex<VecDeque<ServerMessage>>>,
-    is_sender_spawned: Arc<Mutex<bool>>,
 }
 
 impl Client {
     fn new(player_id: u32, writer: OwnedWriteHalf) -> Client {
         Client {
             player_id,
+            watching_chunks: Arc::new(Mutex::new(HashSet::new())),
             writer: Arc::new(Mutex::new(writer)),
             buffer: Arc::new(Mutex::new(VecDeque::new())),
             is_sender_spawned: Arc::new(Mutex::new(false)),

@@ -14,10 +14,6 @@ pub enum ClientMessage {
         x: i32,
         y: i32,
     },
-    RequestChunk {
-        x: i32,
-        y: i32,
-    },
     DestroyBlock {
         chunk_x: i32,
         chunk_y: i32,

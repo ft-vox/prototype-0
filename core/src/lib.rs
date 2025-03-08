@@ -47,7 +47,7 @@ pub fn get_coords(distance: f32) -> Vec<(i32, i32)> {
     coords
 }
 
-struct Server {
+pub struct Server {
     player_id: Arc<Mutex<Option<u32>>>,
     writer: Arc<tokio::sync::Mutex<OwnedWriteHalf>>,
     send_buffer: Arc<tokio::sync::Mutex<VecDeque<ClientMessage>>>,
@@ -167,7 +167,7 @@ impl Vox {
             vox_graphics_wrapper,
             local_player: Human::new(Vec3::new(eye_x, eye_y, eye_z)),
             is_paused: false,
-            terrain_manager: TerrainManager::new(CACHE_DISTANCE, (eye_x, eye_y)),
+            terrain_manager: TerrainManager::new(CACHE_DISTANCE, (eye_x, eye_y), server.clone()),
             target_fog_distance: 0.0,
             current_fog_distance: 0.0,
             server,

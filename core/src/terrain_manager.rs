@@ -4,11 +4,13 @@ use std::{
 };
 
 use map_types::{Chunk, CHUNK_SIZE};
+use messages::ClientMessage;
 
 use crate::{
     get_coords,
     graphics::{DrawCallArgs, MeshBuffer},
     terrain_worker::TerrainWorker,
+    Server,
 };
 use crate::{terrain_worker::TerrainWorkerJob, vertex::Vertex};
 
@@ -18,6 +20,7 @@ pub struct TerrainManager {
     buffer_cache: BufferCache,
     eye: (f32, f32),
     terrain_worker: TerrainWorker,
+    server: Arc<Mutex<Server>>,
 }
 
 pub struct Mesh {
@@ -225,7 +228,7 @@ impl BufferCache {
 }
 
 impl TerrainManager {
-    pub fn new(cache_distance: usize, eye: (f32, f32)) -> Self {
+    pub fn new(cache_distance: usize, eye: (f32, f32), server: Arc<Mutex<Server>>) -> Self {
         let mut result = Self {
             map_cache: Arc::new(Mutex::new(MapCache::new(cache_distance, eye))),
             mesh_cache: Arc::new(Mutex::new(MeshCache::new())),
@@ -236,6 +239,7 @@ impl TerrainManager {
                 Arc::new(Mutex::new(|_pos, _chunk| ())),
                 Arc::new(Mutex::new(|_pos, _mesh| ())),
             ),
+            server,
         };
         result.init();
 
@@ -329,6 +333,9 @@ impl TerrainManager {
                 }
             })),
         );
+
+        // TODO: add proper watch/unwatch
+        // self.server.lock().unwrap().send(ClientMessage::WatchChunk { x: (), y: () });
     }
 
     pub fn set_cache_distance(&mut self, new_cache_distance: usize) {
