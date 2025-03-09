@@ -66,6 +66,26 @@ impl Server {
                     set.insert(player_id);
                 }
             }
+            ClientMessage::UnwatchChunk { x, y } => {
+                let index: ChunkIndex = (x, y);
+                let Some(tmp) = self.client_map.get_mut(&player_id) else {
+                    return;
+                };
+                let player = tmp.lock().await;
+                let deleted = player.watching_chunks.lock().await.remove(&index);
+                if deleted {
+                    let mut watcher = self.watchers.lock().await;
+                    let to_delete = {
+                        let set_arc = watcher.get(&index).unwrap();
+                        let mut set = set_arc.lock().await;
+                        set.remove(&player_id);
+                        set.is_empty()
+                    };
+                    if to_delete {
+                        watcher.remove(&index);
+                    }
+                }
+            }
             _ => {
                 // TODO: remove _
             }
@@ -83,7 +103,7 @@ impl Server {
         let mut watchers = self.watchers.lock().await;
         for index in client.watching_chunks.lock().await.iter() {
             let to_delete = {
-                let tmp = watchers.get_mut(index).unwrap();
+                let tmp = watchers.get(index).unwrap();
                 let mut node = tmp.lock().await;
                 node.remove(&client.player_id);
                 node.len() == 0
