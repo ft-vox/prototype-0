@@ -156,7 +156,7 @@ impl Vox {
             AudioManager::<DefaultBackend>::new(AudioManagerSettings::default())
                 .expect("오디오 매니저 생성 실패");
         let bgm_data =
-            StaticSoundData::from_file("core/assets/bgm.mp3").expect("BGM 파일 로드 실패");
+            StaticSoundData::from_file("game_core/assets/bgm.mp3").expect("BGM 파일 로드 실패");
         let bgm_settings = StaticSoundSettings::new().loop_region(..);
         let bgm_handle = audio_manager
             .play(bgm_data.with_settings(bgm_settings))
