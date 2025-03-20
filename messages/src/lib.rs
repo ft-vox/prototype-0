@@ -35,7 +35,8 @@ pub enum ClientMessage {
     },
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+/// **중요**: `#[derive(Debug)]` 추가하여, `{:?}` 출력 가능하도록 함
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum ServerMessage {
     Init {
         your_player_id: u32,
@@ -70,12 +71,13 @@ pub enum ServerMessage {
     },
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum PlayerAction {
     DestroyBlock,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+/// `#[derive(Debug)]`를 여기에도 붙이면, `{:?}`로 PlayerPosition 출력 가능
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum PlayerPosition {
     NotInWorld,
     InWorld {

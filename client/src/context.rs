@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use tokio::net::TcpStream;
+use tokio::net::tcp::OwnedWriteHalf;
 use winit::{
     dpi::{PhysicalPosition, PhysicalSize},
     window::{Fullscreen, Window},
@@ -8,43 +8,13 @@ use winit::{
 
 use game_core::player::MoveSpeed;
 use game_core::Vox;
+use messages::ServerMessage; // ★ ServerMessage 임포트 (Debug 가능해졌음)
 
 use crate::surface_wrapper::SurfaceWrapper;
 use crate::{
     input::{EventDrivenInput, FrameDrivenInput},
     wgpu_context::WGPUContext,
 };
-
-// use gltf::Gltf;
-// use std::fs::File;
-// use std::io::{BufReader, Read};
-use wgpu::util::DeviceExt;
-
-use bytemuck::{Pod, Zeroable};
-// use std::path::PathBuf;
-// use wgpu::VertexAttribute;
-
-#[repr(C)]
-#[derive(Copy, Clone, Debug, Pod, Zeroable)]
-pub struct Vertex {
-    pub position: [f32; 3],
-    pub tex_coords: [f32; 2],
-}
-
-// impl Vertex {
-//     pub const ATTRIBS: [VertexAttribute; 2] = wgpu::vertex_attr_array![
-//         0 => Float32x3,
-//         1 => Float32x2,
-//     ];
-
-//     pub fn desc<'a>() -> wgpu::VertexBufferLayout<'a> {
-//         wgpu::VertexBufferLayout {
-//             array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
-//             step_mode: wgpu::VertexStepMode::Vertex,
-//             attributes: &Self::ATTRIBS,
-//         }
-//     }
-// }
 
 pub struct Context {
     vox: Vox,
@@ -55,28 +25,28 @@ pub struct Context {
     direction_and_speed: ([f32; 3], MoveSpeed), // TODO: separate
     pub horizontal_rotation: f32,
     pub vertical_rotation: f32,
+
     fly_toggle: bool,
     fly_toggle_timer: Option<f32>,
-    vertex_buffer: wgpu::Buffer,
-    vertex_count: u32,
+
     adhoc_winit_fault_cursor_position_x: f64,
     adhoc_winit_fault_cursor_position_y: f64,
 }
 
 impl Context {
+    /// init: OwnedWriteHalf를 받아 Vox::init(...) 호출
     pub fn init(
         config: &wgpu::SurfaceConfiguration,
         adapter: &wgpu::Adapter,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         window: Arc<Window>,
-        stream: TcpStream,
+        write_half: OwnedWriteHalf,
     ) -> Self {
         println!("\n[ CONTROL KEYS ]\nmovement: WASD + Shift + Space\nspeeding: CTRL\npause: ESC\nscreen mode: Tab");
-        let (vertex_buffer, vertex_count) = Self::load_model(device, queue);
 
         Context {
-            vox: Vox::init(config, adapter, device, queue, stream),
+            vox: Vox::init(config, adapter, device, queue, write_half),
             window,
             input: FrameDrivenInput::new(),
             window_inner_position: PhysicalPosition::new(0, 0),
@@ -86,8 +56,6 @@ impl Context {
             vertical_rotation: 0.0,
             fly_toggle: false,
             fly_toggle_timer: None,
-            vertex_buffer,
-            vertex_count,
             adhoc_winit_fault_cursor_position_x: 0.0,
             adhoc_winit_fault_cursor_position_y: 0.0,
         }
@@ -152,48 +120,20 @@ impl Context {
         frame.present();
     }
 
-    pub fn load_model(device: &wgpu::Device, queue: &wgpu::Queue) -> (wgpu::Buffer, u32) {
-        let gltf_path = "game_core/assets/player.glb";
-
-        let (gltf, buffers, _images) = gltf::import(gltf_path).unwrap_or_else(|e| {
-            panic!("Failed to import glTF file: {}. Error: {:?}", gltf_path, e)
-        });
-
-        let bin_data: Vec<u8> = if !buffers.is_empty() {
-            buffers[0].0.clone()
-        } else {
-            vec![]
-        };
-
-        // Extract vertices from each mesh primitive.
-        let mut vertices: Vec<Vertex> = Vec::new();
-        for mesh in gltf.meshes() {
-            for primitive in mesh.primitives() {
-                let reader = primitive.reader(|_buffer| Some(&bin_data));
-                if let Some(positions) = reader.read_positions() {
-                    if let Some(tex_coords_iter) = reader.read_tex_coords(0).map(|t| t.into_f32()) {
-                        vertices.extend(positions.zip(tex_coords_iter).map(|(p, t)| Vertex {
-                            position: [p[0], p[1], p[2]],
-                            tex_coords: [t[0], t[1]],
-                        }));
-                    } else {
-                        vertices.extend(positions.map(|p| Vertex {
-                            position: [p[0], p[1], p[2]],
-                            tex_coords: [0.0, 0.0],
-                        }));
-                    }
-                }
+    /// ★ ServerMessage 처리 메서드
+    /// 여기서 debug 출력이 가능해짐: `{:?}`
+    pub fn handle_server_message(&mut self, msg: ServerMessage) {
+        match msg {
+            ServerMessage::Init { your_player_id, your_position } => {
+                println!("Init => pid={}, position={:?}", your_player_id, your_position);
+            }
+            ServerMessage::PlayerMove { moved_player_id, position } => {
+                println!("PlayerMove => pid={}, position={:?}", moved_player_id, position);
+            }
+            other => {
+                println!("Unhandled message: {:?}", other);
             }
         }
-
-        // Create a vertex buffer from the vertex data.
-        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Vertex Buffer"),
-            contents: bytemuck::cast_slice(&vertices),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-
-        (vertex_buffer, vertices.len() as u32)
     }
 
     ////////////////////////////
