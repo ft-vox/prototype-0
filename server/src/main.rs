@@ -1,10 +1,10 @@
-use messages::{ClientMessage, ServerMessage};
+use messages::{ClientMessage, PlayerPosition, ServerMessage};
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::env;
 use std::sync::Arc;
+
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::tcp::OwnedWriteHalf;
-use tokio::net::TcpListener;
+use tokio::net::{tcp::OwnedWriteHalf, TcpListener};
 use tokio::sync::Mutex;
 
 type ChunkIndex = (i32, i32);
@@ -23,7 +23,7 @@ struct Client {
 }
 
 impl Server {
-    fn new() -> Server {
+    fn new() -> Self {
         Server {
             client_map: BTreeMap::new(),
             watchers: Arc::new(Mutex::new(HashMap::new())),
@@ -33,20 +33,23 @@ impl Server {
     async fn handle_message(
         &mut self,
         client: &Arc<Mutex<Client>>,
-        message: ClientMessage,
-        server: Arc<Mutex<Server>>,
+        msg: ClientMessage,
+        server_arc: Arc<Mutex<Server>>,
     ) {
-        let player_id = client.lock().await.player_id;
-        match message {
+        let pid = client.lock().await.player_id;
+        match msg {
             ClientMessage::Move { position } => {
-                let message = ServerMessage::PlayerMove {
-                    moved_player_id: player_id,
+                let move_msg = ServerMessage::PlayerMove {
+                    moved_player_id: pid,
                     position,
                 };
-                for (&client_player_id, client) in self.client_map.iter() {
-                    if client_player_id != player_id {
-                        let mut client_guard = client.lock().await;
-                        client_guard.send(message.clone(), server.clone()).await;
+                for (&other_pid, other_client) in &self.client_map {
+                    if other_pid != pid {
+                        other_client
+                            .lock()
+                            .await
+                            .send(move_msg.clone(), server_arc.clone())
+                            .await;
                     }
                 }
             }
@@ -92,9 +95,9 @@ impl Server {
         };
     }
 
-    async fn add_client(&mut self, client: Arc<Mutex<Client>>) {
-        let player_id = client.lock().await.player_id;
-        self.client_map.insert(player_id, client);
+    async fn add_client(&mut self, c: Arc<Mutex<Client>>) {
+        let pid = c.lock().await.player_id;
+        self.client_map.insert(pid, c);
     }
 
     async fn remove_client(&mut self, player_id: u32) {
@@ -116,7 +119,7 @@ impl Server {
 }
 
 impl Client {
-    fn new(player_id: u32, writer: OwnedWriteHalf) -> Client {
+    fn new(player_id: u32, writer: OwnedWriteHalf) -> Self {
         Client {
             player_id,
             watching_chunks: Arc::new(Mutex::new(HashSet::new())),
@@ -126,34 +129,24 @@ impl Client {
         }
     }
 
-    async fn send(&mut self, message: ServerMessage, server: Arc<Mutex<Server>>) {
-        {
-            self.buffer.lock().await.push_back(message);
-        }
-
-        let mut sender_spawned_guard = self.is_sender_spawned.lock().await;
-        if !*sender_spawned_guard {
-            let buffer = self.buffer.clone();
-            let is_sender_spawned = self.is_sender_spawned.clone();
-            let writer = self.writer.clone();
-            let player_id = self.player_id;
-            *sender_spawned_guard = true;
-            tokio::spawn(async move {
-                while let Some(message) = buffer.lock().await.pop_front() {
-                    let response_bytes = bincode::serialize(&message).unwrap();
-                    writer
-                        .lock()
-                        .await
-                        .write_all(&response_bytes)
-                        .await
-                        .unwrap_or_else(|_| {
-                            let server = server.clone();
-                            tokio::spawn(async move {
-                                server.lock().await.remove_client(player_id).await;
-                            });
-                        });
+    async fn send(&mut self, msg: ServerMessage, server_arc: Arc<Mutex<Server>>) {
+        self.buffer.lock().await.push_back(msg);
+        let mut is_sender_spawned_guard = self.is_sender_spawned.lock().await;
+        if !*is_sender_spawned_guard {
+            *is_sender_spawned_guard = true;
+            let buffer_arc = self.buffer.clone();
+            let writer_arc = self.writer.clone();
+            let is_sender_spawned_arc = self.is_sender_spawned.clone();
+            let my_pid = self.player_id;
+            let _ = tokio::spawn(async move {
+                while let Some(m) = buffer_arc.lock().await.pop_front() {
+                    let bytes = bincode::serialize(&m).unwrap();
+                    if writer_arc.lock().await.write_all(&bytes).await.is_err() {
+                        server_arc.lock().await.remove_client(my_pid).await;
+                        break;
+                    }
                 }
-                *is_sender_spawned.lock().await = false;
+                *is_sender_spawned_arc.lock().await = false;
             });
         }
     }
@@ -162,84 +155,67 @@ impl Client {
 #[tokio::main]
 async fn main() {
     let port = env::args().nth(1).unwrap_or_else(|| "4242".to_string());
-
-    let listener = TcpListener::bind(format!("0.0.0.0:{}", port))
+    let listener = TcpListener::bind(("0.0.0.0", port.parse::<u16>().unwrap()))
         .await
         .unwrap();
-    println!("ft_vox server running on port {}...", port);
 
-    let mut last_player_id = 0;
+    println!("Server running on port {} ...", port);
 
-    let server = Arc::new(Mutex::new(Server::new()));
+    let server_arc = Arc::new(Mutex::new(Server::new()));
+    let mut last_pid = 0;
 
     loop {
         let (socket, _) = listener.accept().await.unwrap();
-        let player_id = last_player_id;
-        last_player_id += 1;
+        let pid = last_pid;
+        last_pid += 1;
 
-        let server_clone = Arc::clone(&server);
+        let server_clone = server_arc.clone();
         tokio::spawn(async move {
-            handle_client(socket, player_id, server_clone).await;
+            handle_client(socket, pid, server_clone).await;
         });
     }
 }
 
-async fn handle_client(socket: tokio::net::TcpStream, player_id: u32, server: Arc<Mutex<Server>>) {
+async fn handle_client(socket: tokio::net::TcpStream, pid: u32, server_arc: Arc<Mutex<Server>>) {
     let (mut reader, writer) = socket.into_split();
-    let client = Arc::new(Mutex::new(Client::new(player_id, writer)));
+    let client = Arc::new(Mutex::new(Client::new(pid, writer)));
 
     {
-        client
-            .lock()
-            .await
-            .send(
-                ServerMessage::Init {
-                    your_player_id: player_id,
-                    your_position: messages::PlayerPosition::NotInWorld,
-                },
-                server.clone(),
-            )
-            .await;
+        let mut s = server_arc.lock().await;
+        s.add_client(client.clone()).await;
     }
-
-    println!("Player {} connected", player_id);
-
     {
-        let mut server_guard = server.lock().await;
-        server_guard.add_client(client.clone()).await;
+        let mut c = client.lock().await;
+        let init_msg = ServerMessage::Init {
+            your_player_id: pid,
+            your_position: PlayerPosition::NotInWorld,
+        };
+        c.send(init_msg, server_arc.clone()).await;
     }
+    println!("Player {} connected", pid);
 
-    let mut buffer = Vec::new();
-
-    while let Ok(n) = reader.read_buf(&mut buffer).await {
+    let mut buf = Vec::new();
+    while let Ok(n) = reader.read_buf(&mut buf).await {
         if n == 0 {
             break;
         }
-
-        while let Ok((message, consumed)) = try_deserialize::<ClientMessage>(&buffer) {
-            buffer.drain(..consumed);
-
-            let mut server_guard = server.lock().await;
-            server_guard
-                .handle_message(&client, message, server.clone())
-                .await;
+        while let Ok((msg, consumed)) = try_deser::<ClientMessage>(&buf) {
+            buf.drain(..consumed);
+            let mut s = server_arc.lock().await;
+            s.handle_message(&client, msg, server_arc.clone()).await;
         }
     }
-
     {
-        let mut server_guard = server.lock().await;
-        server_guard.remove_client(player_id).await;
+        let mut s = server_arc.lock().await;
+        s.remove_client(pid).await;
     }
-
-    println!("Player {} disconnected", player_id);
+    println!("Player {} disconnected", pid);
 }
 
-fn try_deserialize<T: serde::de::DeserializeOwned>(
-    buffer: &[u8],
-) -> Result<(T, usize), bincode::Error> {
-    let mut cursor = std::io::Cursor::new(buffer);
-    match bincode::deserialize_from(&mut cursor) {
-        Ok(msg) => Ok((msg, cursor.position() as usize)),
+fn try_deser<T: serde::de::DeserializeOwned>(buf: &[u8]) -> Result<(T, usize), bincode::Error> {
+    let mut cur = std::io::Cursor::new(buf);
+    match bincode::deserialize_from(&mut cur) {
+        Ok(m) => Ok((m, cur.position() as usize)),
         Err(_) => Err(bincode::ErrorKind::SizeLimit.into()),
     }
 }

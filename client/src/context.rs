@@ -1,13 +1,14 @@
 use std::sync::Arc;
 
-use tokio::net::TcpStream;
+use tokio::net::tcp::OwnedWriteHalf;
 use winit::{
     dpi::{PhysicalPosition, PhysicalSize},
     window::{Fullscreen, Window},
 };
 
-use core::player::MoveSpeed;
-use core::Vox;
+use game_core::player::MoveSpeed;
+use game_core::Vox;
+use messages::ServerMessage; // ★ ServerMessage 임포트 (Debug 가능해졌음)
 
 use crate::surface_wrapper::SurfaceWrapper;
 use crate::{
@@ -33,17 +34,19 @@ pub struct Context {
 }
 
 impl Context {
+    /// init: OwnedWriteHalf를 받아 Vox::init(...) 호출
     pub fn init(
         config: &wgpu::SurfaceConfiguration,
         adapter: &wgpu::Adapter,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         window: Arc<Window>,
-        stream: TcpStream,
+        write_half: OwnedWriteHalf,
     ) -> Self {
         println!("\n[ CONTROL KEYS ]\nmovement: WASD + Shift + Space\nspeeding: CTRL\npause: ESC\nscreen mode: Tab");
+
         Context {
-            vox: Vox::init(config, adapter, device, queue, stream),
+            vox: Vox::init(config, adapter, device, queue, write_half),
             window,
             input: FrameDrivenInput::new(),
             window_inner_position: PhysicalPosition::new(0, 0),
@@ -115,6 +118,22 @@ impl Context {
         self.vox
             .render(&view, &wgpu_context.device, &wgpu_context.queue);
         frame.present();
+    }
+
+    /// ★ ServerMessage 처리 메서드
+    /// 여기서 debug 출력이 가능해짐: `{:?}`
+    pub fn handle_server_message(&mut self, msg: ServerMessage) {
+        match msg {
+            ServerMessage::Init { your_player_id, your_position } => {
+                println!("Init => pid={}, position={:?}", your_player_id, your_position);
+            }
+            ServerMessage::PlayerMove { moved_player_id, position } => {
+                println!("PlayerMove => pid={}, position={:?}", moved_player_id, position);
+            }
+            other => {
+                println!("Unhandled message: {:?}", other);
+            }
+        }
     }
 
     ////////////////////////////
