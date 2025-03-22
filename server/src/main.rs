@@ -4,7 +4,7 @@ use std::env;
 use std::sync::Arc;
 
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpListener, tcp::OwnedWriteHalf};
+use tokio::net::{tcp::OwnedWriteHalf, TcpListener};
 use tokio::sync::Mutex;
 
 use messages::{ClientMessage, PlayerPosition, ServerMessage};
@@ -35,7 +35,11 @@ impl Server {
                 };
                 for (&other_pid, other_client) in &self.client_map {
                     if other_pid != pid {
-                        other_client.lock().await.send(move_msg.clone(), server_arc.clone()).await;
+                        other_client
+                            .lock()
+                            .await
+                            .send(move_msg.clone(), server_arc.clone())
+                            .await;
                     }
                 }
             }
@@ -79,7 +83,7 @@ impl Client {
             let writer_arc = self.writer.clone();
             let sending_arc = self.sending.clone();
             let my_pid = self.player_id;
-            let _ = tokio::spawn(async move {
+            tokio::spawn(async move {
                 while let Some(m) = buffer_arc.lock().await.pop_front() {
                     let bytes = bincode::serialize(&m).unwrap();
                     if writer_arc.lock().await.write_all(&bytes).await.is_err() {
@@ -137,7 +141,9 @@ async fn handle_client(socket: tokio::net::TcpStream, pid: u32, server_arc: Arc<
 
     let mut buf = Vec::new();
     while let Ok(n) = reader.read_buf(&mut buf).await {
-        if n == 0 { break; }
+        if n == 0 {
+            break;
+        }
         while let Ok((msg, consumed)) = try_deser::<ClientMessage>(&buf) {
             buf.drain(..consumed);
             let mut s = server_arc.lock().await;
@@ -151,12 +157,24 @@ async fn handle_client(socket: tokio::net::TcpStream, pid: u32, server_arc: Arc<
     println!("Player {} disconnected", pid);
 }
 
-fn try_deser<T: serde::de::DeserializeOwned>(
-    buf: &[u8],
-) -> Result<(T, usize), bincode::Error> {
+fn try_deser<T: serde::de::DeserializeOwned>(buf: &[u8]) -> Result<(T, usize), bincode::Error> {
     let mut cur = std::io::Cursor::new(buf);
+
     match bincode::deserialize_from(&mut cur) {
         Ok(m) => Ok((m, cur.position() as usize)),
-        Err(_) => Err(bincode::ErrorKind::SizeLimit.into()),
+
+        Err(e) => {
+            match *e {
+                // Incomplete input is okay; return the error as-is
+                bincode::ErrorKind::Io(ref io_err)
+                    if io_err.kind() == std::io::ErrorKind::UnexpectedEof =>
+                {
+                    Err(e)
+                }
+
+                // Any other error means invalid data; panic!
+                _ => panic!("Invalid data during deserialization: {:?}", e),
+            }
+        }
     }
 }
