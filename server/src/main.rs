@@ -55,7 +55,7 @@ impl Server {
             }
             ClientMessage::WatchChunk { x, y } => {
                 let index: ChunkIndex = (x, y);
-                let Some(tmp) = self.client_map.get_mut(&player_id) else {
+                let Some(tmp) = self.client_map.get_mut(&pid) else {
                     return;
                 };
                 let player = tmp.lock().await;
@@ -66,12 +66,12 @@ impl Server {
                         .entry(index)
                         .or_insert_with(|| Arc::new(Mutex::new(HashSet::new())));
                     let mut set = entry.lock().await;
-                    set.insert(player_id);
+                    set.insert(pid);
                 }
             }
             ClientMessage::UnwatchChunk { x, y } => {
                 let index: ChunkIndex = (x, y);
-                let Some(tmp) = self.client_map.get_mut(&player_id) else {
+                let Some(tmp) = self.client_map.get_mut(&pid) else {
                     return;
                 };
                 let player = tmp.lock().await;
@@ -81,7 +81,7 @@ impl Server {
                     let to_delete = {
                         let set_arc = watcher.get(&index).unwrap();
                         let mut set = set_arc.lock().await;
-                        set.remove(&player_id);
+                        set.remove(&pid);
                         set.is_empty()
                     };
                     if to_delete {
