@@ -1,5 +1,5 @@
-// server/main.rs
-use std::collections::{BTreeMap, VecDeque};
+use messages::{ClientMessage, PlayerPosition, ServerMessage};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::env;
 use std::sync::Arc;
 
@@ -7,16 +7,26 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{tcp::OwnedWriteHalf, TcpListener};
 use tokio::sync::Mutex;
 
-use messages::{ClientMessage, PlayerPosition, ServerMessage};
+type ChunkIndex = (i32, i32);
 
 struct Server {
     client_map: BTreeMap<u32, Arc<Mutex<Client>>>,
+    watchers: Arc<Mutex<HashMap<ChunkIndex, Arc<Mutex<HashSet<u32>>>>>>,
+}
+
+struct Client {
+    player_id: u32,
+    watching_chunks: Arc<Mutex<HashSet<ChunkIndex>>>,
+    writer: Arc<Mutex<OwnedWriteHalf>>,
+    buffer: Arc<Mutex<VecDeque<ServerMessage>>>,
+    is_sender_spawned: Arc<Mutex<bool>>,
 }
 
 impl Server {
     fn new() -> Self {
         Server {
             client_map: BTreeMap::new(),
+            watchers: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -43,8 +53,46 @@ impl Server {
                     }
                 }
             }
-            _ => { /* ... */ }
-        }
+            ClientMessage::WatchChunk { x, y } => {
+                let index: ChunkIndex = (x, y);
+                let Some(tmp) = self.client_map.get_mut(&player_id) else {
+                    return;
+                };
+                let player = tmp.lock().await;
+                let newly_added = player.watching_chunks.lock().await.insert(index);
+                if newly_added {
+                    let mut watcher = self.watchers.lock().await;
+                    let entry = watcher
+                        .entry(index)
+                        .or_insert_with(|| Arc::new(Mutex::new(HashSet::new())));
+                    let mut set = entry.lock().await;
+                    set.insert(player_id);
+                }
+            }
+            ClientMessage::UnwatchChunk { x, y } => {
+                let index: ChunkIndex = (x, y);
+                let Some(tmp) = self.client_map.get_mut(&player_id) else {
+                    return;
+                };
+                let player = tmp.lock().await;
+                let deleted = player.watching_chunks.lock().await.remove(&index);
+                if deleted {
+                    let mut watcher = self.watchers.lock().await;
+                    let to_delete = {
+                        let set_arc = watcher.get(&index).unwrap();
+                        let mut set = set_arc.lock().await;
+                        set.remove(&player_id);
+                        set.is_empty()
+                    };
+                    if to_delete {
+                        watcher.remove(&index);
+                    }
+                }
+            }
+            _ => {
+                // TODO: remove _
+            }
+        };
     }
 
     async fn add_client(&mut self, c: Arc<Mutex<Client>>) {
@@ -52,36 +100,43 @@ impl Server {
         self.client_map.insert(pid, c);
     }
 
-    async fn remove_client(&mut self, pid: u32) {
-        self.client_map.remove(&pid);
+    async fn remove_client(&mut self, player_id: u32) {
+        let tmp = self.client_map.remove(&player_id).unwrap();
+        let client = tmp.lock().await;
+        let mut watchers = self.watchers.lock().await;
+        for index in client.watching_chunks.lock().await.iter() {
+            let to_delete = {
+                let tmp = watchers.get(index).unwrap();
+                let mut node = tmp.lock().await;
+                node.remove(&client.player_id);
+                node.len() == 0
+            };
+            if to_delete {
+                watchers.remove(index);
+            }
+        }
     }
-}
-
-struct Client {
-    player_id: u32,
-    writer: Arc<Mutex<OwnedWriteHalf>>,
-    buffer: Arc<Mutex<VecDeque<ServerMessage>>>,
-    sending: Arc<Mutex<bool>>,
 }
 
 impl Client {
     fn new(player_id: u32, writer: OwnedWriteHalf) -> Self {
         Client {
             player_id,
+            watching_chunks: Arc::new(Mutex::new(HashSet::new())),
             writer: Arc::new(Mutex::new(writer)),
             buffer: Arc::new(Mutex::new(VecDeque::new())),
-            sending: Arc::new(Mutex::new(false)),
+            is_sender_spawned: Arc::new(Mutex::new(false)),
         }
     }
 
     async fn send(&mut self, msg: ServerMessage, server_arc: Arc<Mutex<Server>>) {
         self.buffer.lock().await.push_back(msg);
-        let mut sending_guard = self.sending.lock().await;
-        if !*sending_guard {
-            *sending_guard = true;
+        let mut is_sender_spawned_guard = self.is_sender_spawned.lock().await;
+        if !*is_sender_spawned_guard {
+            *is_sender_spawned_guard = true;
             let buffer_arc = self.buffer.clone();
             let writer_arc = self.writer.clone();
-            let sending_arc = self.sending.clone();
+            let is_sender_spawned_arc = self.is_sender_spawned.clone();
             let my_pid = self.player_id;
             tokio::spawn(async move {
                 while let Some(m) = buffer_arc.lock().await.pop_front() {
@@ -91,7 +146,7 @@ impl Client {
                         break;
                     }
                 }
-                *sending_arc.lock().await = false;
+                *is_sender_spawned_arc.lock().await = false;
             });
         }
     }

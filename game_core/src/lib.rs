@@ -50,7 +50,7 @@ pub fn get_coords(distance: f32) -> Vec<(i32, i32)> {
 /// 클라이언트측 'Server' 구조체
 /// ─ 원래 `TcpStream` 전체를 받아 read/write 했으나,
 ///   이제는 '쓰기'만 담당하도록 OwnedWriteHalf만 보관
-struct Server {
+pub struct Server {
     /// 플레이어 ID(옵션)
     player_id: Arc<Mutex<Option<u32>>>,
 
@@ -191,7 +191,7 @@ impl Vox {
             vox_graphics_wrapper,
             local_player: Human::new(Vec3::new(eye_x, eye_y, eye_z)),
             is_paused: false,
-            terrain_manager: TerrainManager::new(CACHE_DISTANCE, (eye_x, eye_y)),
+            terrain_manager: TerrainManager::new(CACHE_DISTANCE, (eye_x, eye_y), server.clone()),
             target_fog_distance: 0.0,
             current_fog_distance: 0.0,
             server,
