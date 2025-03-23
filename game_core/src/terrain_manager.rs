@@ -4,7 +4,6 @@ use std::{
 };
 
 use map_types::{Chunk, CHUNK_SIZE};
-use messages::ClientMessage;
 
 use crate::{
     get_coords,

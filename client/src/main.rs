@@ -1,16 +1,9 @@
-use std::{
-    env,
-    process::exit,
-    time::Instant,
-    cell::RefCell,
-    rc::Rc,
-    sync::Arc,
-};
+use std::{cell::RefCell, env, process::exit, rc::Rc, sync::Arc, time::Instant};
 
-use tokio::net::{TcpStream, tcp::{OwnedReadHalf, OwnedWriteHalf}};
+use tokio::net::{tcp::OwnedReadHalf, TcpStream};
 use tokio::sync::mpsc;
 use winit::{
-    dpi::{PhysicalPosition, PhysicalSize},
+    dpi::PhysicalSize,
     event::{Event, KeyEvent, WindowEvent},
     event_loop::{EventLoop, EventLoopWindowTarget},
     window::Window,
@@ -102,69 +95,75 @@ async fn main() {
     let mut last_frame_time = Instant::now();
 
     // 6) 이벤트 루프
-    window_loop.event_loop.run(move |event: Event<()>, target: &EventLoopWindowTarget<()>| {
-        match event {
-            ref e if SurfaceWrapper::start_condition(e) => {
-                surface.resume(&wgpu_context, window_loop.window.clone(), true);
-                if context.borrow().is_none() {
-                    // 7) Context::init(..., write_half) 한 번만 move하기 위해 Option에서 take()
-                    if let Some(wh) = write_half_opt.borrow_mut().take() {
-                        *context.borrow_mut() = Some(Context::init(
-                            surface.config(),
-                            &wgpu_context.adapter,
-                            &wgpu_context.device,
-                            &wgpu_context.queue,
-                            window_loop.window.clone(),
-                            wh,
-                        ));
-                    } else {
-                        eprintln!("write_half already taken!");
-                    }
-                }
-            }
-            Event::Suspended => {
-                surface.suspend();
-            }
-            Event::WindowEvent { event, .. } => match event {
-                WindowEvent::Resized(size) => {
-                    if let Some(ctx) = context.borrow_mut().as_mut() {
-                        ctx.resize(size, &mut surface, &wgpu_context);
-                    }
-                    window_loop.window.request_redraw();
-                }
-                WindowEvent::CloseRequested => {
-                    target.exit();
-                }
-                WindowEvent::KeyboardInput {
-                    event: KeyEvent { logical_key, state, .. },
-                    ..
-                } => {
-                    event_input.set_key_state(logical_key, state);
-                }
-                WindowEvent::CursorMoved { position, .. } => {
-                    event_input.set_cursor_position(position);
-                }
-                WindowEvent::RedrawRequested => {
-                    let now = Instant::now();
-                    let delta_time = now.duration_since(last_frame_time).as_secs_f32();
-                    last_frame_time = now;
-
-                    while let Ok(msg) = rx.try_recv() {
-                        if let Some(ctx) = context.borrow_mut().as_mut() {
-                            ctx.handle_server_message(msg);
+    #[allow(clippy::let_unit_value)]
+    let _ = window_loop.event_loop.run(
+        move |event: Event<()>, target: &EventLoopWindowTarget<()>| {
+            match event {
+                ref e if SurfaceWrapper::start_condition(e) => {
+                    surface.resume(&wgpu_context, window_loop.window.clone(), true);
+                    if context.borrow().is_none() {
+                        // 7) Context::init(..., write_half) 한 번만 move하기 위해 Option에서 take()
+                        if let Some(wh) = write_half_opt.borrow_mut().take() {
+                            *context.borrow_mut() = Some(Context::init(
+                                surface.config(),
+                                &wgpu_context.adapter,
+                                &wgpu_context.device,
+                                &wgpu_context.queue,
+                                window_loop.window.clone(),
+                                wh,
+                            ));
+                        } else {
+                            eprintln!("write_half already taken!");
                         }
                     }
-
-                    if let Some(ctx) = context.borrow_mut().as_mut() {
-                        ctx.update(&event_input);
-                        ctx.tick(delta_time);
-                        ctx.render(&mut surface, &wgpu_context);
-                    }
-                    window_loop.window.request_redraw();
                 }
+                Event::Suspended => {
+                    surface.suspend();
+                }
+                Event::WindowEvent { event, .. } => match event {
+                    WindowEvent::Resized(size) => {
+                        if let Some(ctx) = context.borrow_mut().as_mut() {
+                            ctx.resize(size, &mut surface, &wgpu_context);
+                        }
+                        window_loop.window.request_redraw();
+                    }
+                    WindowEvent::CloseRequested => {
+                        target.exit();
+                    }
+                    WindowEvent::KeyboardInput {
+                        event:
+                            KeyEvent {
+                                logical_key, state, ..
+                            },
+                        ..
+                    } => {
+                        event_input.set_key_state(logical_key, state);
+                    }
+                    WindowEvent::CursorMoved { position, .. } => {
+                        event_input.set_cursor_position(position);
+                    }
+                    WindowEvent::RedrawRequested => {
+                        let now = Instant::now();
+                        let delta_time = now.duration_since(last_frame_time).as_secs_f32();
+                        last_frame_time = now;
+
+                        while let Ok(msg) = rx.try_recv() {
+                            if let Some(ctx) = context.borrow_mut().as_mut() {
+                                ctx.handle_server_message(msg);
+                            }
+                        }
+
+                        if let Some(ctx) = context.borrow_mut().as_mut() {
+                            ctx.update(&event_input);
+                            ctx.tick(delta_time);
+                            ctx.render(&mut surface, &wgpu_context);
+                        }
+                        window_loop.window.request_redraw();
+                    }
+                    _ => {}
+                },
                 _ => {}
-            },
-            _ => {}
-        }
-    });
+            }
+        },
+    );
 }

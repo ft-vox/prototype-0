@@ -9,10 +9,7 @@ use kira::{
     AudioManager, AudioManagerSettings, DefaultBackend,
 };
 use messages::{ClientMessage, PlayerPosition, ServerMessage};
-use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
-    net::{tcp::OwnedWriteHalf, TcpStream},
-};
+use tokio::{io::AsyncWriteExt, net::tcp::OwnedWriteHalf};
 use wgpu::util::DeviceExt;
 
 mod graphics;
