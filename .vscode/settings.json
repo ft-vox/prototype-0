@@ -7,16 +7,6 @@
         "editor.formatOnSave": true,
         "editor.defaultFormatter": "tamasfe.even-better-toml",
     },
-    "[c]": {
-        "editor.formatOnSave": true,
-        "editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd",
-    },
-    "files.associations": {
-        "**/*.h": "c",
-    },
     "rust-analyzer.checkOnSave": true,
     "rust-analyzer.check.command": "clippy",
-    "C_Cpp.intelliSenseEngine": "disabled",
-    "clangd.detectExtensionConflicts": false,
-    "sonarlint.pathToCompileCommands": "${workspaceFolder}/compile_commands.json",
 }
