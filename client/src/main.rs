@@ -42,15 +42,21 @@ impl EventLoopWrapper {
 /// 서버 메시지 수신 태스크 (읽기 전용)
 async fn network_listener(mut read_half: OwnedReadHalf, tx: mpsc::Sender<ServerMessage>) {
     use tokio::io::AsyncReadExt;
-    let mut buffer = vec![0u8; 1024];
+
+    let mut read_buf = vec![0u8; 1024];
+    let mut buf = Vec::<u8>::new();
+
     loop {
-        match read_half.read(&mut buffer).await {
+        match read_half.read(&mut read_buf).await {
             Ok(0) => {
                 println!("Server disconnected.");
                 break;
             }
             Ok(n) => {
-                if let Ok(msg) = bincode::deserialize::<ServerMessage>(&buffer[..n]) {
+                buf.extend_from_slice(&read_buf[..n]);
+
+                while let Ok((msg, consumed)) = try_deser::<ServerMessage>(&buf) {
+                    buf.drain(..consumed);
                     if tx.send(msg).await.is_err() {
                         eprintln!("Failed to send server message to channel");
                     }
@@ -63,6 +69,21 @@ async fn network_listener(mut read_half: OwnedReadHalf, tx: mpsc::Sender<ServerM
         }
     }
     println!("network_listener finished.");
+}
+
+fn try_deser<T: serde::de::DeserializeOwned>(buf: &[u8]) -> Result<(T, usize), bincode::Error> {
+    let mut cur = std::io::Cursor::new(buf);
+
+    match bincode::deserialize_from(&mut cur) {
+        Ok(m) => Ok((m, cur.position() as usize)),
+
+        Err(e) => match *e {
+            bincode::ErrorKind::Io(ref io_err) if io_err.kind() == std::io::ErrorKind::UnexpectedEof => {
+                Err(e)
+            }
+            _ => panic!("Invalid data during deserialization: {:?}", e),
+        },
+    }
 }
 
 #[tokio::main]

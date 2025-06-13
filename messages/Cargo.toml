@@ -6,3 +6,6 @@ edition = "2021"
 [dependencies]
 serde = { version = "1.0.217", features = ["derive"] }
 map-types = { version = "0.1.0", path = "../map_types" }
+
+[dev-dependencies]
+bincode = "1.3"
